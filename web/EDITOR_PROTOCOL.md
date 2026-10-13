@@ -278,7 +278,9 @@ numbered 0..31 (the device shows U01..U32).
   they play the VA kits 66, 10 and 77, and a record holding one loads as that kit: `UP_GET` / `UP_LOAD` give KIT 6, 5
   or 8 (the record itself is not rewritten). Projects, motion events and `SET` do the same.
 - `UP_STORE`: name "" stores with the automatic name the device uses (engine name + slot number,
-  "ANALOG 07"). rc 1 for a bad slot or name.
+  "ANALOG 07"). rc 1 for a bad slot or name. An FM6 track on its own patch (SLOT OWN) given a name also
+  takes it into the patch's name (its first 10 characters, space-padded): `FM6_GET` of the user slot then
+  shows it. The automatic name and a factory patch (F n) leave the patch's name alone.
 - rc 2 = the flash write failed or there is no flash. A failed flash write keeps the previous
   record in RAM and flash, including its name. Without flash, a valid change is RAM-only until power-off.
   (`UP_PUT` / `UP_STORE` / `UP_ERASE` stop the transport first, see "Saves while playing"; a device

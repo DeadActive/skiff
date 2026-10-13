@@ -210,6 +210,8 @@ static int mig_test(void)
     mig_boot();
     trk[song.sel].eng_req = ENGI_FM6;
     fm6_load_slot(song.sel, 3);
+    trk[song.sel].p[P_E7] = 3;                           /* (SLOT F4, as a load sets it: (FM6 LAB) a factory patch keeps
+                                                          * its name when a sound is saved) */
     fail_after = (int)((sizeof(up_bank_t) + 255u) / 256u + 1u + 3u);   /* the preset bank's write passes, the patches' fails */
     up_store(20, "CUT");
     fail_after = -1;

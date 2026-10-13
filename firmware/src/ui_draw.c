@@ -479,14 +479,21 @@ static void foot_hint(char *a, char *b)
     str_cpy(b, ui.act || ui.ev_del ? "OCT- CANCEL" : "OCT- HOME", 16);   /* ((Skiff U2) where it goes: HOME, not "BACK") */
 }
 
-/* the sound's name on the track: a user preset or the engine's preset (b holds 16) */
+/* the sound's name on the track: a user preset or the engine's preset (b holds 16); (FM6 LAB) an FM6 track on its own
+ * patch (edited, INIT's): the patch's name ("INIT VOICE") */
 static void sound_name(const track_t *t, char *b)
 {
     const engine_t *e = ENGINES[t->eng_req % NENGINES];
     b[0] = 0;
     if (user_of(t) < UP_SLOTS)
         up_name(user_of(t), b);
-    else if (e->npresets)
+    else if (t->eng_req % NENGINES == ENGI_FM6 && t->p[P_E7] == FM6_OWN) {
+        uint32_t n = 10;
+        memcpy(b, fm6_patch[trk_index(t) % NTRK] + FP_NAME, 10);
+        while (n && b[n - 1u] == ' ')
+            n--;
+        b[n] = 0;
+    } else if (e->npresets)
         str_cpy(b, e->presets[t->preset % e->npresets].name, 16);
 }
 
@@ -510,9 +517,7 @@ static void draw_foot(void)
     if (ui.home)
         ti[0] = 0;                                     /* ((Skiff U4, L5) the header names the page: here only where it */
     else                                               /* is in its family, "2/2" (was "ENV DEST 2/2", "HOME") */
-        page_pos(ti);
-    if (!ui.home && pg->graph == GR_DXSND)          /* ((Skiff phase 8) the sound sheet: what SELECT does, as the */
-        str_cpy(ti, "SELECT: ROWS", sizeof ti);        /* mockup's; the header names the page and the sound) */
+        page_pos(ti);                                  /* (a sheet: "SELECT: ROWS") */
     str_cpy(s, ename, sizeof s);
     s[str_len(s) + 1u] = 0;
     s[str_len(s)] = (char)('1' + song.sel);
@@ -775,8 +780,8 @@ static void draw_columns(void)
         draw_column(3, "LIST", favorites.filter ? "FAV" : "ALL", "", VAL(3u), -1, ICON_X_FOLDER);
         return;
     }
-    if (cur_page()->graph == GR_DXSND) {                 /* (Skiff phase 7, 8) EDIT > SOUND, the sheet (ui_dx.c) */
-        dx_cards();
+    if (sheet_of(cur_page()->graph)) {                   /* (Skiff phase 7, 8; FM6 LAB) a sheet's window (SHEETS) */
+        sheet_of(cur_page()->graph)->cards();
         return;
     }
     if (cur_page()->graph == GR_SONG) {                  /* (Skiff phase 5) ENTRY PATTERN REPS SONG (ui_input.c song_knob):

@@ -378,7 +378,8 @@ enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_
        GR_DXSND,                   /* (Skiff phase 7, 8) EDIT > SOUND: a sound of the DRUM-X kit, the sheet (ui_dx.c) */
        GR_LANES,                   /* (Skiff U3, R6) EDIT > LANES (DRUM): the eight lane levels, KNOB 1 the lane (ui.lane) */
        GR_ENVDST, GR_LFODST, GR_DELAY, GR_REVERB, GR_CHORUS, GR_GLOBAL, GR_VOICE, GR_VOICE2,
-       GR_ARP2 };                  /* (Skiff U5, V1) the pages' own graphs, the scope's before (ui_pgraph.c); ARP 2: ARP's */
+       GR_ARP2,                    /* (Skiff U5, V1) the pages' own graphs, the scope's before (ui_pgraph.c); ARP 2: ARP's */
+       GR_FMOP, GR_FMALL };        /* (FM6 LAB) EDIT > OPERATOR and ALL OPS: FM6's patch, two sheets (ui_fm6.c) */
 
 typedef struct {
     const char *title;
@@ -403,6 +404,8 @@ static const page_t PAGES[] = {
     {"CHORD", FAM_SCL, SC_TRACK, GR_CHORD, {P_CHRD, P_VOIC, 0xFF, 0xFF}},   /* SCL again: the chord keys (chord.c) */
     {"EDIT 1", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E0, P_E1, P_E2, P_E3}},
     {"EDIT 2", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E4, P_E5, P_E6, P_E7}},
+    {"OPERATOR", FAM_EDIT, SC_TRACK, GR_FMOP, {0xFF, 0xFF, 0xFF, 0xFF}},   /* (FM6 LAB) FM6 only: an operator's values */
+    {"ALL OPS", FAM_EDIT, SC_TRACK, GR_FMALL, {0xFF, 0xFF, 0xFF, 0xFF}},   /* (FM6 LAB) FM6 only: the voice's (ui_fm6.c) */
     {"LANES", FAM_EDIT, SC_TRACK, GR_LANES, {0xFF, 0xFF, 0xFF, 0xFF}},   /* DRUM only: LANE, its LEVEL (page_desc) */
     {"SOUND", FAM_EDIT, SC_TRACK, GR_DXSND, {0xFF, 0xFF, 0xFF, 0xFF}},     /* (Skiff phase 7, 8) DRUM-X only: a sound of the
                                                                          * project's kit on one sheet (ui_dx.c) */

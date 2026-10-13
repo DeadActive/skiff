@@ -522,8 +522,8 @@ static int fm6_patches(void)
     up_store(5, "MINE");                                 /* track 3 (MY PATCH, OWN) -> slot 6 */
     a[0] = ED_FM6_USER; a[1] = 5;
     request(ED_FM6_GET, a, 2);
-    bad += check("UP_STORE of an FM6 track: FM6_GET user 6 gives its patch", host_wire[7] == 0 &&
-                 !memcmp(host_wire + 8 + 118, "MY PATCH  ", 10));
+    bad += check("UP_STORE of an FM6 track: FM6_GET user 6 gives its patch, named as the sound (FM6 LAB)",
+                 host_wire[7] == 0 && !memcmp(host_wire + 8 + 118, "MINE      ", 10));
     memcpy(a + 2, pk, FM6_PACKED);
     memcpy(a + 2 + 118, "EDITOR    ", 10);
     a[2 + 14] = 120;                                     /* OP6 output level 120: stored as 99 */

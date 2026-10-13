@@ -19,7 +19,9 @@ synths and drums, patterns and songs, live performance, and a screen that shows 
 Skiff turns the FM-1 into a six-track groovebox: fourteen synth and drum engines, a 64-step sequencer with chords,
 ratchets, trig conditions and parameter locks, a shared pool of patterns played through per-track lists and scenes,
 and a performance layer for launching it all live. Every page draws what its knobs do, and holding HOME shows what
-every button, encoder and key does right there. A browser editor reaches all of it from a computer.
+every button, encoder and key does right there. FM6 sounds can be built from a bare sine on the unit itself, every
+operator's envelope drawn as it plays and coloured by how bright the FM makes it. A browser editor reaches all of it
+from a computer.
 
 Skiff is free software, a fork of [Felucca](https://github.com/hugelton/Felucca) 1.1.5 by Hügelton Instruments: it
 keeps Felucca's engines, sound and file formats, so Felucca's sounds and projects load in Skiff. Skiff is not
@@ -33,12 +35,12 @@ Custom firmware, at your own risk; the way back to the official firmware is belo
 connect the FM-1 by USB and follow it. The same page takes the FM-1 back to the official V15 firmware, saving a
 complete backup of your music first.
 
-**With Python 3:** download `skiff-1.0.fwsc` from the [latest release](https://github.com/illuminus5/skiff/releases/latest)
+**With Python 3:** download `skiff-1.1.fwsc` from the [latest release](https://github.com/illuminus5/skiff/releases/latest)
 and, with this repository's `tools/` folder,
 
 ```
 pip install mido python-rtmidi
-python tools/fm1_install.py skiff-1.0.fwsc
+python tools/fm1_install.py skiff-1.1.fwsc
 ```
 
 It takes about two minutes and the FM-1 restarts on Skiff.
@@ -52,7 +54,7 @@ Edge, over USB MIDI).
 | | |
 | --- | --- |
 | **Tracks** | 6, each with its own engine, sound, sequence and mix; 8 voices shared between them (T5 and T6 play every engine but PHYS and GRAIN) |
-| **Engines** | 14: ANALOG, FM6, PHASE, LOFI, SAMPLE, VOICE, TRIO, WHEEL, GRAIN, PHYS, NOISE, SLICE, DRUM, DRUM-X; 100 factory sounds |
+| **Engines** | 14: ANALOG, FM6, PHASE, LOFI, SAMPLE, VOICE, TRIO, WHEEL, GRAIN, PHYS, NOISE, SLICE, DRUM, DRUM-X; 100 factory sounds; every value of an FM6 patch (6 operators, 32 algorithms) editable on the unit |
 | **Sequencer** | 64 steps a track; LENGTH 1–64; 1/1 to 1/32, triplets, 2 and 4 bars a step; chords of up to 4 notes, velocity, accent, slide, tie; per-step chance, ratchet ×1–4 or FLAM, 12 trig conditions (FILL, !FILL, 1:2 … 4:4), NUDGE (−32 to +31 64ths of a step); swing, gate; FWD, RVRS, PING or RAND |
 | **Recording** | live with overdub, FEEL (keeps where you played), count-in and click; step recording; TAKE keeps the last loop you played, after the fact |
 | **Automation** | knob moves and parameter locks (hold a step, turn a knob), 64 records, listed and edited on SEQ › AUTOMATION |
@@ -97,6 +99,25 @@ Edge, over USB MIDI).
 <td><img src="docs/img/fx_duck.png" alt="FX › DUCK"><br><sub><b>DUCK</b>: a track dips under another's hits, the pump drawn over a bar</sub></td>
 </tr>
 </table>
+
+### FM6 from scratch
+
+EDIT › OPERATOR and ALL OPS put every value of an FM6 patch on the unit's knobs: PRESETS picks the operator, SELECT
+its ratio, envelope, keyboard scaling, the algorithm, the pitch envelope and the LFO. INIT starts from a bare sine, and
+SAVE › USER keeps the result as a sound of its own. The graph, after an idea by Floyd Steinberg, is the note as the
+engine plays it: every operator's envelope, each carrier coloured along its length from cool (a sine) to hot (where
+the modulators make it bite).
+
+<table>
+<tr>
+<td width="25%"><img src="docs/img/fm_op_tone.png" alt="EDIT › OPERATOR, TONE"><br><sub><b>OPERATOR</b>: OP4's ratio; the carriers hot where it bites</sub></td>
+<td width="25%"><img src="docs/img/fm_op_env.png" alt="EDIT › OPERATOR, ENV 1"><br><sub><b>ENV</b>: the stage being turned, a filled handle</sub></td>
+<td width="25%"><img src="docs/img/fm_op_keys.png" alt="EDIT › OPERATOR, KEYS"><br><sub><b>KEYS</b>: the level across the keyboard</sub></td>
+<td width="25%"><img src="docs/img/fm_all_lfo.png" alt="EDIT › ALL OPS, LFO"><br><sub><b>ALL OPS</b>: the LFO's vibrato fading in</sub></td>
+</tr>
+</table>
+
+![OPERATOR in CRYPT, NEON and QUARK](docs/img/fm6_themes.png)
 
 ### Sound: every page draws what it does
 
@@ -152,6 +173,9 @@ FM6 patches from `.syx` files and saves complete backups.
 - **Six tracks**, each its own engine and sound; 8 voices shared between them. T5 and T6 play every engine but
   PHYS and GRAIN. ALGORITHM selects the track on every page; HOME, PERFORM, SONG and the MIXER show all six
 - **Fourteen engines** (below), DRUM-X among them, each with its own factory presets
+- **FM6 from scratch** (1.1): every value of an FM6 patch on the unit (EDIT › OPERATOR and ALL OPS), INIT a bare
+  sine, the sound saved as a user sound; the operators' envelopes drawn as they play, each carrier shaded by its
+  brightness, in every theme's own look
 - **Every page shows what it does:** the four knobs as cards across the top, and a graph of the page below:
   the envelope, the LFO per destination, the delay's echoes, the reverb's tail, the swing grid, the glide,
   the oscillator and filter, the arpeggio. Hold **HOME** (SHIFT) and a map shows what every button, encoder
@@ -238,9 +262,11 @@ by the keys, with what each key is in Skiff.
 In the order the device lists them:
 
 - **ANALOG**: virtual analog; two oscillators, noise, drive, resonant low-pass filter
-- **FM6**: classic 6-operator FM (Dexed-based): 32 algorithms, a full patch per track edited in the
-  web editor (which imports .syx files), macros on the device, an algorithm chart on screen; SLOT
-  picks a factory patch (F1–F8) or the track's own (OWN)
+- **FM6**: classic 6-operator FM (Dexed-based): 32 algorithms, a full patch per track, every value of it
+  editable on the device (EDIT › OPERATOR and ALL OPS: the operators' envelopes drawn as they play, each
+  carrier shaded by how bright the modulators make it) or in the web editor (which imports .syx files);
+  INIT starts from a bare sine; macros on the device, an algorithm chart; SLOT picks a factory patch
+  (F1–F8) or the track's own (OWN)
 - **PHASE**: phase distortion (ported from CrispyZebra)
 - **LOFI**: chiptune; pulse, triangle, saw, noise and a 4-bit wave RAM, stepped envelope, sweep, arpeggio
 - **SAMPLE**: multisampled instruments and 3 user sample slots
@@ -311,7 +337,8 @@ every setting back as a new unit has it. The web editor's Settings tab reads and
   jump. ON or OFF, every click of a fast turn counts
 - **BPM LOCK:** ON (default), SELECT turns the pages of a family; hold GLO and turn SELECT, tap F4 in the GLO
   layer or use GLO › GLOBAL for the tempo. OFF, SELECT is the tempo everywhere, Felucca's way. Skiff turns it
-  ON once on a unit coming from Felucca; DRUM-X's SOUND sheet moves its rows with SELECT either way
+  ON once on a unit coming from Felucca; DRUM-X's SOUND sheet and FM6's OPERATOR and ALL OPS move their rows with
+  SELECT either way
 - **SCALE LEDS:** OFF or ON: the keys show the selected track's scale all the time (the root a little
   brighter); not on DRUM or SLICE tracks
 - **CLOCK:** INT, USB or TRS, where the tempo comes from. **MIDI IN:** CH1-6, channels 1–6 play tracks 1–6,

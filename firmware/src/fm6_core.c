@@ -127,7 +127,9 @@ static void fm6_env_init(fm6_env_t *e, const uint8_t *op, int32_t outlevel, int3
     fm6_env_advance(e, op, 0);
 }
 
-static int32_t fm6_env_get(fm6_env_t *e, const uint8_t *op)
+/* (FM6 LAB) the envelopes' steps (and the pitch envelope's) always inline: the editor runs them too (ui_fm6.c), and a
+ * second caller would leave them out of the audio loop as calls */
+static inline __attribute__((always_inline)) int32_t fm6_env_get(fm6_env_t *e, const uint8_t *op)
 {
     if (e->statc) {
         e->statc -= FM6_N;
@@ -158,7 +160,7 @@ static int32_t fm6_env_get(fm6_env_t *e, const uint8_t *op)
     return e->level;
 }
 
-static void fm6_env_key(fm6_env_t *e, const uint8_t *op, int down)
+static inline __attribute__((always_inline)) void fm6_env_key(fm6_env_t *e, const uint8_t *op, int down)
 {
     if (e->down != (uint8_t)down) {
         e->down = (uint8_t)down;
@@ -198,7 +200,7 @@ static void fm6_penv_init(fm6_penv_t *e, const uint8_t *p)
     e->down = 1;
     fm6_penv_advance(e, p, 0);
 }
-static int32_t fm6_penv_get(fm6_penv_t *e, const uint8_t *p)
+static inline __attribute__((always_inline)) int32_t fm6_penv_get(fm6_penv_t *e, const uint8_t *p)
 {
     if (e->ix < 3u || (e->ix < 4u && !e->down)) {
         if (e->rising) {
@@ -217,7 +219,7 @@ static int32_t fm6_penv_get(fm6_penv_t *e, const uint8_t *p)
     }
     return e->level;
 }
-static void fm6_penv_key(fm6_penv_t *e, const uint8_t *p, int down)
+static inline __attribute__((always_inline)) void fm6_penv_key(fm6_penv_t *e, const uint8_t *p, int down)
 {
     if (e->down != (uint8_t)down) {
         e->down = (uint8_t)down;
@@ -463,6 +465,16 @@ static int32_t fm6_osc_base(const uint8_t *op, int32_t note, int32_t extra)
     return ((4458616 * ((op[FP_FC] & 3) * 100 + op[FP_FF] % 100u)) >> 3) + (det > 7 ? 13457 * (det - 7) : 0);
 }
 
+/* operator op's envelope at a note-on of MIDI note `note`, velocity vel: its output level with the key's level scaling
+ * and the velocity, its rate scaling. The note's, and (FM6 LAB) the editor's: ui_fm6.c draws what plays */
+static void fm6_op_env_init(fm6_env_t *e, const uint8_t *op, int32_t note, int32_t vel)
+{
+    int32_t ol = fm6_scaleout(op[FP_OL]) + fm6_scale_level(note, op);
+    ol = (ol > 127 ? 127 : ol) << 5;
+    ol += fm6_scale_vel(vel, op[FP_KVS]);
+    fm6_env_init(e, op, ol < 0 ? 0 : ol, fm6_scale_rate(note, op[FP_RS]));
+}
+
 /* a note-on (msfa note init) of patch p, MIDI note `note` (transposed), velocity vel. fresh: from silence
  * (phases, gains, feedback 0); else a retrigger keeps them, as msfa does */
 static void fm6_note_init(fm6_note_t *n, const uint8_t *p, int32_t note, int32_t vel, int fresh)
@@ -478,10 +490,7 @@ static void fm6_note_init(fm6_note_t *n, const uint8_t *p, int32_t note, int32_t
     n->fixed = 0;
     for (k = 0; k < 6u; k++) {
         const uint8_t *op = p + k * FP_OP;
-        int32_t ol = fm6_scaleout(op[FP_OL]) + fm6_scale_level(note, op);
-        ol = (ol > 127 ? 127 : ol) << 5;
-        ol += fm6_scale_vel(vel, op[FP_KVS]);
-        fm6_env_init(&n->env[k], op, ol < 0 ? 0 : ol, fm6_scale_rate(note, op[FP_RS]));
+        fm6_op_env_init(&n->env[k], op, note, vel);
         n->base[k] = fm6_osc_base(op, note, 0);
         n->fixed |= (uint8_t)((op[FP_MODE] & 1u) << k);
     }

@@ -371,6 +371,30 @@ static void scr_shown(void)                            /* after the frame: the r
 static const page_t *page_over;   /* a quick layer's own four knobs (ui_layer.c), while it edits or draws them */
 static const page_t *cur_page(void) { return page_over ? page_over : &PAGES[ui.page]; }
 
+/* (FM6 LAB) a sheet: a page whose four knobs are a window over a table, SELECT moving it before the pages beside it
+ * (DRUM-X's SOUND, FM6's OPERATOR and ALL OPS: ui_input.c SHEETS). sheet_of: the page's, or 0 */
+typedef struct {
+    uint8_t graph, eng, nwin, *win;              /* the page (GR_*), the engine it is for, its windows, the one shown */
+    void (*knob)(uint32_t k, int32_t s);
+    void (*cards)(void);
+    uint32_t (*sig)(void);                       /* what the cards and the panel show (ui_graph.c graph_signature) */
+    void (*draw)(const track_t *t, uint16_t c);  /* the panel, from its top */
+    const char *(*title)(void);                  /* the header's */
+    void (*pick)(int32_t s);                     /* PRESETS */
+    const char *pj;                              /* PRESETS' job (SHIFT's map) */
+} sheet_t;
+static const sheet_t *sheet_of(uint32_t g);
+/* SELECT on a sheet: its window down (d > 0) or up; 0 at its ends (SELECT goes on to the page there) */
+static int sheet_rows(const sheet_t *sh, int32_t d)
+{
+    int32_t w = (int32_t)(*sh->win % sh->nwin) + (d > 0 ? 1 : -1);
+    if (w < 0 || w >= (int32_t)sh->nwin)
+        return 0;
+    *sh->win = (uint8_t)w;
+    ui.hot_t = 0;                                       /* (another knob's card: none lit) */
+    return 1;
+}
+
 /* MENU > LARGE (#15, Discussion #80: what KNOB 1..4 do, in bigger type). Per page type:
  *   LK_TALL  HOME and the value pages (EDIT ENV LFO MOD FX SLICER SCL CHORD ARP VOICE PATTERN STEP's knobs, MIXER,
  *            GLOBAL, SYSTEM, TOOLS, MOTION): tall cards (a K1..K4 keycap, the icon, the label in M, the value in L,
@@ -392,8 +416,8 @@ static uint32_t large_kind(void)
         return LK_TALL;
     g = cur_page()->graph;
     return g == GR_BROWSE || g == GR_SLOTS || g == GR_USER || g == GR_BANK || step_page(g) ||
-           g == GR_CHANCE || g == GR_PLAY || g == GR_SLICES || g == GR_EVENTS || g == GR_SONG || g == GR_DXSND ? LK_LABEL
-                                                                                                             : LK_TALL;
+           g == GR_CHANCE || g == GR_PLAY || g == GR_SLICES || g == GR_EVENTS || g == GR_SONG || sheet_of(g) ? LK_LABEL
+                                                                                                           : LK_TALL;
 }
 /* the geometry of the page shown: the cards' height, the panel's top and height */
 static uint32_t card_h(void) { return large_kind() == LK_TALL ? LG_CARD_H : CARD_H; }
@@ -434,13 +458,9 @@ static uint32_t layer_btn(void);
 /* (Skiff phase 7, 8) EDIT > SOUND, the DRUM-X sound sheet (ui_dx.c, included by ui_input.c): the sound edited, the
  * sheet's window the knobs are on (0..3) */
 static uint8_t dx_ui_lane, dx_ui_win;
-static void dx_knob(uint32_t k, int32_t s);
-static void dx_cards(void);
-static uint32_t dx_sig(void);
-static void graph_dx(const track_t *t, uint16_t c);
-static int dx_rows(int32_t d);
-static void dx_lane_turn(int32_t s);
-static const char *dx_title(void);
+/* (FM6 LAB) EDIT > OPERATOR and ALL OPS (ui_fm6.c): the operator picked (0..5: OP1..OP6), OPERATOR's window, ALL
+ * OPS' window (.pool: off the audio ISR's merged globals) */
+static uint8_t fm_ui[3] __attribute__((section(".pool")));
 
 /* FM operator pages belong to DIGITAL; they never appear on other instruments (without FELUCCA_FM4: never). SLICES:
  * a SLICE track's (ui_slice.c); (Skiff U3, R6) LANES a DRUM track's (its lane levels; DRUM-X's sheet has them);
@@ -451,9 +471,10 @@ static const char *dx_title(void);
 static int page_visible(uint32_t i)
 {
     const engine_t *e = ENGINES[TSEL->eng_req % NENGINES];
+    const sheet_t *sh = sheet_of(PAGES[i].graph);
     uint32_t id = PAGES[i].id[0];
-    if (PAGES[i].graph == GR_DXSND)
-        return TSEL->eng_req % NENGINES == ENGI_DRUMX;
+    if (sh)
+        return TSEL->eng_req % NENGINES == sh->eng;
     if (PAGES[i].graph == GR_LANES)
         return TSEL->eng_req % NENGINES == ENGI_DRUM;
     if (PAGES[i].graph == GR_ROLL)
@@ -812,8 +833,9 @@ static int page_step(int32_t dir)
 static const char *page_head(void)
 {
     const page_t *pg = cur_page();
-    if (pg->graph == GR_DXSND)
-        return dx_title();
+    const sheet_t *sh = sheet_of(pg->graph);
+    if (sh)
+        return sh->title();
     if (pg->scope == SC_ENGINE)                         /* ((Skiff U4, L5) EDIT: the engine's own name (OSC, KIT), the
                                                          * footer only where it is (n/m); the footer said it before) */
         return ENGINES[TSEL->eng_req % NENGINES]->page_title[pg->id[0] != P_E0];
@@ -1354,7 +1376,8 @@ static int set_engine_of(track_t *t, uint32_t ei)
 static void apply_preset(uint32_t pi) { apply_preset_to(TSEL, pi); }
 static int set_engine(uint32_t ei) { return set_engine_of(TSEL, ei); }
 /* INIT (TOOLS, the EDIT layer): the selected track's engine from its defaults and first preset, the steps kept;
- * (Skiff phase 7) on a DRUM-X track the project's kit back to the factory's too. One undo copy holds both (UNDO_KIT) */
+ * (Skiff phase 7) on a DRUM-X track the project's kit back to the factory's too. One undo copy holds both (UNDO_KIT).
+ * (FM6 LAB) on FM6 the bare sine to build a sound from (FM6_INIT: OP1 alone, ALG 1; SLOT OWN; the macros at 0) */
 static void sound_init(void)
 {
     track_t *t = TSEL;
@@ -1363,6 +1386,12 @@ static void sound_init(void)
     set_engine(t->eng_req);
     if (kit)
         memcpy(dx_kit, DX_KIT_DEF, sizeof dx_kit);
+    if (t->eng_req % NENGINES == ENGI_FM6) {
+        uint8_t v[FP_SIZE + 1u];
+        fm6_unpack(FM6_INIT, v);
+        fm6_set_patch(trk_index(t), v);
+        fm6_adopt(trk_index(t));
+    }
     load_end(t);
     ui_message("SOUND INITIALIZED");
 }

@@ -742,8 +742,8 @@ static void edit_param(uint32_t slot, int32_t steps)
         song_knob(slot, steps);
         return;
     }
-    if (pg->graph == GR_DXSND) {                          /* (Skiff phase 7, 8) EDIT > SOUND: the sheet's window (ui_dx.c) */
-        dx_knob(slot, steps);
+    if (sheet_of(pg->graph)) {                            /* (Skiff phase 7, 8; FM6 LAB) a sheet: its window (SHEETS) */
+        sheet_of(pg->graph)->knob(slot, steps);
         return;
     }
     if (pg->graph == GR_LANES && slot == 0u) {           /* (Skiff U3, R6) LANES: KNOB 1 the lane (the grid's too), KNOB 2
@@ -993,8 +993,8 @@ static void presets_turn(int32_t s)
         ui.hot_t = 40;
     } else if (pg->fam == FAM_SEQ && g == GR_STEPS) {
         cursor_set(ui.cursor + s);                        /* (PATTERN draws it; MOTION: STEP shows it) */
-    } else if (g == GR_DXSND) {                           /* (Skiff phase 8) DRUM-X's sheet: the sound (BD .. CB) */
-        dx_lane_turn(s);
+    } else if (sheet_of(g)) {                             /* (Skiff phase 8; FM6 LAB) a sheet's pick: DRUM-X's sound */
+        sheet_of(g)->pick(s);                             /* (BD .. CB), FM6's operator */
     } else if (g == GR_SLICES) {                          /* ((Skiff U4, F7) SLICES: KNOB 1's, the slice; was nothing) */
 #if FELUCCA_SLICE
         if (slice_page_ok())
@@ -1005,21 +1005,23 @@ static void presets_turn(int32_t s)
     }
 }
 
-/* (Skiff phase 8, DESIGN.md rule 3) SELECT turned s on a page: a detent a step, either way. DRUM-X's sheet moves its
- * knobs' window first, then the page beside it; any other page steps to the page before or after in its family (ui.c
- * page_step: the ends where they are). The sheet entered from the page after it: its foot, as SELECT left it */
+/* (Skiff phase 8, DESIGN.md rule 3) SELECT turned s on a page: a detent a step, either way. A sheet (DRUM-X's, FM6's)
+ * moves its knobs' window first, then the page beside it; any other page steps to the page before or after in its
+ * family (ui.c page_step: the ends where they are). A sheet entered from the page after it: its foot, as SELECT left
+ * it */
 static void select_turn(int32_t s)
 {
     int32_t d = s > 0 ? 1 : -1, n = s > 0 ? s : -s;
+    const sheet_t *sh;
     while (n-- > 0) {
-        if (cur_page()->graph == GR_DXSND && dx_rows(d))
+        if ((sh = sheet_of(cur_page()->graph)) != 0 && sheet_rows(sh, d))
             continue;
         if (!page_step(d)) {
             ui.edge_t = 24;                             /* ((Skiff U4, F7) the end: the footer's n/m flashes) */
             break;
         }
-        if (cur_page()->graph == GR_DXSND)
-            dx_ui_win = d > 0 ? 0u : 3u;
+        if ((sh = sheet_of(cur_page()->graph)) != 0)
+            *sh->win = (uint8_t)(d > 0 ? 0u : sh->nwin - 1u);
     }
 }
 
@@ -1491,8 +1493,8 @@ static void ui_input(void)
         track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));
     if ((s = glo ? sel : panel_enc(EN_SELECT)) != 0) {   /* SELECT: the tempo with GLO held (or BPM LOCK OFF, Felucca's
                                                          * way); (Skiff phase 8, rule 3) else the pages */
-        int sheet = !lay && !ui.home && cur_page()->graph == GR_DXSND;   /* (Skiff U1) the sound sheet's rows: SELECT
-                                                                          * is their only way, BPM LOCK or not */
+        int sheet = !lay && !ui.home && sheet_of(cur_page()->graph);   /* (Skiff U1) a sheet's rows: SELECT is their
+                                                                        * only way, BPM LOCK or not */
         if (glo || (!(ui_prefs & PREF_BPM_LOCK) && !sheet)) {
             song.g[G_BPM] = (int16_t)clamp(song.g[G_BPM] + accel(EN_SELECT, s, 200), GP[G_BPM].min, GP[G_BPM].max);
             ui.bpm_t = 40;                              /* the header's BPM lights up; no message over the header */
@@ -1522,8 +1524,8 @@ static void ui_input(void)
         if (ui.home || pg->scope == SC_STEP || pg->scope == SC_TRK || page_desc(pg, k, &hv) ||
             ((pg->graph == GR_USER || pg->graph == GR_BANK || pg->graph == GR_MOD) && k == 0u)
             || ((pg->graph == GR_SLICES || pg->graph == GR_PLAY) && k < 2u) ||
-            (pg->graph == GR_PLAY && k == 3u) || pg->graph == GR_SONG || pg->graph == GR_DXSND) {   /* (not an empty
-                                                         * column; (Skiff) PLAY's GATE; SONG's four; SOUND's four) */
+            (pg->graph == GR_PLAY && k == 3u) || pg->graph == GR_SONG || sheet_of(pg->graph)) {   /* (not an empty
+                                                         * column; (Skiff) PLAY's GATE; SONG's four; a sheet's four) */
             ui.hot_col = (uint8_t)k;
             ui.hot_t = 40;
         }
@@ -1629,3 +1631,22 @@ timeout:
 }
 
 #include "ui_dx.c"                                      /* (Skiff phase 7, 8) EDIT > SOUND: the DRUM-X sound sheet */
+#include "ui_fm6.c"                                     /* (FM6 LAB) EDIT > OPERATOR, ALL OPS: FM6's patch */
+
+/* (FM6 LAB) the sheets (ui.c sheet_t): their pages' every hook (the knobs, cards, panel, header, PRESETS, SELECT,
+ * SHIFT's map) goes through here */
+static const sheet_t SHEETS[] = {
+    {GR_DXSND, ENGI_DRUMX, DX_NWIN, &dx_ui_win, dx_knob, dx_cards, dx_sig, graph_dx, dx_title, dx_lane_turn, "DRUM"},
+    {GR_FMOP, ENGI_FM6, FM_NWIN, &fm_ui[1], fm_op_knob, fm_op_cards, fm_sig, graph_fm_op, fm_op_title, fm_op_turn,
+     "OPERATOR"},
+    {GR_FMALL, ENGI_FM6, FM_NWIN, &fm_ui[2], fm_all_knob, fm_all_cards, fm_sig, graph_fm_all, fm_all_title, fm_op_turn,
+     "OPERATOR"},
+};
+static const sheet_t *sheet_of(uint32_t g)
+{
+    uint32_t i;
+    for (i = 0; i < sizeof SHEETS / sizeof SHEETS[0]; i++)
+        if (SHEETS[i].graph == g)
+            return &SHEETS[i];
+    return 0;
+}

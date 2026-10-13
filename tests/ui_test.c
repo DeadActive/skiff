@@ -2472,9 +2472,130 @@ static int engine_cycle(const char *const *want, uint32_t n)   /* EDIT tapped fr
     }
     return ok;
 }
+/* (FM6 LAB) EDIT > OPERATOR and ALL OPS: every byte of an FM6 track's patch from the knobs (ui_fm6.c) */
+static int test_fm6_lab(void)
+{
+    int bad = 0, ok;
+    uint32_t tr, i, pos;
+    uint8_t was[FP_SIZE + 1u], gen;
+    ui_power_on();
+    ui_prefs |= PREF_BPM_LOCK;                          /* (SELECT: the pages, the sheets' rows) */
+    tr = trk_index(TSEL);
+    set_engine_of(TSEL, ENGI_FM6);                      /* TINE EP: SLOT F1 */
+    ok = TSEL->p[P_E7] == 0;
+    go_title("OPERATOR"); frame();
+    fm_ui[0] = 0; fm_ui[1] = 0;
+    turn(EN_PRESET, 2);                                 /* OP3 (no sound load) */
+    ok &= fm_ui[0] == 2u && TSEL->preset == 0u && TSEL->eng_req == ENGI_FM6 && str_eq(page_head(), "OPERATOR 3");
+    memcpy(was, fm6_patch[tr], sizeof was);
+    gen = fm6_pgen[tr];
+    turn(EN_K1, -3);                                    /* OUTPUT */
+    for (i = 0; i < FP_SIZE; i++)
+        ok &= i == (5u - 2u) * FP_OP + FP_OL ? fm6_patch[tr][i] < was[i] : fm6_patch[tr][i] == was[i];
+    ok &= fm6_pgen[tr] != gen && TSEL->p[P_E7] == FM6_OWN && ui.hot_col == 0u;
+    bad += check("OPERATOR: PRESETS picks OP3 (no load), K1 turns its OUTPUT byte only, the patch is OWN now", ok);
+    turn(EN_K1, 3);
+    bad += check("OUTPUT back where it was: the patch is TINE EP's again, SLOT F1", TSEL->p[P_E7] == 0 &&
+                 !memcmp(fm6_patch[tr], was, FP_SIZE));
+    {   /* RATIO: x0.5 .. x31, then 1 10 100 1K HZ, and back */
+        uint8_t *op = fm6_patch[tr] + (5u - 2u) * FP_OP;
+        turn(EN_K2, -40);
+        ok = !op[FP_MODE] && op[FP_FC] == 0;
+        for (pos = 1; pos < 36u; pos++) {
+            turn(EN_K2, 1);
+            ok &= op[FP_MODE] == (pos >= 32u) && op[FP_FC] == (pos >= 32u ? pos - 32u : pos);
+        }
+        turn(EN_K2, 1);
+        ok &= op[FP_MODE] && op[FP_FC] == 3;
+        turn(EN_K2, -40);
+        ok &= !op[FP_MODE] && op[FP_FC] == 0;
+        bad += check("RATIO walks x0.5, x1 .. x31, 1 10 100 1K HZ (MODE fixed) and back, the ends where they are", ok);
+    }
+    turn(EN_SELECT, 1);                                 /* ENV 1: RATE 1 LEVEL 1 RATE 2 LEVEL 2 */
+    memcpy(was, fm6_patch[tr], sizeof was);
+    turn(EN_K3, -2);
+    ok = fm_ui[1] == 1u && str_eq(cur_page()->title, "OPERATOR") && fm6_patch[tr][(5u - 2u) * FP_OP + FP_R1 + 1] < was[(5u - 2u) * FP_OP + FP_R1 + 1];
+    turn(EN_SELECT, 3);                                 /* MORE: BREAK KEY RATE VELOCITY LFO AMP */
+    turn(EN_K1, 1);
+    ok &= fm_ui[1] == 4u && fm6_patch[tr][(5u - 2u) * FP_OP + FP_BP] == was[(5u - 2u) * FP_OP + FP_BP] + 1u;
+    turn(EN_SELECT, 1);                                 /* past MORE: ALL OPS, its top */
+    ok &= str_eq(cur_page()->title, "ALL OPS") && fm_ui[2] == 0u && str_eq(page_head(), "ALL OPS");
+    turn(EN_SELECT, -1);                                /* back: OPERATOR's foot */
+    ok &= str_eq(cur_page()->title, "OPERATOR") && fm_ui[1] == 4u;
+    bad += check("SELECT: OPERATOR's windows (ENV 1 RATE 2, MORE BREAK), past its foot ALL OPS's top, back its foot", ok);
+    go_title("ALL OPS"); fm_ui[2] = 0; frame();
+    TSEL->p[P_E0] = 5; TSEL->p[P_E1] = 2;               /* EDIT 1's ALGO and FEEDBACK over the patch's 5 and 3 */
+    turn(EN_K1, 1);
+    turn(EN_K2, 1);
+    ok = fm6_patch[tr][FP_ALG] == 5u && TSEL->p[P_E0] == 0 && fm6_patch[tr][FP_FB] == 6u && TSEL->p[P_E1] == 0 &&
+         fm6_alg_of(TSEL) == 5u;
+    bad += check("ALL OPS: ALGO and FEEDBACK step from what plays (ALG 5 by EDIT 1, FB 3 + 2) into the patch, EDIT 1's to "
+                 "neutral", ok);
+    turn(EN_SELECT, 3);                                 /* LFO: WAVE RATE FADE KEY SYNC */
+    memcpy(was, fm6_patch[tr], sizeof was);
+    turn(EN_K1, 1); turn(EN_K4, -1);
+    ok = fm_ui[2] == 3u && fm6_patch[tr][FP_LFW] == was[FP_LFW] + 1u && fm6_patch[tr][FP_LKS] == 0u;
+    bad += check("ALL OPS LFO: WAVE on, KEY SYNC off", ok);
+    ui.fam_last[FAM_EDIT] = ui.page;
+    set_engine_of(TSEL, 0); frame();
+    bad += check("ALL OPS of a track no longer FM6 falls back to EDIT 1 (the sheets are FM6's)", str_eq(cur_page()->title, "EDIT 1"));
+    {   /* the panel's brightness (Steinberg's idea): INIT's sine cold everywhere; TINE EP's OP3 (fed by OP4, x14) hot
+         * at its attack, cooler at the key up; six carriers (ALG 32) with FEEDBACK 7: heat from the feedback alone */
+        static fm_sim_t s;
+        uint8_t v[FP_SIZE + 1u];
+        uint32_t x, h0, h1, any = 0;
+        set_engine_of(TSEL, ENGI_FM6);
+        fm_sim(&s, TSEL);
+        h0 = fm_heat(&s, 2, fm_feeders(s.alg, 2), 1);
+        h1 = fm_heat(&s, 2, fm_feeders(s.alg, 2), FM_HW);
+        ok = h0 >= 6u && h1 < h0 && s.held > 0 && s.n > s.held && s.op[2].n >= 4u && s.op[2].x[s.op[2].n - 1u] == FM_XW - 1;
+        fm6_unpack(FM6_INIT, v);
+        fm6_set_patch(tr, v);
+        fm_sim(&s, TSEL);
+        for (x = 0; x < FM_XW; x++)
+            any |= fm_heat(&s, 0, fm_feeders(s.alg, 0), (int32_t)x);
+        ok &= !any && s.live == 1u && (s.car & 1u);
+        v[FP_ALG] = 31;                                 /* ALG 32: OP6 a carrier with the feedback */
+        v[FP_FB] = 7;
+        v[FP_OL] = 99;                                  /* (OP6: the patch's first operator) */
+        fm6_set_patch(tr, v);
+        fm_sim(&s, TSEL);
+        ok &= fm_heat(&s, 5, fm_feeders(s.alg, 5), 2) > 0u && !fm_heat(&s, 0, fm_feeders(s.alg, 0), 2);
+        bad += check("brightness: TINE EP's OP3 hot at the attack, cooler at the key up; INIT cold; ALG 32 FB 7 warm", ok);
+    }
+    {   /* INIT on FM6: the bare sine to build from (OWN, the macros at 0, the footer INIT VOICE); SAVE held: back */
+        uint8_t ini[FP_SIZE + 1u], tine[FP_SIZE + 1u];
+        char nm[16];
+        set_engine_of(TSEL, ENGI_FM6); go_home(); frame();
+        TSEL->p[P_E2] = 20;                             /* (MOD LVL turned since the load) */
+        memcpy(tine, fm6_patch[tr], sizeof tine);
+        fm6_unpack(FM6_INIT, ini);
+        confirm_open(CF_INIT_SOUND, song.sel); frame();
+        press(B_OCTUP);
+        sound_name(TSEL, nm);
+        ok = !memcmp(fm6_patch[tr], ini, FP_SIZE) && TSEL->p[P_E7] == FM6_OWN && !TSEL->p[P_E0] && !TSEL->p[P_E2] &&
+             str_eq(nm, "INIT VOICE") && msg_is("SOUND INITIALIZED");
+        hold(B_SAVE);
+        sound_name(TSEL, nm);
+        ok &= !memcmp(fm6_patch[tr], tine, FP_SIZE) && TSEL->p[P_E2] == 20 && str_eq(nm, "TINE EP");
+        bad += check("INIT on FM6: the bare sine (OP1, ALG 1), SLOT OWN, macros 0, named INIT VOICE; SAVE held: TINE EP back", ok);
+    }
+    ui_prefs = 0;                                       /* BPM LOCK OFF: on the sheet SELECT is still its rows */
+    set_engine_of(TSEL, ENGI_FM6);
+    go_page(GR_FMOP);
+    fm_ui[1] = 0;
+    {
+        int16_t b0 = song.g[G_BPM];
+        turn(EN_SELECT, 1);
+        bad += check("BPM LOCK OFF: OPERATOR's rows still on SELECT", fm_ui[1] == 1u && song.g[G_BPM] == b0);
+    }
+    return bad;
+}
+
 static int test_edit_cycle(void)
 {
     static const char *const CYC_A[] = {"EDIT 1", "EDIT 2", "VOICE", "VOICE 2", "EDIT 1"};
+    static const char *const CYC_F[] = {"EDIT 1", "EDIT 2", "OPERATOR", "ALL OPS", "VOICE", "VOICE 2", "EDIT 1"};
     static const char *const CYC_D[] = {"EDIT 1", "EDIT 2", "OP1 ENV", "OP2 ENV", "OP3 ENV", "OP4 ENV",
                                         "OP LEVEL", "VOICE", "VOICE 2", "EDIT 1"};
     int bad = 0, ok;
@@ -2495,8 +2616,8 @@ static int test_edit_cycle(void)
                  engine_cycle(CYC_D, NELEM(CYC_D)));
 #else
     set_engine_of(TSEL, ENGI_DIGITAL);
-    bad += check("EDIT cycle (engine 1 asked for: FM6, DIGITAL retired): EDIT 1 EDIT 2 VOICE VOICE 2 EDIT 1",
-                 TSEL->eng_req == ENGI_FM6 && engine_cycle(CYC_A, NELEM(CYC_A)));
+    bad += check("EDIT cycle (engine 1 asked for: FM6, DIGITAL retired): EDIT 1 EDIT 2 OPERATOR ALL OPS VOICE VOICE 2 EDIT 1",
+                 TSEL->eng_req == ENGI_FM6 && engine_cycle(CYC_F, NELEM(CYC_F)));
     (void)CYC_D;
 #endif
     {   /* #97: a DRUM track's lane levels on EDIT > LANES ((Skiff U3, R6) one page: KNOB 1 the lane, KNOB 2 its level;
@@ -3877,16 +3998,29 @@ static int test_fm4_retired(void)
                  up_rec(7)->engine == ENGI_DIGITAL && up_engine(7) == ENGI_FM6 &&
                  total == ENGINES[ENGI_FM6]->npresets + 1u);
     up_store(8, "AGAIN");
-    {
-        uint8_t pk[FM6_PACKED], w[FP_SIZE + 1u];
-        bad += check("  saved again: an FM6 user preset with SLOT OWN and the converted patch beside it",
+    {   /* ((FM6 LAB) the typed name goes into the patch's own too: the rest as converted) */
+        uint8_t pk[FM6_PACKED], w[FP_SIZE + 1u], f[FP_SIZE + 1u];
+        char an[16];
+        bad += check("  saved again: an FM6 user preset with SLOT OWN and the converted patch beside it, named AGAIN",
                      up_rec(8)->engine == ENGI_FM6 && up_value(up_rec(8), P_E7) == FM6_OWN && !upf_get(8, pk) &&
-                     (fm6_unpack(pk, w), !memcmp(w, v, FP_SIZE)));
+                     (fm6_unpack(pk, w), !memcmp(w, v, FP_NAME)) && !memcmp(w + FP_NAME, "AGAIN     ", 10));
         fm6_load_slot(song.sel, 2);                    /* another patch on the track, then the preset again */
         up_load(8);
         frame();
-        bad += check("  .. which loads back: the same patch, SLOT OWN", !memcmp(fm6_patch[song.sel], v, FP_SIZE) &&
+        bad += check("  .. which loads back: the same patch (named AGAIN), SLOT OWN",
+                     !memcmp(fm6_patch[song.sel], v, FP_NAME) && !memcmp(fm6_patch[song.sel] + FP_NAME, "AGAIN     ", 10) &&
                      TSEL->p[P_E7] == FM6_OWN && fm6_slot[song.sel] == FM6_OWN);
+        memcpy(w, fm6_patch[song.sel], sizeof w);
+        up_auto_name(an, ENGI_FM6, 9);
+        up_store(9, an);                               /* the automatic name ("FM6 10"): the patch keeps its own */
+        ok = !memcmp(fm6_patch[song.sel], w, FP_SIZE);
+        fm6_load_slot(song.sel, 2);                    /* a factory patch, F3: a typed name leaves it F3 */
+        fm6_adopt(song.sel);
+        memcpy(f, fm6_patch[song.sel], sizeof f);
+        up_store(10, "TYPED");
+        ok &= TSEL->p[P_E7] == 2 && !memcmp(fm6_patch[song.sel], f, FP_SIZE);
+        bad += check("  (FM6 LAB) the automatic name, or a factory patch (F3): the patch's own name stays", ok);
+        up_put(9, 0); up_put(10, 0);                   /* (erased: as the tests after it found them) */
     }
     /* preset numbers of engine 1 */
     set_engine_of(TSEL, ENGI_DIGITAL);
@@ -7686,6 +7820,7 @@ int main(void)
     bad += test_browse_no_pattern();
     bad += test_name();
     bad += test_edit_cycle();
+    bad += test_fm6_lab();
 #if FELUCCA_SLICE
     bad += test_slices();
 #endif

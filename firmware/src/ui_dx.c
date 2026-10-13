@@ -40,16 +40,6 @@ static void dx_follow(void)
     }
 }
 static void dx_lane_turn(int32_t s) { dx_ui_lane = (uint8_t)clamp((int32_t)(dx_ui_lane & 7u) + (s > 0 ? 1 : -1), 0, 7); }
-/* SELECT on the sheet: the window up or down; 0 at its ends (SELECT goes on to the page there) */
-static int dx_rows(int32_t d)
-{
-    int32_t w = (int32_t)(dx_ui_win % DX_NWIN) + (d > 0 ? 1 : -1);
-    if (w < 0 || w >= (int32_t)DX_NWIN)
-        return 0;
-    dx_ui_win = (uint8_t)w;
-    ui.hot_t = 0;                                       /* (another knob's card: none lit) */
-    return 1;
-}
 static const char *dx_title(void)                     /* the header's: "SOUND SD" */
 {
     static char t[12];

@@ -343,6 +343,20 @@ static int up_store(uint32_t k, const char *name)
     up_set_name(&r, k, name);
     for (i = 0; i < P_COUNT; i++)
         up_set_value(&r, i, motion_base_value(TSEL, i));
+    if (r.engine == ENGI_FM6 && TSEL->p[P_E7] == FM6_OWN && name && name[0]) {   /* (FM6 LAB) its own patch takes a
+                                                         * typed name (its first 10: .syx keeps it); a factory patch
+                                                         * (F n) and the automatic name leave it as it is */
+        char a[16];
+        up_auto_name(a, r.engine, k);
+        if (!str_eq(a, name)) {
+            uint32_t tr = trk_index(TSEL) % NTRK, n = str_len(name);
+            uint8_t v[FP_SIZE + 1u];
+            memcpy(v, fm6_patch[tr], sizeof v);
+            for (i = 0; i < 10u; i++)
+                v[FP_NAME + i] = (uint8_t)(i < n ? name[i] : ' ');
+            fm6_set_patch(tr, v);
+        }
+    }
     {
         int rc = up_put(k, &r);                         /* the record first, then its FM6 patch (up_fm6.c) */
         if ((rc == 0 || rc == 3) && r.engine == ENGI_FM6) {

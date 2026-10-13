@@ -1240,19 +1240,20 @@ static void shift_map(smap_t *m)
     uint32_t g = ui.home ? GR_NONE : cur_page()->graph, steps = !ui.home && (step_page(g) || g == GR_CHANCE ||
                                                                                g == GR_PLAY || g == GR_STEPS);
     static const char SND[] = "SOUND";              /* (PRESETS' job on most pages: not this page's own) */
+    const sheet_t *sh = sheet_of(g);
     const char *pj = ui.home || g == GR_BROWSE ? SND : steps ? "STEP" : g == GR_USER || g == GR_SLOTS ? "SLOT" :
                      g == GR_BANK ? "PATTERN" : g == GR_EVENTS ? "ROW" : g == GR_SONG ? "ENTRY" :
-                     g == GR_DXSND ? "DRUM" : g == GR_SLICES ? "SLICE" : SND;
+                     sh ? sh->pj : g == GR_SLICES ? "SLICE" : SND;
     static const smap_t ALL[6] = {{"BUTTONS", "PAGES", 0}, {"HOLD ONE", "ITS LAYER", 0}, {"HOLD SAVE", "UNDO", 0},
                                   {"+ SAVE", "TAKE", 2}, {"+ REC", "REC SET", 2}, {"+ BUTTON", "LOCK", 2}};
     uint32_t i;
     m[0] = (smap_t){"PRESETS", pj, (uint8_t)(pj != SND)};
-    if (!(ui_prefs & PREF_BPM_LOCK) && g != GR_DXSND)
+    if (!(ui_prefs & PREF_BPM_LOCK) && !sh)
         m[1] = (smap_t){"SELECT", "TEMPO", 1};
     else if (ui.home)
         m[1] = (smap_t){"GLO + SELECT", "TEMPO", 0};
     else
-        m[1] = (smap_t){"SELECT", g == GR_DXSND ? "ROWS" : "PAGE", (uint8_t)(g == GR_DXSND)};
+        m[1] = (smap_t){"SELECT", sh ? "ROWS" : "PAGE", (uint8_t)(sh != 0)};
     m[2] = (smap_t){"ALGO", "TRACK", 0};
     m[3] = steps ? (smap_t){"KEYS + REC", "STEPS", 1} : (smap_t){"KEYS", drum_track(TSEL) ? "DRUMS" : "NOTES", 0};
     m[4] = steps ? (smap_t){"EDIT + REC", "CLEAR", 1} : !ui.home && act_cols() ? (smap_t){"OCT+", "DO IT", 1} :

@@ -715,6 +715,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_SIX_EDIT, S_SIX_EDIT_SAID,
        S_LFO_DEST, S_VOICE2, S_VOICE2_UNI, S_ARP_ON, S_ARP2, S_EDIT_FLT, S_GLOBAL_SWING, S_VOICE_GLIDE,   /* (Skiff U5) */
        S_SHIFT_ENV, S_SHIFT_STEP, S_SHIFT_HOME, S_LFO_RUN, S_LFO_DEST_RUN, S_HOME_SCOPE,
+       S_FM_TONE, S_FM_ENV, S_FM_KEYS, S_FM_ALGO, S_FM_PITCH, S_FM_LFO, S_FM_INIT,   /* (FM6 LAB) */
        S_MOCK_HOME, S_MOCK_PRESETS, S_MOCK_SEQ, S_MOCK_DRUM, S_MOCK_MIXER, S_MOCK_DIALOG, S_MOCK_MENU, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "project", "lanes", "step", "pattern", "chance", "motion", "drum",
@@ -741,6 +742,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "six_home", "six_song", "six_perform", "six_mixer", "six_glo", "six_fx", "six_edit", "six_edit_said",
     "lfo_dest", "voice_2", "voice_2_uni", "arp_on", "arp_2", "edit_flt", "global_swing", "voice_glide",
     "shift_env", "shift_step", "shift_home", "lfo_run", "lfo_dest_run", "home_scope",
+    "fm_op_tone", "fm_op_env", "fm_op_keys", "fm_all_algo", "fm_all_pitch", "fm_all_lfo", "fm_init",
     "mock_home", "mock_presets", "mock_seq", "mock_drum", "mock_mixer", "mock_dialog", "mock_menu"};
 
 /* the scenes of the UI design screens: the state the UI-redesign
@@ -1145,6 +1147,35 @@ static void setup(int s)
     case S_SIX_HOME: song.octave = 2; song.rec = 1; usb.config = 1; song.sel = NTRK - 2u; break;
     case S_SIX_SONG:                                /* (SEQ > SONG playing, SONG ON: entry B picked) */
         song_lists(1); go_page(GR_SONG); song.sel = NTRK - 2u; sg.entry = 1; break;
+    case S_FM_TONE:                                 /* (FM6 LAB) EDIT > OPERATOR and ALL OPS as the mockup's */
+    case S_FM_ENV:                                  /* (design/mock_fm6.py, D): TINE EP's OP4 (TONE, OUTPUT turned; */
+    case S_FM_KEYS:                                 /* ENV 1, RATE 2 turned); OP2 softer up the keys (R DEPTH 40 */
+    case S_FM_ALGO:                                 /* -LIN); ALGO with OP4 picked; BRASS's pitch envelope (PITCH 1) */
+    case S_FM_PITCH:                                /* and its LFO (FADE); INIT's bare sine */
+    case S_FM_LFO:
+    case S_FM_INIT: {
+        static const uint8_t HOT[7] = {0, 2, 2, 0, 1, 2, 0xFF}, OP[7] = {3, 3, 1, 3, 0, 0, 0};
+        static const uint8_t WIN[7] = {FMW_TONE, FMW_ENV1, FMW_KEYS, FMW_ALGO, FMW_PITCH1, FMW_LFO, FMW_TONE};
+        uint32_t i = s - S_FM_TONE, tr = trk_index(TSEL);
+        uint8_t v[FP_SIZE + 1u];
+        eng(ENGI_FM6);
+        if (s == S_FM_PITCH || s == S_FM_LFO)
+            apply_preset_to(TSEL, 3);               /* BRASS */
+        memcpy(v, fm6_patch[tr], sizeof v);
+        if (s == S_FM_KEYS) {
+            v[(5u - 1u) * FP_OP + FP_RD] = 40;
+            v[(5u - 1u) * FP_OP + FP_RC] = 0;
+        }
+        if (s == S_FM_INIT)
+            fm6_unpack(FM6_INIT, v);
+        fm6_set_patch(tr, v);
+        fm6_adopt(tr);
+        fm_ui[0] = OP[i];
+        go_title(i < 3u || s == S_FM_INIT ? "OPERATOR" : "ALL OPS");
+        fm_ui[i < 3u || s == S_FM_INIT ? 1 : 2] = WIN[i];
+        ui.hot_col = HOT[i] & 3u; ui.hot_t = HOT[i] == 0xFFu ? 0 : 30;
+        break;
+    }
     case S_DX_SOUND:                                /* (Skiff phase 8) EDIT > SOUND, DRUM-X's sheet on track 6 as the */
     case S_DX_SOUND2:                               /* mockup's (design/mock_p8.py): the snare, its PTCH B turned; its */
     case S_DX_SOUND3:                               /* switches, WAVE turned; the kick's COLR LEVL DRV (DRV ON, PMOD LONG) */

@@ -1136,6 +1136,16 @@ static void graph_fm6(const track_t *t, uint16_t c)
         y[k] = bus - 6 - FM_BH - 23 * (int32_t)(FM6_CELL[alg][k] >> 4);
         if (car >> k & 1u) { cl = x[k] < cl ? x[k] : cl; cr = x[k] > cr ? x[k] : cr; }
     }
+    if (sheet_of(cur_page()->graph)) {               /* ((FM6 LAB T) ALL OPS: the theme's mark round the operator picked,
+                                                      * under the chart: a gold frame, a laser, a cell's brackets) */
+        k = fm_ui[0] % 6u;
+        if (ux.crypt)
+            cv_frame(x[k] - 12, y[k] - 2, 25, FM_BH + 4, CR_GOLD);
+        else if (ux.neon)
+            ne_laser(x[k] - 12, y[k] - 2, 25, FM_BH + 4, T_SURF);
+        else if (ux.quark)
+            qk_corners(x[k] - 13, y[k] - 3, 27, FM_BH + 6, T_ACCENT, 4);
+    }
     for (k = 0; k < 6u; k++) {                       /* into k: its sources down to its jog row, across, down */
         for (j = 0; j < 6u; j++)
             if (m[k] >> j & 1u) {
@@ -1154,9 +1164,10 @@ static void graph_fm6(const track_t *t, uint16_t c)
     fm_bus(cl, cr, bus);
     FM6_CHART_HOOK(FMH_FB, fbop, 0);
     fm_loop(x[fbop], y[fbop], hot == P_E1 ? T_ACCENT : fb ? T_MID : T_DIM);
-    for (k = 0; k < 6u; k++) {
-        uint32_t on = pt[(5u - k) * FP_OP + FP_OL] != 0, fill_c = (car >> k & 1u) && on;
-        uint16_t f = hotset >> k & 1u ? T_ACCENT : c, fill = fill_c ? f : T_RAISE;
+    for (k = 0; k < 6u; k++) {                       /* ((FM6 LAB) ALL OPS: the operator picked, ACCENT) */
+        uint32_t on = pt[(5u - k) * FP_OP + FP_OL] != 0, pick = sheet_of(cur_page()->graph) && k == fm_ui[0] % 6u;
+        uint32_t fill_c = ((car >> k & 1u) && on) || pick;
+        uint16_t f = hotset >> k & 1u || pick ? T_ACCENT : c, fill = fill_c ? f : T_RAISE;
         char n[2] = {(char)('1' + k), 0};
         FM6_CHART_HOOK(FMH_BOX, k, 0);
         cv_rrect(x[k] - 10, y[k], 21, FM_BH, 3, fill, T_SURF);
@@ -1286,13 +1297,13 @@ static void page_title(char *ti)
         str_cpy(ti + str_len(ti), N_SCALE[clamp(t->p[P_SCALE], 0, (int32_t)(sizeof N_SCALE / sizeof N_SCALE[0]) - 1)], 8);
     }
 }
-/* (Skiff U4, L5) where the page is in its family, for the footer: "2/3" ("": a family of one; DRUM-X's sheet: what
- * SELECT does) */
+/* (Skiff U4, L5) where the page is in its family, for the footer: "2/3" ("": a family of one; a sheet (DRUM-X's,
+ * FM6's): what SELECT does) */
 static void page_pos(char *ti)
 {
     uint32_t i, n = 0, k = 0;
     ti[0] = 0;
-    if (cur_page()->graph == GR_DXSND) {
+    if (sheet_of(cur_page()->graph)) {
         str_cpy(ti, "SELECT: ROWS", 20);
         return;
     }
@@ -1352,8 +1363,8 @@ static uint32_t graph_signature(void)
     }
     if (pg->graph == GR_MOD)
         h ^= (mod_ui_slot + 1u) * 40503u;
-    if (pg->graph == GR_DXSND)                       /* (Skiff phase 7) the DRUM-X sound edited (ui_dx.c) */
-        h ^= dx_sig();
+    if (sheet_of(pg->graph))                         /* (Skiff phase 7; FM6 LAB) a sheet's: what it edits (SHEETS) */
+        h ^= sheet_of(pg->graph)->sig();
     if (pg->graph == GR_SLCR && t->p[P_SLCR])        /* the SLICER's step playing */
         h ^= (sl[song.sel].idx + 1u) * 2654435761u;
     if (pg->graph == GR_SLOTS) {                     /* (a checksum over each slot) */
@@ -2309,10 +2320,11 @@ static void draw_graph(void)
             cv_oy = 0;
             graph_bank();
             break;
-        case GR_DXSND:                               /* (Skiff phase 7, 8) EDIT > SOUND: the sheet, from the panel's top
-                                                      * (ui_dx.c) */
+        case GR_DXSND:                               /* (Skiff phase 7, 8; FM6 LAB) a sheet, from the panel's top */
+        case GR_FMOP:
+        case GR_FMALL:
             cv_oy = 0;
-            graph_dx(t, c);
+            sheet_of(pg->graph)->draw(t, c);
             break;
         case GR_SONG:                                /* (Skiff phase 5) the rows from the panel's top (the mockup's) */
             cv_oy = 0;

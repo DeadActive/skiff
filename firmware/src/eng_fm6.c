@@ -242,12 +242,30 @@ static void fm6_poll(void)
 }
 
 /* -------------------------------------------------------------- macros --- */
+/* RATIO, MOD ENV and VEL MOD (e: P_E0..) on the modulators of patch p in algorithm alg (0..31), as they play: the
+ * audio ISR's copy (fm6_sync) and (FM6 LAB) the editor's graph (ui_fm6.c) */
+static void fm6_macro(uint8_t *p, uint32_t alg, const int16_t *e)
+{
+    uint32_t car = fm6_carriers(alg), k, j;
+    int32_t meg = clamp(e[4], -64, 63) * 40 / 64;           /* MEG: rate steps (+ slower) */
+    for (k = 0; k < 6u; k++) {
+        uint8_t *op = p + k * FP_OP;
+        if ((car >> k) & 1u)
+            continue;
+        if (!op[FP_MODE])
+            op[FP_FC] = (uint8_t)clamp(op[FP_FC] + e[3], 0, 31);
+        for (j = 0; j < 4u; j++)
+            op[FP_R1 + j] = (uint8_t)clamp(op[FP_R1 + j] - meg, 0, 99);
+        op[FP_KVS] = (uint8_t)clamp(op[FP_KVS] + e[5], 0, 7);
+    }
+}
+
 /* the patch through E0..E6 (audio ISR; cheap when nothing changed) */
 static void fm6_sync(const track_t *t)
 {
-    uint32_t tr = (uint32_t)(t - trk), k, j, car, n = 0;
+    uint32_t tr = (uint32_t)(t - trk), k, car, n = 0;
     const int16_t *e = &t->p[P_E0];
-    int32_t meg, step;
+    int32_t step;
     if (tr >= NTRK)
         return;
     if (fm6_eff[tr].ok && fm6_eff[tr].gen == fm6_pgen[tr]) {
@@ -266,23 +284,16 @@ static void fm6_sync(const track_t *t)
         fm6_eff[tr].alg = (uint8_t)alg;
         fm6_eff[tr].fb = (uint8_t)clamp(p[FP_FB] + e[1], 0, 7);
         car = fm6_carriers(alg);
-        meg = clamp(e[4], -64, 63) * 40 / 64;               /* MEG: rate steps (+ slower) */
         step = clamp(e[6], 0, 127) * (12 * 13981) / 127;    /* DTUN: up to 12 cents a step (1 cent = 13981) */
-        for (k = 0; k < 6u; k++) {
-            uint8_t *op = p + (5u - k) * FP_OP;              /* OP1 first: carriers in their order */
+        for (k = 0; k < 6u; k++) {                           /* OP1 first: carriers in their order */
             uint32_t ki = 5u - k;
             fm6_eff[tr].dt[ki] = 0;
             if ((car >> ki) & 1u) {                          /* carriers 0, +1, -1, +2, -2, +3 steps apart */
                 static const int8_t SPREAD[6] = {0, 1, -1, 2, -2, 3};
                 fm6_eff[tr].dt[ki] = SPREAD[n++] * step;
-                continue;
             }
-            if (!op[FP_MODE])
-                op[FP_FC] = (uint8_t)clamp(op[FP_FC] + e[3], 0, 31);
-            for (j = 0; j < 4u; j++)
-                op[FP_R1 + j] = (uint8_t)clamp(op[FP_R1 + j] - meg, 0, 99);
-            op[FP_KVS] = (uint8_t)clamp(op[FP_KVS] + e[5], 0, 7);
         }
+        fm6_macro(p, alg, e);
         fm6_lfo_reset(&fm6_lfo[tr], p);
     }
     fm6_eff[tr].ok = 1;
