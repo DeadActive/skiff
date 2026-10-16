@@ -39,12 +39,15 @@ All by Hügelton Instruments (Leo Kuroshita), in this tree:
 | Felucca: firmware, tools, web pages, tests | GPL-3.0-only | `LICENSE` |
 | The PHASE engine's waveforms: a C port of the oscillator of CrispyZebra (<https://github.com/hugelton/CrispyZebra>) | GPL-3.0 | `firmware/src/eng_phase.c` |
 | The DRUM voices and kit | GPL-3.0-only | `firmware/src/drum_voice.c`, `firmware/src/eng_drum.c` |
-| The Hügelton Sample Pack: Felucca's drum sounds, made by `tools/gen_waves.py`, from which the SLICE engine's BREAK is built (not CC0) | GPL-3.0-only | `tools/gen_waves.py` |
+| The Hügelton Sample Pack: Felucca's drum sounds, made by `tools/gen_waves.py` (not CC0; the SLICE engine's BREAK was built from them through Skiff 1.1, the SLICE test's loop still is) | GPL-3.0-only | `tools/gen_waves.py` |
 | The Fukiai icon font (<https://github.com/hugelton/Fukiai>): the firmware's icons (rasterised at build time by `tools/gen_aa_icons.py`) and the web editor's | MIT | `web/fukiai.ttf`, `LICENSES/MIT-Fukiai.txt`, `web/FUKIAI-LICENSE.txt` |
 
 Skiff's changes to Felucca, marked (Skiff) in the sources, and its pictures (`docs/skiff.png` from the firmware's
 screen renders, `docs/controls.jpg` and `docs/keystrip.pdf` drawn by `tools/gen_panel_diagram.py`) are GPL-3.0-only
-too.
+too. So are SLICE's BREAK and FUNK (`assets/breaks/`, after Skiff 1.1): loops cut from drum takes made with the YuE2 music
+model by Multimodal Art Projection (<https://github.com/multimodal-art-projection/YuE>), under its permission for
+individual creators to publish and distribute what it makes; no YuE2 weights or code are in this tree (how they were
+made: `assets/breaks/ATTRIBUTION.txt`).
 
 ## Third-party material
 
