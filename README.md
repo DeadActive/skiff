@@ -14,6 +14,9 @@ synths and drums, patterns and songs, live performance, and a screen that shows 
   <img src="https://img.shields.io/badge/hardware-M--VAVE%20FM--1-555" alt="Hardware: M-VAVE FM-1">
 </p>
 
+<p align="center"><b>New in 1.2:</b> more sounds, a list by type, and new ways to shape them ·
+<a href="https://github.com/illuminus5/skiff/releases/tag/v1.2">the release notes</a></p>
+
 ![Skiff on the FM-1's screen: HOME, a step page, PERFORM, the MIXER, DELAY and the SHIFT map](docs/skiff.png)
 
 Skiff turns the FM-1 into a six-track groovebox: fourteen synth and drum engines with 143 factory sounds you can list
