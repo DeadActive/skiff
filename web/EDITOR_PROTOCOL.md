@@ -55,6 +55,13 @@ takes P_COUNT and P_E0 from `INFO` keeps working (see "The chord keys" below).
 levels), went in before the engine parameters, which moved from 83..90 to 91..98: P_COUNT 99, P_E0 91. No command
 changed; projects are FUN9 (3648 bytes, see "Projects (FUN9)"). See "The DRUM lane levels" below.
 
+**Skiff phase 9 (125 parameters):** twenty-two track parameters went in before the engine parameters, which moved
+from 95..102 to 117..124: FX > DRIVE's `TYPE` (95: SOFT HARD FOLD BITS, DIST's clipper) and `TONE` (96, −64..63),
+ENV 2's `ATTACK` `DECAY` `SUSTAIN` `RELEASE` (97..100: the MOD matrix's source ENV2, `SRC` value 9, appended), the
+DRUM lanes' `TUNE` (101..108, 0..127, 64 as designed) and `DECAY` (109..116, −64..63, 0 as designed): P_COUNT 125,
+P_E0 117. No command changed. Projects keep 103 values a track (the layout before), the new ones in SKF3's PX block (see "Projects
+(Skiff phase 6: SKF3)"); user presets store all 125.
+
 ## Framing
 
 A request is `F0 7D 46 4C <cmd> <args...> F7`:
@@ -80,7 +87,7 @@ watches (v2, `WATCH`), the device also sends push frames (cmds 23, 24, 26) at an
 | track | 0..NTRK−1: tracks 1..NTRK (synth parts; `INFO`'s NTRK: 4, Skiff phase 6 six) |
 | engine byte | 0..NENGINES−1 (firmware before 1.0: NENGINES = its drum track, no engine). The numbers are fixed, new engines are appended: 0 ANALOG, 1 reserved (DIGITAL before 1.0: see below), 2 PHASE, 3 LOFI, 4 SAMPLE, 5 VOICE, 6 TRIO, 7 WHEEL, 8 GRAIN, 9 PHYS, 10 DRUM, 11 NOISE, 12 FM6, 13 SLICE, (Skiff phase 7) 14 DRUM-X (NENGINES 15, Felucca and Skiff before: 14; a build with `FELUCCA_SLICE=0` keeps 13 reserved). The device and the editor list them in another order (ANALOG FM6 PHASE LOFI SAMPLE VOICE TRIO WHEEL GRAIN PHYS NOISE SLICE DRUM DRUM-X: `ENGINE_ORDER`); the numbers stay. Engine NENGINES (15 now) still names a user slot in the favourites messages |
 
-The engine parameters are `P_E0..P_E7`: P_COUNT−8 .. P_COUNT−1 (91..98), and `INFO` gives `P_E0`.
+The engine parameters are `P_E0..P_E7`: P_COUNT−8 .. P_COUNT−1 (117..124 since Skiff phase 9), and `INFO` gives `P_E0`.
 Their meaning, range and names depend on the current engine, so re-read `DESC` for them
 after an engine change.
 
@@ -308,7 +315,8 @@ those at their defaults, which change nothing. Then the chord keys (ids 81, 82):
 stored with 89 (or 69) load with CHRD OFF and VOIC CLOSE, their engine values at 83..90. Then the DRUM lane levels
 (ids 83..90): P_COUNT 99, P_E0 91; records stored with 91 (1.0.x) or fewer load with every lane at 127 (100 %), their
 engine values at 91..98.
-Skiff: the play direction `DIR` (id 91): P_COUNT 100, P_E0 92. A version 4 or 5 record keeps its pattern's 16
+Skiff: the play direction `DIR` (id 91): P_COUNT 100, P_E0 92; the ducking (92..94): P_COUNT 103, P_E0 95; phase 9
+(95..116): P_COUNT 125, P_E0 117, records of 103 loading those at their defaults. A version 4 or 5 record keeps its pattern's 16
 NUDGE values in the last 12 bytes of the value area (bytes 132..143 of it, beyond any P_COUNT below 128): 6 bits
 each, two's complement, 4 steps in 3 bytes; all 0 is on the grid, which every record of before holds. `UP_GET` /
 `UP_PUT` do not carry them (an `UP_PUT` record is on the grid); backups carry the whole record.
@@ -379,10 +387,13 @@ grid lives in the steps themselves, so every engine has it:
   NENGINES, no presets (`UP_LOAD` / `UP_STORE` rc 1), its level the global `G_DRLVL`. Drums are now the
   DRUM engine on any part: the first C key is the kick (C2 = 36), notes are GM numbers.
 - The globals `G_DRCH`, `G_DRLVL`, `G_DRREV` (ids 24..26: the old drum track's MIDI channel, level and
-  reverb send) keep their ids, and `G_COUNT` stays 27. `G_DRLVL` and `G_DRREV` are inert: `DESC` gives
-  label "-", range 0..0, and no page shows them. Id 24 (`G_DRCH`, never read since 1.0) is `G_RTYPE`
-  since 1.0: the reverb's model, `DESC` label "TYPE", enum ROOM (0) / SPRING (1), on the REVERB
-  page (FX); projects of formats before FUN7 load it as ROOM. MIDI channel 10 is no longer special (channels 1..4 play
+  reverb send) keep their ids, and `G_COUNT` stays 27. Id 24 (`G_DRCH`, never read since 1.0) is `G_RTYPE`
+  since 1.0: the reverb's model, `DESC` label "TYPE", enum ROOM (0) / SPRING (1), (Skiff phase 9) HALL (2), on the
+  REVERB page (GLO); projects of formats before FUN7 load it as ROOM, and Skiff before phase 9 loads HALL as SPRING
+  (its range ends there). `G_DRLVL` and `G_DRREV` were inert (`DESC` label "-", range 0..0); since Skiff phase 9
+  they are `G_CMODE` and `G_CFDBK`, the chorus's MODE (enum CHORUS 0 / FLANGER 1 / PHASER 2) and FEEDBACK (0..127),
+  KNOB 3 and 4 of GLO › CHORUS. A project of any format but SKF3 loads both as 0 (they held the old drum part's
+  values there); Skiff before phase 9 reads them as 0. MIDI channel 10 is no longer special (channels 1..4 play
   tracks 1..4, channels 5..16 are ignored since 1.0.3; Skiff phase 6: channels 1..6 play tracks 1..6, 7..16 are
   ignored; with ROUT SEL every channel the selected track).
 - Selecting a track with `TRACK` does not push `RELOAD` (the editor re-reads `DUMP`, the steps and the
@@ -601,7 +612,13 @@ when the track's engine is not the saved one).
   values 0..127 each (PITCH PMOD DECAY NOISE COLOR). SKF3 holds it at 1175: `58` ("X"), then the 88 bytes, just
   before the FM6 patches; 0 there (the factory kit unedited is not written; a record of before; a kit with a value out
   of range): the factory kit. SKF2
-  holds none (its four-track projects load with the factory kit).
+  holds none (its four-track projects load with the factory kit). (Skiff phase 9) A DRUM-X factory preset may load a
+  kit of its own (FACTORY KIT .. LASER KIT); `PRESET` then changes the kit too, so read it again (`KIT_GET`).
+- **The PX block (Skiff phase 9).** Every project format stores 103 values a track (byte 66 says 103), by count:
+  ids 0..94, then `P_E0..P_E7`. The parameters after them (ids 95..116 today) are SKF3's PX block at 981..1174: `50`
+  ("P"), a count n (22), then each track's n values, value + 64; written only when one of them is not its default,
+  so a project that uses none is the bytes it was before phase 9. A record without the block (every one before)
+  loads them at their defaults; Skiff before phase 9 reads an SKF3 with the block and ignores it.
 - **MIDI clock** has no SysEx. `G_CLOCK` selects the source: 0 INT, 1 USB, 2 TRS. With 1 or 2 the sequencer
   steps on that port's Clock pulses (the other port's are ignored), Start (0xFA) restarts from step 0,
   Continue (0xFB) resumes and Stop (0xFC) stops; BPM follows the incoming tempo (40..240), and 500 ms

@@ -99,6 +99,11 @@ static const uint8_t UNIT_G[3] = {G_CLOCK, G_ROUTE, G_TUNE};
 static uint8_t unit_g_adopt __attribute__((section(".pool")));   /* the first boot: a load takes them (main.c) */
 static uint32_t unit_g_t __attribute__((section(".pool")));      /* fm1_ms | 1 of a change not saved yet */
 static int unit_g_id(uint32_t id) { return id == G_CLOCK || id == G_ROUTE || id == G_TUNE; }
+/* (Skiff phase 9) PRESETS' LIST as a type (core.h PT_*, preset_t tag): the factory sounds of that type only. A byte no
+ * engine uses (0 in every older setting: none, so ALL or FAV, favorites.filter, as before; settings_persist.c keeps it
+ * below PT_N). favorites.filter stays 0 / 1: firmware before refuses a backup of any other (editor_backup.c) */
+#define ui_ptag (favorites.factory[15][21])
+_Static_assert(PT_N == 8, "settings_persist.c keeps ui_ptag below 8");
 /* MENU > AUDIO CLICK, CLICK LEVEL, COUNT-IN (1.1, Discussion #131; click.c, seq.c): two bits each in another byte no
  * engine uses, saved with the settings: bits 0-1 CLICK (OFF REC ON), 2-3 CLICK LEVEL (stored 0 MID, 1 LOW, 2 HIGH),
  * 4-5 COUNT-IN (OFF, 1 BAR, 2 BARS); 0 in older settings = OFF / MID / OFF, so nothing clicks or counts in that did
@@ -479,9 +484,10 @@ static int page_visible(uint32_t i)
         return TSEL->eng_req % NENGINES == ENGI_DRUM;
     if (PAGES[i].graph == GR_ROLL)
         return !drum_track(TSEL);
-    if (e->oneshot && (PAGES[i].fam == FAM_SCL || id == P_ATK || id == P_ED_FLT || id == P_VOICE || id == P_ALLOC))
+    if (e->oneshot && (PAGES[i].fam == FAM_SCL || id == P_ATK || id == P_ED_FLT || id == P_EG2_ATK || id == P_VOICE ||
+                       id == P_ALLOC))
         return 0;
-    if (e->ownenv && (id == P_ATK || id == P_ED_FLT))
+    if (e->ownenv && (id == P_ATK || id == P_ED_FLT || id == P_EG2_ATK))   /* ((Skiff phase 9) ENV 2: where ENV is) */
         return 0;
 #if FELUCCA_SLICE
     if (PAGES[i].graph == GR_SLICES)
@@ -607,7 +613,8 @@ static int lock_page_ok(uint32_t i)
     uint32_t k;
     if (i >= NPAGES || (PAGES[i].scope != SC_TRACK && PAGES[i].scope != SC_ENGINE) || PAGES[i].graph == GR_MOD)
         return 0;
-    if (PAGES[i].graph == GR_LANES)                     /* ((Skiff U3) LANES: KNOB 2 the lane's level, lock_id) */
+    if (PAGES[i].graph == GR_LANES)                     /* ((Skiff U3) LANES: KNOB 2 the lane's level, (phase 9) KNOB 3
+                                                         * 4 its TUNE DECAY, lock_id) */
         return 1;
     for (k = 0; k < 4u; k++)
         if (PAGES[i].id[k] != 0xFFu && motion_param(PAGES[i].id[k]))
@@ -617,7 +624,9 @@ static int lock_page_ok(uint32_t i)
 static uint32_t lock_id(uint32_t k)
 {
     uint32_t id = !ui.plk_src || !lock_page_ok(ui.plk_src - 1u) ? ENGINES[TSEL->eng_req % NENGINES]->knob[k & 3u] :
-                  PAGES[ui.plk_src - 1u].graph == GR_LANES ? ((k & 3u) == 1u ? P_LN0 + page_lane() : 0xFFu) :
+                  PAGES[ui.plk_src - 1u].graph == GR_LANES ? ((k & 3u) == 1u ? P_LN0 + page_lane() :
+                                                              (k & 3u) == 2u ? P_LTUNE0 + page_lane() :
+                                                              (k & 3u) == 3u ? P_LDECAY0 + page_lane() : 0xFFu) :
                   PAGES[ui.plk_src - 1u].id[k & 3u];
     return id < P_COUNT && motion_param(id) ? id : 0xFFu;
 }
@@ -965,11 +974,13 @@ static uint32_t fnv(uint32_t h, const void *p, uint32_t n)
     return h;
 }
 static uint32_t steps_sig(const track_t *t) { return fnv(2166136261u, t->step, sizeof t->step); }
-static uint32_t track_sig(const track_t *t)      /* the sound (an FM6 track's patch too), the steps */
+static uint32_t track_sig(const track_t *t)      /* the sound (an FM6 track's patch, a DRUM-X track's kit), the steps */
 {
     uint8_t id[3] = {t->eng_req, t->preset, t->user};
     uint32_t h = fnv(fnv(steps_sig(t), t->p, sizeof t->p), id, 3), k = trk_index(t);
     h = fnv(h, fm6_patch[k], sizeof fm6_patch[k]); /* (a patch the editor sent between two loads) */
+    if (t->eng_req % NENGINES == ENGI_DRUMX)     /* ((Skiff phase 9) a kit edited between two preset loads) */
+        h = fnv(h, dx_kit, sizeof dx_kit);
     for (uint32_t j = 0; j < motion.count; j++)
         if ((motion.event[j].place >> 6) == k) h = fnv(h, &motion.event[j], sizeof motion.event[j]);
     return h ^ ((motion.on >> k) & 1u);
@@ -1229,7 +1240,8 @@ static int param_kept(uint32_t i)
 
 /* a retired preset kept as an alias, so stored preset numbers stay valid: SAMPLE 1, once TRANH, is PIANO
  * (tools/gen_samples.py SMP_SET_ORIG). It loads as the original; browsing skips it. -> the preset k stands for.
- * (SAMPLE 4, once PERC, is past SMP_NPRESETS: apply_preset_to loads it as DRUM) */
+ * (SAMPLE 4, once PERC: apply_preset_to loads it as DRUM; (Skiff phase 9) SAMPLE's variations follow it, so it is an
+ * alias among the presets, skipped as 1 is) */
 static uint32_t preset_orig(const engine_t *e, uint32_t k)
 {
     return e->presets == SMP_PRESET_TABLE && k < SMP_NSETS ? SMP_SET_ORIG[k] : k;
@@ -1297,7 +1309,7 @@ static int set_engine_of(track_t *t, uint32_t ei);
 static void apply_preset_to(track_t *t, uint32_t pi)
 {
     const engine_t *e = ENGINES[t->eng_req % NENGINES];
-    uint32_t i;
+    uint32_t i, kit;
 #if !FELUCCA_FM4
     if (t->eng_req % NENGINES == ENGI_DIGITAL) {
         fm4_load_preset(t, pi);
@@ -1308,7 +1320,8 @@ static void apply_preset_to(track_t *t, uint32_t pi)
         set_engine_of(t, ENGI_DRUM);                  /* number: the editor's PRESET, a favourite): DRUM's kit */
         return;                                       /* (core.h drum_from_perc) */
     }
-    load_begin(t, UNDO_SOUND);
+    kit = t->eng_req % NENGINES == ENGI_DRUMX ? DRUMX_PKIT[pi % NELEM(DRUMX_PKIT)] : 0u;   /* ((phase 9) the kit + 1) */
+    load_begin(t, UNDO_SOUND | (kit ? UNDO_KIT : 0u));
     panic_req |= (uint8_t)(1u << trk_index(t));       /* MONO/POLY may change: release what sounds */
     t->user = 0;
     if (t == TSEL)
@@ -1338,6 +1351,8 @@ static void apply_preset_to(track_t *t, uint32_t pi)
         for (i = 0; i < NELEM(pr->more) && pr->more[i].id; i++)   /* ((Skiff) its LFO, GLIDE, ..: core.h) */
             t->p[pr->more[i].id] = pr->more[i].v;
     }
+    if (kit)                                          /* ((Skiff phase 9) DRUM-X: the preset's kit, the project's: */
+        memcpy(dx_kit, DX_KITS[kit - 1u], sizeof dx_kit);   /* one undo copy holds it, as INIT's: sound_init) */
     fm6_track_loaded(t);                              /* FM6: the preset's patch (its SLOT) */
     load_end(t);
 }
@@ -1448,27 +1463,37 @@ static uint32_t preset_all_at(uint32_t n, uint32_t *k)
     return e;
 }
 
+/* (Skiff phase 9) the LIST (PRESETS KNOB 4): 0 ALL, 1 FAV (favorites.filter), 2.. a type (ui_ptag + 1) */
+static uint32_t list_mode(void) { return ui_ptag ? ui_ptag + 1u : favorites.filter; }
+static const char *const LIST_NAME[PT_N + 1] = {"ALL", "FAV", "BASS", "LEAD", "PAD", "KEYS", "PLUCK", "DRUM", "FX"};
+static int preset_in_list(uint32_t e, uint32_t k)     /* a LIST but ALL: the sound is in it (user presets: FAV only) */
+{
+    if (ui_ptag)
+        return e < NENGINES && ENGINES[e]->presets[k].tag == ui_ptag;
+    return favorite_has(e, k);
+}
+
 static uint32_t preset_pos(uint32_t *total)
 {
     uint32_t all, current = preset_all_pos(&all), n = 0, pos = 0xFFFFFFFFu;
-    if (!favorites.filter) { *total = all; return current; }
+    if (!list_mode()) { *total = all; return current; }
     for (uint32_t i = 0; i < all; i++) {
         uint32_t k, e = preset_all_at(i, &k);
-        if (!favorite_has(e, k)) continue;
+        if (!preset_in_list(e, k)) continue;
         if (i == current) pos = n;
         n++;
     }
     *total = n;
-    return pos == 0xFFFFFFFFu ? n : pos; /* current sound need not be a favorite */
+    return pos == 0xFFFFFFFFu ? n : pos; /* current sound need not be in the list */
 }
 static uint32_t preset_at(uint32_t n, uint32_t *k)
 {
     uint32_t all;
-    if (!favorites.filter) return preset_all_at(n, k);
+    if (!list_mode()) return preset_all_at(n, k);
     preset_all_pos(&all);
     for (uint32_t i = 0; i < all; i++) {
         uint32_t e = preset_all_at(i, k);
-        if (favorite_has(e, *k) && !n--) return e;
+        if (preset_in_list(e, *k) && !n--) return e;
     }
     *k = UP_SLOTS;
     return NENGINES;
@@ -1541,18 +1566,18 @@ static void eng_list_step(int32_t direction)         /* the next / previous soun
 static void preset_step(int32_t direction)
 {
     uint32_t total, cur = preset_pos(&total);
-    if (!total) { ui_message("NO FAVORITES"); return; }
+    if (!total) { ui_message(ui_ptag ? "NO SOUNDS" : "NO FAVORITES"); return; }
     preset_go(cur >= total ? (direction > 0 ? 0 : total - 1) :
               (cur + (direction > 0 ? 1u : total - 1u)) % total);
 }
 
-/* Seven display rows. Favorites use a bounded window, not a repeating carousel.
- * Return total for an empty row; a non-favorite current sound shows the start. */
+/* Seven display rows. A LIST of favorites or of a type uses a bounded window, not a repeating carousel.
+ * Return total for an empty row; a current sound outside the list shows the start. */
 static uint32_t preset_visible(uint32_t cur, uint32_t total, uint32_t row)
 {
     uint32_t first, last;
     if (!total || row >= 7u) return total;
-    if (!favorites.filter)
+    if (!list_mode())
         return (cur + total * 4u + row - 3u) % total;
     first = cur < total && cur > 3u ? cur - 3u : 0u;
     last = total > 7u ? total - 7u : 0u;

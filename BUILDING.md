@@ -43,12 +43,13 @@ On Linux x86-64 the toolchain runs natively and Docker is not needed.
 `JIELI_TOOLCHAIN` and `AC79_SDK` override the default locations
 (`~/.jieli/toolchain`, `~/fw-AC79_AIoT_SDK`).
 
-`./build.sh --release 1.0` makes a release build: the package identity becomes `FM-1_710`
-(Skiff's 7XY; Felucca's are 9XY) and the version string `v1.0`; the package is `build/skiff-1.0.fwsc`, and
-`build/release-1.0/` holds what a release ships: the package, the app
-(`skiff-1.1-app.bin`), `SHA256SUMS`, the sample attribution, `LICENSE`, `LICENSING.md` and
+`./build.sh --release 1.2` makes a release build: the package identity becomes `FM-1_712`
+(Skiff's 7XY; Felucca's are 9XY) and the version string `v1.2`; the package is `build/skiff-1.2.fwsc`, and
+`build/release-1.2/` holds what a release ships: the package, the app
+(`skiff-1.2-app.bin`), `SHA256SUMS`, the samples' attributions (`ATTRIBUTION.txt` for the CC0 sets,
+`ATTRIBUTION-BREAKS.txt` for SLICE's BREAK and FUNK), `LICENSE`, `LICENSING.md` and
 `LICENSES/` (the package contains Apache-2.0 SDK files, so the licence texts travel with it).
-`web/make_site.py build/skiff-1.0.fwsc 1.0 OUT` makes the GitHub Pages site from it: the browser installer, the
+`web/make_site.py build/skiff-1.2.fwsc 1.2 OUT` makes the GitHub Pages site from it: the browser installer, the
 editor and the package with its licences.
 
 Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`, `core.h` and `icons.c`):

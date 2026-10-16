@@ -75,16 +75,16 @@ static void slice_view(uint32_t *a, uint32_t *b, uint32_t *len)
         *b = *a + 1u;
 }
 
-/* the edit table of the selected part's slot, the first time from the slices shown (DIV becomes MAN); 0 = BREAK,
- * PIANO or an empty slot: nothing to edit (says so) */
+/* the edit table of the selected part's slot, the first time from the slices shown (DIV becomes MAN); 0 = a
+ * built-in source (BREAK, PIANO, FUNK) or an empty slot: nothing to edit (says so) */
 static slc_man_t *slice_edit_begin(uint32_t *k)
 {
     uint32_t src, div, n, i, a, b, st;
     const slc_src_t *s = slice_src(&src, &div);
     slc_man_t *m;
-    if (!s || !src || src == SLC_SRC_PIANO) {
+    if (!s || !SLC_SRC_USR(src)) {
         static const char *const EMPTY[3] = {"USR1 EMPTY", "USR2 EMPTY", "USR3 EMPTY"};
-        ui_message(src && src != SLC_SRC_PIANO ? EMPTY[src - 1u] : "PICK A USR SAMPLE FIRST");
+        ui_message(SLC_SRC_USR(src) ? EMPTY[src - 1u] : "PICK A USR SAMPLE FIRST");
         return 0;
     }
     *k = src - 1u;

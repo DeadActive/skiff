@@ -30,13 +30,14 @@
  * presets read and write t->p from the main loop, which the ISR preempts; TIMER5 only fills the MIDI rings),
  * and the engines read t->p as before. An engine reads its parameters in note_on (events_block) unmodulated.
  * Nothing active (every slot with SRC, DST or AMT at 0): no work, and the sound is bit-identical. */
-enum { MS_OFF, MS_LFO, MS_ENV, MS_VEL, MS_KEY, MS_RAND, MS_MODW, MS_AT, MS_EXPR, MS_N };
+enum { MS_OFF, MS_LFO, MS_ENV, MS_VEL, MS_KEY, MS_RAND, MS_MODW, MS_AT, MS_EXPR, MS_ENV2, MS_N };   /* (append only) */
 enum { MD_OFF, MD_PITCH, MD_CUT, MD_SHP, MD_AMP, MD_PAN, MD_DIST, MD_CHO, MD_DLY, MD_REV, MD_RATE, MD_VIB, MD_E1,
        MD_N = MD_E1 + 8 };
 _Static_assert(NELEM(N_MSRC) == MS_N && NELEM(N_MDST) == MD_N, "N_MSRC / N_MDST == MS_* / MD_*");
 _Static_assert(P_M2SRC == P_M1SRC + 3 && P_M4AMT == P_M1SRC + 11 && P_M4AMT + 1 == P_FM1_ATK, "matrix slots: 3 ids each");
 #define NMSLOT 4u
-#define MS_VOICE(s) ((s) >= MS_ENV && (s) <= MS_RAND)             /* a value per voice */
+#define MS_VOICE(s) ((1u << (s)) & (1u << MS_ENV | 1u << MS_VEL | 1u << MS_KEY | 1u << MS_RAND | 1u << MS_ENV2))   /* a
+                                                                  * value per voice */
 #define MS_BIPOLAR(s) ((s) == MS_LFO || (s) == MS_KEY || (s) == MS_RAND)
 
 /* the track parameter of a per-block destination */
@@ -49,6 +50,7 @@ static uint32_t mod_param(uint32_t d)
 
 static struct {                  /* the part in mix_part (one at a time) */
     uint8_t on;                  /* a slot is active: track_render calls mod_voice */
+    uint8_t env2;                /* (Skiff phase 9) a slot's source is ENV2: track_render ticks it (voice.c env2_tick) */
     uint8_t amp;                 /* an AMP slot: the voice gain applies */
     uint8_t nv, nk;              /* voice terms, per-block parameters held */
     int32_t pit, cut, shp, gain; /* per voice, from the per-track sources (gain Q15) */
@@ -83,6 +85,8 @@ static int32_t mod_tsrc(const track_t *t, uint32_t s, int32_t lfo)
         return mod_key(t->m_key);
     case MS_RAND:
         return t->m_rnd;
+    case MS_ENV2:                                       /* ((Skiff phase 9) the latest note's ENV 2) */
+        return t->m_env2;
     case MS_MODW:
         return t->mw * 258;
     case MS_AT:
@@ -129,6 +133,8 @@ static __attribute__((noinline)) int mod_begin(track_t *t)
     lfo = mulq15(t->lfo_val, t->lfo_fade);              /* (the LFO of the block before: track_render ticks it) */
     mod.on = 1;
     mod.amp = 0;
+    mod.env2 = p[P_M1SRC] == MS_ENV2 || p[P_M2SRC] == MS_ENV2 || p[P_M3SRC] == MS_ENV2 || p[P_M4SRC] == MS_ENV2;   /* (a
+                                                         * slot off too: a tick for nothing, the loop below as it was) */
     mod.nv = mod.nk = 0;
     mod.pit = mod.cut = mod.shp = 0;
     mod.gain = 32767;
@@ -187,11 +193,14 @@ static __attribute__((noinline)) void mod_voice(track_t *t, voice_t *v, vmod_t *
 {
     int32_t pit = mod.pit, cut = mod.cut, shp = mod.shp, gain = mod.gain, env = m->envq15;
     uint32_t k;
-    if (v == &t->v[t->m_vi])
+    if (v == &t->v[t->m_vi]) {
         t->m_env = env;                                 /* ENV of the latest note, for per-block destinations */
+        t->m_env2 = v->env2 >> 9;                       /* ((Skiff phase 9) its ENV 2 too) */
+    }
     for (k = 0; k < mod.nv; k++) {
         uint32_t s = mod.vsrc[k];
-        int32_t x = s == MS_ENV ? env : s == MS_VEL ? v->mvel * 258 : s == MS_KEY ? mod_key(v->note) : v->mrnd;
+        int32_t x = s == MS_ENV ? env : s == MS_VEL ? v->mvel * 258 : s == MS_KEY ? mod_key(v->note) :
+                    s == MS_ENV2 ? v->env2 >> 9 : v->mrnd;
         mod_voice_add(s, mod.vdst[k], x, mod.vamt[k], &pit, &cut, &shp, &gain);
     }
     if (pit) {

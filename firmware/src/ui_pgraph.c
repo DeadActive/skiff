@@ -208,11 +208,13 @@ static void graph_delay(uint16_t c)
     pg_text(14, 16, "DRY", T_MID);
 }
 
-/* REVERB: the first reflections, then the tail SIZE long, its top dimmed by DAMP; SPRING: its coil over it */
+/* REVERB: the first reflections, then the tail SIZE long, its top dimmed by DAMP; SPRING: its coil over it; (Skiff
+ * phase 9) HALL: the tail twice as long */
 static void graph_reverb(uint16_t c)
 {
     static const uint8_t ER[5] = {84, 60, 72, 46, 52};
-    int32_t i, x, e = 32768, len = 40 + song.g[G_RSIZE] * 144 / 127, k = 32768 - 98304 / len;
+    int32_t hall = song.g[G_RTYPE] == 2;
+    int32_t i, x, e = 32768, len = (40 + song.g[G_RSIZE] * 144 / 127) * (hall ? 2 : 1), k = 32768 - 98304 / len;
     int32_t dim = 20 + song.g[G_RDAMP] * 60 / 127;   /* % of the tail's height dimmed */
     if (ux.crypt) {                                  /* (Skiff C4) CRYPT: the reflections ! columns, the tail shade
                                                       * characters # * + : . fading along it, its top blood (DAMP);
@@ -237,15 +239,31 @@ static void graph_reverb(uint16_t c)
                 cr_ch(x, 17, &AF_S, '~', T_MID);
             pg_text(12, 17, "SPRING", T_MID);
         } else
-            pg_text(12, 17, "ROOM", T_MID);
+            pg_text(12, 17, hall ? "HALL" : "ROOM", T_MID);
         return;
     }
-    for (i = 0; i < 5; i++)
-        cv_rect(12 + i * 6, 126 - ER[i], 3, ER[i], T_TEXT);
+    for (i = 0; i < 5; i++) {                        /* ((Skiff phase 9) NEON: lit tubes; QUARK: calorimeter towers) */
+        if (ux.neon)
+            ne_tube(12 + i * 6, 126 - ER[i], 3, ER[i], T_TEXT, T_SURF);
+        else if (ux.quark)
+            qk_tower(12 + i * 6 - 1, 126, 4, 84, ER[i], T_TEXT, 0);
+        else
+            cv_rect(12 + i * 6, 126 - ER[i], 3, ER[i], T_TEXT);
+    }
     for (x = 44; x <= 228; x++) {
-        int32_t h = 84 * e >> 15, top = h * dim / 100, t = (x - 44) * 100 / 184;
-        cv_rect(x, 126 - h, 1, top, ux_mix(c, T_SURF, 55 + t * 30 / 100));
-        cv_rect(x, 126 - h + top, 1, h - top, ux_mix(c, T_SURF, t * 60 / 100));
+        int32_t h = 84 * e >> 15, top = h * dim / 100, t = (x - 44) * 100 / 184, y;
+        if (ux.neon) {                               /* ((Skiff phase 9) NEON: the sun's bands under it, DAMP's top violet) */
+            cv_rect(x, 126 - h, 1, top, ux_mix(NE_VIOLET, T_SURF, 45 + t * 30 / 100));
+            ne_band_col(x, 126 - h + top - 3, 126 - 84, 126);
+        } else if (ux.quark) {                       /* ((Skiff phase 9) QUARK: a Monte Carlo fill, DAMP's top sparse) */
+            for (y = 126 - h; y < 126 - h + top; y++)
+                if ((x + y) % 3 == 0 && y % 2 == 0)
+                    cv_rect(x, y, 1, 1, T_DIM);
+            qk_mc(x, 126 - h + top - 2, 126);
+        } else {
+            cv_rect(x, 126 - h, 1, top, ux_mix(c, T_SURF, 55 + t * 30 / 100));
+            cv_rect(x, 126 - h + top, 1, h - top, ux_mix(c, T_SURF, t * 60 / 100));
+        }
         e = e * k >> 15;
     }
     if (song.g[G_RTYPE] == 1) {
@@ -253,23 +271,95 @@ static void graph_reverb(uint16_t c)
         for (x = 64; x <= 228; x++)
             cv_pset(x, 13 + sine_i((uint32_t)(x - 64) * 0x0D000000u) * 3 / 32768, T_MID);
     } else
-        pg_text(12, 17, "ROOM", T_MID);
+        pg_text(12, 17, hall ? "HALL" : "ROOM", T_MID);
 }
 
-/* CHORUS: the dry sound and its copy, its pitch drifting (fx.c: one modulated delay): RATE how fast, DEPTH how far */
+/* (Skiff phase 9) FLANGER's and PHASER's response at x of 0 .. 216 (low .. high), Q15 (32768: as the dry; up to
+ * twice): FLANGER the comb of the dry and its copy, DEPTH more teeth, FEEDBACK sharper and higher; PHASER the two
+ * notches of its four stages, DEPTH wider, FEEDBACK a peak beside each */
+static int32_t pg_cho_resp(uint32_t mode, int32_t x)
+{
+    int32_t fb = song.g[G_CFDBK], dp = song.g[G_CDEPTH], v, k, h;
+    if (mode == 1u) {
+        uint32_t n = 4u + (uint32_t)dp * 6u / 127u;
+        v = sine_i((uint32_t)x * n * 9942053u + 0x40000000u);   /* (cos: 2^31 / 216 a px and tooth) */
+        v = v < 0 ? -v : v;
+        k = (v * v >> 15) * (v * v >> 15) >> 15;
+        return (v * (127 - fb) + k * fb) / 127 * (127 + fb) / 127;
+    }
+    for (h = 32768, k = 0; k < 2; k++) {
+        int32_t d = x - (k ? 150 : 66), w = 10 + dp / 8, r = d - (d < 0 ? -2 : 2) * w;
+        h -= 30000 * w * w / (w * w + d * d);
+        h += fb * 128 * w * w / (w * w + r * r);
+    }
+    return h < 0 ? 0 : h;
+}
+/* CHORUS: the dry sound and its copy, its pitch drifting (fx.c: one modulated delay): RATE how fast, DEPTH how far;
+ * (Skiff phase 9) FEEDBACK: a fainter second pass; FLANGER, PHASER: their response across the spectrum, drawn as ANALOG's
+ * FLT draws its curve in each theme */
 static void graph_chorus(uint16_t c)
 {
-    int32_t x, py = 74, a = song.g[G_CDEPTH] * 44 / 127;
-    uint32_t inc = (0xFFFFFFFFu / 216u) * (uint32_t)(1 + song.g[G_CRATE] * 5 / 127);
+    int32_t x, py = 74, a = song.g[G_CDEPTH] * 44 / 127, fb = song.g[G_CFDBK], b = a * fb / 127, ey;
+    uint32_t inc = (0xFFFFFFFFu / 216u) * (uint32_t)(1 + song.g[G_CRATE] * 5 / 127), mode = (uint32_t)song.g[G_CMODE];
+    if (mode == 1u || mode == 2u) {
+        if (ux.crypt) {                              /* (CRYPT: ASCII art over its shade, 37 columns of 9 lines, a skull on
+                                                      * its highest peak) */
+            uint8_t L[37];
+            int32_t pk = 0;
+            for (x = 0; x < 37; x++) {               /* (the skull's peak: the highest, nearest the middle) */
+                L[x] = (uint8_t)clamp(8 - pg_cho_resp(mode, x * 6) * 4 / 32768, 0, 8);
+                if (L[x] < L[pk] || (L[x] == L[pk] && (x > 18 ? x - 18 : 18 - x) < (pk > 18 ? pk - 18 : 18 - pk)))
+                    pk = x;
+            }
+            cr_dots(12, 34, 6, 10, L, 37, 9, T_DIM);
+            cr_art(12, 34, 6, 10, L, 37, T_THEME);
+            cr_skull(12 + pk * 6 - 4, 34 + L[pk] * 10 - 12, CR_FLAME, T_SURF, 0);
+        } else {
+            for (x = 0; x <= 216; x++) {             /* (under it: NEON the sun's bands, QUARK a Monte Carlo fill) */
+                int32_t y = 124 - pg_cho_resp(mode, x) * 40 / 32768;
+                if (ux.neon)
+                    ne_band_col(12 + x, y, 44, 124);
+                else if (ux.quark)
+                    qk_mc(12 + x, y, 124);
+                else
+                    cv_rect(12 + x, y, 1, 124 - y, ux_mix(c, T_SURF, 75));
+                if (x)
+                    cv_line_t(12 + x - 1, py, 12 + x, y, c, 3);
+                py = y;
+            }
+            pg_hline(12, 228, 84, T_LINE);           /* (the dry's level) */
+        }
+        pg_text(12, 16, mode == 1u ? "THE DRY AND ITS COPY: A COMB, SWEPT" : "FOUR STAGES: TWO NOTCHES, SWEPT", T_MID);
+        return;
+    }
     pg_hline(12, 228, 74, T_MID);
-    if (ux.crypt) {                                  /* (Skiff C4) CRYPT: the copy a snake, 5 lines of 8 px either way */
-        uint8_t L[37];
-        int32_t i, A = (a + 4) / 8;
-        for (i = 0; i < 37; i++)
+    if (ux.crypt) {                                  /* (Skiff C4) CRYPT: the copy a snake, 5 lines of 8 px either way;
+                                                      * ((phase 9) FEEDBACK: its copy ASCII art behind, MID) */
+        uint8_t L[37], L2[37];
+        int32_t i, A = (a + 4) / 8, B = (b + 4) / 8;
+        for (i = 0; i < 37; i++) {
             L[i] = (uint8_t)(5 + (sine_i((uint32_t)(i * 6) * inc) * A + (A ? 16384 : 0)) / 32768);
+            L2[i] = (uint8_t)(5 + (sine_i((uint32_t)(i * 6) * inc - 0x30000000u) * B + (B ? 16384 : 0)) / 32768);
+        }
+        if (fb)
+            cr_art(12, 34, 6, 8, L2, 37, T_MID);
         cr_snake(12, 34, 6, 8, L, 36, T_THEME, CR_EMBER);   /* (its head and tongue inside the frame) */
         pg_text(12, 16, "DRY AND ITS DRIFTING COPY", T_MID);
         return;
+    }
+    if (fb) {                                        /* ((Skiff phase 9) FEEDBACK: the copy's copy, fainter, behind: NEON a
+                                                      * ghost, QUARK dotted) */
+        for (x = 0, py = 74; x <= 216; x += 2) {
+            int32_t y = 74 + sine_i((uint32_t)x * inc - 0x30000000u) * b / 32768;
+            if (ux.quark) {
+                if (x % 6 == 0)
+                    cv_rect(12 + x, y, 1, 1, T_MID);
+            } else if (x) {
+                cv_line_t(12 + x - 2, py, 12 + x, y, ux.neon ? ux_mix(c, T_SURF, 55) : T_MID, 1);
+            }
+            py = y;
+        }
+        py = 74;
     }
     for (x = 0; x <= 216; x += 2) {
         int32_t y = 74 + sine_i((uint32_t)x * inc) * a / 32768;
@@ -277,7 +367,130 @@ static void graph_chorus(uint16_t c)
             cv_line_t(12 + x - 2, py, 12 + x, y, c, 3);
         py = y;
     }
+    ey = 74 + sine_i(216u * inc) * a / 32768;        /* ((Skiff phase 9) its end, as LFO's now: NEON a white-hot trail into a
+                                                      * sparkle, QUARK the electron) */
+    if (ux.neon) {
+        for (x = 0; x < 36; x++)
+            cv_rect(228 - x, 74 + sine_i((uint32_t)(216 - x) * inc) * a / 32768, 1, 2, ux_mix(T_TEXT, c, x * 100 / 36));
+        ne_spark(228, ey + 1, T_ACCENT, 2);
+    } else if (ux.quark) {
+        qk_disc(228, ey, 3, T_ACCENT);
+    }
     pg_text(12, 16, "DRY AND ITS DRIFTING COPY", T_MID);
+}
+
+/* (Skiff phase 9) FX > DRIVE: the TYPE's transfer at the DRIVE, as fx.c track_dist shapes it (its low cut and tone left
+ * out): the input across, the output up, the straight line dim behind it; at the right the TYPE, DIST and TONE (BITS:
+ * the bits left, the hold) */
+static int32_t pg_drive_at(uint32_t type, int32_t d, int32_t x)
+{
+    int32_t g = 4096 + d * d * 2, y = ((x >> 2) * g) >> 10;
+    if (!d)
+        return x;                                    /* (DIST 0: no DIST at all) */
+    if (type == DT_BITS) {
+        uint32_t s = (uint32_t)d / 11u;
+        return mulq15(((x + (s ? 1 << (s - 1u) : 0)) >> s) << s, 32000 - d * 20);
+    }
+    if (type == DT_HARD) {
+        y = clamp(y, -24576, 24576);
+    } else if (type == DT_FOLD) {
+        int32_t u = (y + 16384) & 65535;
+        y = (u < 32768 ? u - 16384 : 49152 - u) * 2;
+    } else {
+        y = softclip(y + 2400) - softclip(2400);
+    }
+    return mulq15(clamp(y, -40000, 40000), 30000 - d * 120);
+}
+/* the inset: a sine's cycle of 88 samples through the TYPE, BITS' hold, the TONE's two-pole low-pass and the make-up,
+ * as fx.c runs them (its second pass: the filter settled) */
+static void pg_drive_wave(const track_t *t, uint32_t type, int32_t d, int32_t *y)
+{
+    uint32_t i, hm = type == DT_BITS ? (1u << ((uint32_t)d >> 5)) - 1u : 0u;
+    int32_t lp1 = 0, lp2 = 0, h = 0, k = clamp((type == DT_BITS ? 32700 - d * 40 : 32000 - d * 95) +
+                                              t->p[P_DTONE] * 150, 2000, 32700);
+    for (i = 0; i < 176u; i++) {
+        int32_t x = sine_i(i * 48806447u) * 3 / 4;   /* (2^32 / 88 a sample, -2.5 dBFS) */
+        if (!(i & hm))
+            h = pg_drive_at(type, d, x);
+        lp1 += mulq15(h - lp1, k);
+        lp2 += mulq15(lp1 - lp2, k);
+        if (i >= 88u)
+            y[i - 88u] = d ? lp2 : x;
+    }
+}
+static void graph_drive(const track_t *t, uint16_t c)
+{
+    uint32_t type = (uint32_t)t->p[P_DTYPE] & 3u;
+    int32_t d = t->p[P_DIST], i, py = 0, pk = 0, w[88];
+    int16_t ys[117];
+    char b[24];
+    pg_drive_wave(t, type, d, w);
+    for (i = 0; i <= 116; i++) {                     /* (the curve; its highest point, the first) */
+        ys[i] = (int16_t)(66 - pg_drive_at(type, d, (i - 58) * 32768 / 58) * 58 / 32768);
+        if (ys[i] < ys[pk])
+            pk = i;
+    }
+    if (ux.crypt) {                                  /* (CRYPT, as LFO's: the straight line faint ASCII art, the curve a
+                                                      * snake, its head at the end (39 columns of 3 px, 13 lines of 9); the
+                                                      * wave as OSC's: ASCII art, blood in its teeth (22 of 4, 9 of 8)) */
+        uint8_t L[39], S[39], W[22];
+        for (i = 0; i < 39; i++) {
+            L[i] = (uint8_t)clamp(6 - pg_drive_at(type, d, (i * 2 - 38) * 32768 / 38) * 6 / 32768, 0, 12);
+            S[i] = (uint8_t)(12 - i * 12 / 38);
+        }
+        for (i = 0; i < 22; i++)
+            W[i] = (uint8_t)clamp(4 - w[i * 4] * 4 / 32768, 0, 8);
+        pg_hline(12, 128, 66, T_LINE);
+        cv_rect(70, 8, 1, 117, T_LINE);
+        pg_hline(140, 227, 88, T_LINE);
+        cr_art(12, 8, 3, 9, S, 39, T_LINE);
+        cr_snake(12, 8, 3, 9, L, 38, T_THEME, CR_EMBER);   /* (its head and tongue clear of the wave) */
+        for (i = 0; i + 1 < 22; i++)
+            if (W[i + 1] <= W[i])
+                cr_dither(140 + i * 4, 56 + W[i] * 8 + 2, 4, (8 - W[i]) * 8 - 2, CR_BLOOD);
+        cr_art(140, 56, 4, 8, W, 22, T_THEME);
+    } else {
+        for (i = 0; i <= 116; i++) {                 /* (under the curve, as ANALOG's FLT: NEON the sun's bands, QUARK a
+                                                      * Monte Carlo fill) */
+            if (ux.neon)
+                ne_band_col(12 + i, ys[i], 8, 124);
+            else if (ux.quark)
+                qk_mc(12 + i, ys[i], 124);
+            else
+                cv_rect(12 + i, ys[i], 1, 124 - ys[i], ux_mix(c, T_SURF, 75));
+        }
+        pg_hline(12, 128, 66, T_LINE);
+        cv_rect(70, 8, 1, 117, T_LINE);
+        pg_hline(140, 227, 88, T_LINE);
+        cv_line(12, 124, 128, 8, T_DIM);             /* (the straight line: no drive) */
+        for (i = 1; i <= 116; i++)
+            cv_line_t(12 + i - 1, ys[i - 1], 12 + i, ys[i], c, 3);
+        for (i = 0; i < 88; i++) {                   /* (the wave) */
+            int32_t y = 88 - w[i] * 32 / 32768;
+            if (i)
+                cv_line_t(140 + i - 1, py, 140 + i, y, c, 2);
+            py = y;
+        }
+        py = 88 - w[87] * 32 / 32768;                /* (its end, as LFO's now) */
+        if (ux.quark) {                              /* (QUARK: a nucleus on the curve's highest point, the electron at
+                                                      * the wave's end) */
+            qk_nucleus(12 + pk, ys[pk], T_THEME, 7);
+            qk_disc(227, py, 3, T_ACCENT);
+        } else if (ux.neon) {                        /* (NEON: a sparkle at the curve's end; a white-hot trail into one at
+                                                      * the wave's) */
+            ne_spark(128, ys[116] + 1, T_ACCENT, 2);
+            for (i = 0; i < 24; i++)
+                cv_rect(227 - i, 88 - w[87 - i] * 32 / 32768, 1, 2, ux_mix(T_TEXT, c, i * 100 / 24));
+            ne_spark(227, py + 1, T_ACCENT, 1);
+        }
+    }
+    cv_text(140, 26 - AF_M.asc, &AF_M, N_DTYPE[type], d ? c : T_DIM);
+    if (type == DT_BITS && d) {                      /* (the bits left of 16, each sample held) */
+        fmt_int(b, 16 - d / 11);
+        str_cpy(b + str_len(b), " BITS, HOLD ", 13);
+        fmt_int(b + str_len(b), 1 << (d >> 5));
+        pg_text(140, 42, b, T_MID);
+    }
 }
 
 /* GLOBAL: a bar's 16 steps (a beat's tallest), the off steps late by SWING+ (seq: core.h swing_step_len) over a mark

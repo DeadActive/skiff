@@ -2,12 +2,15 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* PERFORM: the effects of the FX hold layer, on the master. A key pressed while FX is held belongs to the
  * layer (seq.c keyboard_block): it plays no note, sends no MIDI, records nothing, and holds its effect until
- * it is let go (ui_input.c opens the layer and shows the map). The 10 white keys from the left (F3 .. A4):
- *   REPEAT 1/8 1/16 1/32, REVERSE, LPF | HPF, TAPE STOP, FREEZE, OCT UP, OCT DN;  the other 6 white keys do
- *   nothing; black keys 1..6 (F#3 G#3 A#3 C#4 D#4 F#4): tracks 1..6 muted while held (not P_MUTE, never saved).
+ * it is let go (ui_input.c opens the layer and shows the map). The 14 white keys from the left (F3 .. E5):
+ *   REPEAT 1/8 1/16 1/32, REVERSE, LPF | HPF, TAPE STOP, FREEZE, OCT UP, OCT DN, (Skiff phase 9) GATE, DUB,
+ *   FLANGE, VINYL;  the other 2 white keys do nothing; black keys 1..6 (F#3 G#3 A#3 C#4 D#4 F#4): tracks 1..6
+ *   muted while held (not P_MUTE, never saved).
  * REPEAT and REVERSE start on the next 1/16 (at once while stopped); the others at once; all end when let go,
  * with a 2.9 ms ramp. Effects of different kinds stack; of the buffer ones (REPEAT, REVERSE, TAPE STOP,
- * FREEZE, OCT UP, OCT DN) the last pressed plays, and letting it go returns to the one held before.
+ * FREEZE, OCT UP, OCT DN, FLANGE, VINYL) the last pressed plays, and letting it go returns to the one held before.
+ * (Skiff phase 9) GATE: the mix chopped on the 1/16s (perf_gate). DUB: the dry mix into the delay, its feedback up
+ * (perf_dub). FLANGE, VINYL: the mix through a short delay that moves, in the buffer as OCT UP / DN's (perf_mdl).
  * OCT UP / OCT DN: a harmonizer, the mix an octave up / down beside itself (after the author's earlier
  * fxHarmonizer, the classic rotating-delay shifter): two read taps of a delay sweep 128 .. 2176 samples, half a sweep apart, at the
  * speed that makes the pitch 2x / 0.5x; a raised-cosine cross-fade (the sine table) hides each tap's jump
@@ -26,12 +29,13 @@
  * Chain: [REPEAT / REVERSE / TAPE / FREEZE] -> LPF -> HPF -> CRUSH, after the master level and before
  * master_out (the limiter); THROW and the mutes act before the buses (fx.c mix_block / mix_part).
  * Idle (no key, no knob, no ramp left) every stage is skipped: the output is bit-identical. */
-enum { PF_R8, PF_R16, PF_R32, PF_REV, PF_LPF, PF_HPF, PF_TAPE, PF_FRZ, PF_OUP, PF_ODN, PF_M1, PF_N = PF_M1 + NTRK };
+enum { PF_R8, PF_R16, PF_R32, PF_REV, PF_LPF, PF_HPF, PF_TAPE, PF_FRZ, PF_OUP, PF_ODN, PF_GATE, PF_DUB, PF_FLG, PF_VIN,
+       PF_M1, PF_N = PF_M1 + NTRK };            /* ((Skiff phase 9) GATE .. VINYL: the mutes' bits moved, never stored) */
 #define PF_BIT(e) (1u << (e))
 #define PF_REPEAT 0x7u                                         /* the three REPEAT rates */
 #define PF_Q (PF_REPEAT | PF_BIT(PF_REV))                      /* start on the 1/16 */
 #define PF_HARM (PF_BIT(PF_OUP) | PF_BIT(PF_ODN))
-#define PF_BUF (PF_REPEAT | PF_BIT(PF_REV) | PF_BIT(PF_TAPE) | PF_BIT(PF_FRZ) | PF_HARM)
+#define PF_BUF (PF_REPEAT | PF_BIT(PF_REV) | PF_BIT(PF_TAPE) | PF_BIT(PF_FRZ) | PF_HARM | PF_BIT(PF_FLG) | PF_BIT(PF_VIN))
 #define PF_MUTE (((1u << NTRK) - 1u) << PF_M1)
 #define PB_FRAMES 8192u                       /* stereo frames in sl_buf (four tracks' of it): 371 ms at 22.05 kHz */
 _Static_assert((PB_FRAMES & (PB_FRAMES - 1u)) == 0u && PB_FRAMES * 2u <= NTRK * SL_LEN,
@@ -43,9 +47,11 @@ _Static_assert((PB_FRAMES & (PB_FRAMES - 1u)) == 0u && PB_FRAMES * 2u <= NTRK * 
 #define HB_MASK 4095u                         /* OCT UP / DN: the delay's frames (of the loop's 8192) */
 #define HB_BASE 128u                          /* .. the taps' shortest delay, samples; the sweep: 2048 */
 #define HB_FB 269                             /* .. KNOB 4 (0 .. 100) -> the shimmer, Q15: 0 .. 0.82 */
+#define MD_FB 18000                           /* FLANGE: its feedback, Q15 (0.55) */
+#define DUB_FB 30800                          /* DUB: the delay's feedback while held, Q15 (0.94; FEEDBACK's most: 0.84) */
 #define PF_TOP (63 << 8)                      /* filter cutoff index, Q8 (PF_SVF): the LPF's open end */
 #define PF_LOW (14 << 8)                      /* .. the LPF sweep's end, the HPF sweep's (and K1's) top */
-enum { BM_NONE, BM_LOOP, BM_TAPE, BM_FRZ, BM_HARM };
+enum { BM_NONE, BM_LOOP, BM_TAPE, BM_FRZ, BM_HARM, BM_FLG, BM_VIN };
 
 static volatile uint32_t perf_mask;   /* main: the FX button's bit while its layer may own keys, 0 = none */
 static volatile uint32_t kb_mask;     /* main: the button bits whose hold makes keys a layer's (ui_layer.c), 0 = none */
@@ -101,7 +107,12 @@ static struct {
     uint32_t cn;
     int32_t td;                        /* THROW: the share of the dry mix sent, Q15 */
     int32_t mg[NTRK];                  /* mute gains, Q15 (32768 = open) */
-} pf = {.src = PF_N, .next = PF_N, .lc = PF_TOP, .mg = {[0 ... NTRK - 1] = 32768}};
+    uint32_t gp0;                      /* (Skiff phase 9) GATE: the block's first sample in its 1/16, */
+    int32_t gg;                        /* .. its gain, Q15 (32768 = open) */
+    int32_t dd, dfb;                   /* DUB: the share of the dry mix sent, Q15; the delay's feedback (0: the song's) */
+    int32_t vl[2], ck;                 /* VINYL: the low-pass, the crackle's pop */
+    uint32_t seed;                     /* .. its random */
+} pf = {.src = PF_N, .next = PF_N, .lc = PF_TOP, .mg = {[0 ... NTRK - 1] = 32768}, .gg = 32768};
 
 /* the loop length of a REPEAT / REVERSE (1/8) at the tempo, 44.1 kHz samples; 0 = not one */
 static const uint8_t PF_DEN[PF_REV + 1] = {2, 4, 8, 2};
@@ -182,6 +193,12 @@ static void perf_buf_start(uint32_t e)
         pf.hph = 0;
         pf.hinc = e == PF_OUP ? 0u - (1u << 21) : 1u << 20;   /* the delay: -1 / +0.5 sample a sample */
         pf.hfb = 0;
+    } else if (e == PF_FLG || e == PF_VIN) {      /* (wr, len: as OCT UP / DN's) */
+        pf.mode = e == PF_FLG ? BM_FLG : BM_VIN;
+        pf.len = 0;
+        pf.hph = 0;
+        pf.hinc = e == PF_FLG ? 0xFFFFFFFFu / (8u * beat_samples()) : 54052u;   /* a bar each way; 0.555 Hz */
+        pf.vl[0] = pf.vl[1] = pf.ck = 0;
     } else if (e == PF_FRZ) {
         pf.mode = BM_FRZ;
         pf.gp[0] = 0;
@@ -249,6 +266,7 @@ static __attribute__((noinline)) AUDIO_RAM int perf_begin(uint32_t n)
     ph0 = pf.ph % pf.P;                             /* the 1/16 in this block (n: none) */
     bnd = ph0 ? (pf.P - ph0 < n ? pf.P - ph0 : n) : 0u;
     pf.ph += n;
+    pf.gp0 = ph0;                                   /* (GATE's place) */
     pf.act &= held;                                 /* let go: at once */
     pf.act |= held & ~PF_Q;
     pf.act0 = pf.act;
@@ -259,6 +277,8 @@ static __attribute__((noinline)) AUDIO_RAM int perf_begin(uint32_t n)
         pf.act |= q;
     }
     perf_act = pf.act;
+    pf.dfb += clamp(((pf.act >> PF_DUB) & 1u ? DUB_FB : 0) - pf.dfb, -24, 120);   /* DUB's feedback: up in 0.2 s, down
+                                                                                   * in 0.9 s (the echoes ring out) */
     /* the filters: LPF from open down over a bar while its key is held, KNOB 1 left; HPF up, KNOB 1 right */
     m = perf_k[0];
     {
@@ -306,6 +326,28 @@ static __attribute__((noinline)) AUDIO_RAM void perf_mute(uint32_t k, int32_t *b
     pf.mg[k] = g;
 }
 
+/* (Skiff phase 9) DUB (C5): the dry mix into the delay's send, whole, while held (2.9 ms in and out); meanwhile the
+ * delay's feedback up to DUB_FB, its return up to MIX's default (perf_begin; fx.c fx_buses): the echoes pile up, and
+ * ring out after it is let go */
+static __attribute__((noinline)) AUDIO_RAM void perf_dub(const int32_t *ml, const int32_t *mr, int32_t *sd, uint32_t n)
+{
+    uint32_t i;
+    int32_t t = (pf.act >> PF_DUB) & 1u ? 32768 : 0;
+    for (i = 0; i < n; i++) {
+        pf.dd += clamp(t - pf.dd, -SL_SLOPE, SL_SLOPE);
+        sd[i] += mulq16((ml[i] + mr[i]) >> 1, (uint32_t)pf.dd << 1);
+    }
+}
+/* the delay's feedback and return (fx.c), Q15: the song's, or DUB's while they are more (its return at MIX's default:
+ * DUB is heard with the delay's MIX at 0 too) */
+static void perf_dub_dly(int32_t *fb, int32_t *mix)
+{
+    if (*fb < pf.dfb)
+        *fb = pf.dfb;
+    if (*mix < pf.dfb * 3 / 4)
+        *mix = pf.dfb * 3 / 4;
+}
+
 /* before the buses: THROW (KNOB 3) adds the dry mix to the delay and reverb sends */
 static __attribute__((noinline)) AUDIO_RAM void perf_pre(const int32_t *ml, const int32_t *mr, int32_t *sd, int32_t *sr,
                                                uint32_t n)
@@ -320,6 +362,8 @@ static __attribute__((noinline)) AUDIO_RAM void perf_pre(const int32_t *ml, cons
             sr[i] += x;
         }
     }
+    if (pf.dd || ((pf.act >> PF_DUB) & 1u))
+        perf_dub(ml, mr, sd, n);
 }
 
 /* x towards y by w (Q15, 32768 = y) */
@@ -388,11 +432,11 @@ static inline void perf_grain(uint32_t g, int32_t *yl, int32_t *yr)
     pf.gp[g] = p + 1u < PB_GRAIN ? p + 1u : 0u;
 }
 
-/* OCT UP / DN: the tap at sweep place ph, both channels (as stored: half the level); silence before the
- * delay has that much in it */
-static inline void hb_tap(uint32_t ph, int32_t *l, int32_t *r)
+/* the buffer's delay at d (Q16 samples: OCT UP / DN, FLANGE, VINYL), both channels (as stored: half the level);
+ * silence before the delay has that much in it */
+static inline void pb_dtap(uint32_t d, int32_t *l, int32_t *r)
 {
-    uint32_t d = (HB_BASE << 16) + (ph >> 5), di = d >> 16;   /* the delay, Q16: 128 .. 2176 samples */
+    uint32_t di = d >> 16;
     int32_t f = (int32_t)((d >> 1) & 0x7FFFu);
     const int16_t *p, *q;
     if (di + 1u > pf.len) {
@@ -404,6 +448,8 @@ static inline void hb_tap(uint32_t ph, int32_t *l, int32_t *r)
     *l = p[0] + (((q[0] - p[0]) * f) >> 15);
     *r = p[1] + (((q[1] - p[1]) * f) >> 15);
 }
+/* OCT UP / DN: the tap at sweep place ph: a delay of 128 .. 2176 samples */
+static inline void hb_tap(uint32_t ph, int32_t *l, int32_t *r) { pb_dtap((HB_BASE << 16) + (ph >> 5), l, r); }
 /* OCT UP / DN on one sample: yl / yr the harmonized mix (see the top). noinline: perf_block's loop keeps its
  * code layout (target_budget.py: a block placed out of line looks like a loop round the per-sample code) */
 static __attribute__((noinline)) AUDIO_RAM void perf_harm(int32_t l, int32_t r, int32_t *yl, int32_t *yr)
@@ -433,6 +479,62 @@ static __attribute__((noinline)) AUDIO_RAM void perf_harm(int32_t l, int32_t r, 
     pf.hph += pf.hinc;
     *yl = l + (l >> 3) + ((sl_ * 45875) >> 15);     /* 0.56 live + 0.7 shifted (x2: stored at half) */
     *yr = r + (r >> 3) + ((sr_ * 45875) >> 15);
+}
+
+/* (Skiff phase 9) FLANGE (D5) / VINYL (E5) on one sample: the mix into the buffer at 44.1 kHz (as OCT UP / DN's)
+ * and back from a delay that moves. FLANGE: 0.3 .. 6 ms, a triangle from the press, a bar each way, fed back (MD_FB),
+ * out with the mix (a comb that sweeps: the jet). VINYL: 0.3 .. 2.6 ms on a sine at 0.555 Hz (a record's turn at 33:
+ * a wow of +-0.4 %), through a low-pass at ~4.5 kHz, with crackle (~21 pops a second, a few samples each) */
+static __attribute__((noinline)) AUDIO_RAM void perf_mdl(int32_t l, int32_t r, int32_t *yl, int32_t *yr)
+{
+    int32_t al, ar, xl, xr, flg = pf.mode == BM_FLG;
+    uint32_t t = pf.hph < 0x80000000u ? pf.hph : ~pf.hph;   /* (FLANGE's triangle, 0 .. 2^31) */
+    if (pf.mode == BM_HARM) {                       /* (OCT UP / DN: perf_buf's call for the three) */
+        perf_harm(l, r, yl, yr);
+        return;
+    }
+    l >>= 1;                                        /* (stored at half: headroom) */
+    r >>= 1;
+    pb_dtap(flg ? (13u << 16) + (t >> 15) * 252u : (14u << 16) + (uint32_t)(osc_sine(pf.hph) + 32768) * 100u, &al, &ar);
+    xl = flg ? l + mulq15(al, MD_FB) : l;
+    xr = flg ? r + mulq15(ar, MD_FB) : r;
+    if (pf.len < (uint32_t)SL_RAMP) {               /* (the recording fades in, as OCT UP / DN's) */
+        xl = (xl * (int32_t)pf.len) >> SL_RAMP_LOG2;
+        xr = (xr * (int32_t)pf.len) >> SL_RAMP_LOG2;
+    }
+    pb_put(pf.wr & HB_MASK, xl, xr);
+    pf.wr++;
+    if (pf.len <= HB_MASK)
+        pf.len++;
+    pf.hph += pf.hinc;
+    if (flg) {
+        *yl = l + al;                               /* (the mix and the delay, a half each: stored at half) */
+        *yr = r + ar;
+        return;
+    }
+    pf.vl[0] += mulq15(al - pf.vl[0], 15500);       /* VINYL: the low-pass, */
+    pf.vl[1] += mulq15(ar - pf.vl[1], 15500);
+    pf.seed = pf.seed * 1664525u + 1013904223u;     /* the crackle: a pop now and then, */
+    if (!(pf.seed >> 21))
+        pf.ck = (int32_t)(pf.seed << 11) >> 20;
+    *yl = (pf.vl[0] + pf.ck) << 1;
+    *yr = (pf.vl[1] + pf.ck) << 1;
+    pf.ck = pf.ck * 3 / 4;                          /* .. dying in a few samples */
+}
+
+/* (Skiff phase 9) GATE (B4): the mix chopped on the 1/16s, open their first half, shut the second (2.9 ms edges);
+ * DEPTH (KNOB 4) how far it shuts (0: silence). After CRUSH */
+static __attribute__((noinline)) AUDIO_RAM void perf_gate(int32_t *bl, int32_t *br, uint32_t n)
+{
+    uint32_t i, p = pf.gp0, h = pf.P >> 1, on = (pf.act >> PF_GATE) & 1u;
+    int32_t lo = perf_k[3] * 327;
+    for (i = 0; i < n; i++) {
+        pf.gg += clamp((on && p >= h ? lo : 32768) - pf.gg, -SL_SLOPE, SL_SLOPE);
+        bl[i] = mulq16(bl[i], (uint32_t)pf.gg << 1);
+        br[i] = mulq16(br[i], (uint32_t)pf.gg << 1);
+        if (++p >= pf.P)
+            p = 0;
+    }
 }
 
 /* the buffer effect faded out: the next one, or the buffer back. Once per effect, out of the per-sample loop
@@ -506,9 +608,9 @@ static inline void perf_buf(int32_t *pl, int32_t *pr)
             yr >>= 10;
             on = 1;
         }
-    } else if (pf.mode == BM_HARM) {
-        perf_harm(l, r, &yl, &yr);
-        on = 2;                                     /* (KNOB 4 is the shimmer: the level stays full) */
+    } else {                                        /* OCT UP / DN, (Skiff phase 9) FLANGE, VINYL (perf_mdl: one call */
+        perf_mdl(l, r, &yl, &yr);                   /* here, perf_block's loop keeps its layout) */
+        on = 1 + (pf.mode == BM_HARM);              /* (OCT UP / DN: KNOB 4 is the shimmer, the level stays full) */
     }
     pf.tw = on && pf.src != PF_N ? on == 2 ? 32768 : 32768 - perf_k[3] * 327 : 0;
     pf.w += clamp(pf.tw - pf.w, -SL_SLOPE, SL_SLOPE);
@@ -590,6 +692,8 @@ static __attribute__((noinline)) AUDIO_RAM void perf_block(int32_t *bl, int32_t 
         bl[i] = l;
         br[i] = r;
     }
+    if (((pf.act >> PF_GATE) & 1u) || pf.gg != 32768)
+        perf_gate(bl, br, n);
     pf.busy = pf.act || pf.mode != BM_NONE || pf.w || pf.la || pf.ha || pf.cw || pf.td || pf.mute || perf_k[0] ||
-              perf_k[1] || perf_k[2];
+              perf_k[1] || perf_k[2] || pf.gg != 32768 || pf.dd || pf.dfb;
 }

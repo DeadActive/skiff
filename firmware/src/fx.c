@@ -19,11 +19,14 @@ static struct {
     int32_t dly_lp;
     uint16_t comb_i[4], ap_i[2];
     int32_t comb_lp[4];
-    uint8_t rtype;                       /* the reverb model running (G_RTYPE: 0 ROOM, 1 SPRING) */
+    uint8_t rtype;                       /* the reverb model running (G_RTYPE: 0 ROOM, 1 SPRING, (Skiff phase 9) 2 HALL) */
     uint16_t sp_w;                       /* SPRING: the loop's write index (SP_MASK) */
     int32_t sp_lp, sp_hp, sp_he, sp_size;   /* .. its loop low-pass, low cut (and its remainder), the loop
                                              * length (Q8, glides) */
     uint32_t sp_ph;                      /* .. the output tap's wobble */
+    int32_t hall_y;                      /* (Skiff phase 9) HALL: its last half-rate output (the line between) */
+    int32_t cho_y;                       /* (Skiff phase 9) the CHORUS bus: its last output (FEEDBACK), */
+    int32_t ph_s[4];                     /* .. PHASER's allpasses */
 } fx;
 
 /* SPRING (G_RTYPE 1): one spring of a spring tank, mono like the other buses, in the ROOM's own buffers (no
@@ -43,18 +46,77 @@ static struct {
                                           * |x - o| < 749000, far past any peak the chain reaches) */
 _Static_assert(sizeof rev_comb / 2u >= SP_LEN && sizeof rev_u.sp / 4u >= 4u * (SP_N + 1u), "SPRING in ROOM's buffers");
 
+/* (Skiff phase 9) FX > DRIVE: DIST's kind (P_DTYPE) at the same drive (P_DIST), and its TONE (P_DTONE, -64..63: the
+ * tone low-pass moved from where the drive puts it; 0 as before). SOFT: the soft clip below, as before. HARD: the
+ * drive into a flat clip at 3/4 of full scale (odd harmonics: a buzz). FOLD: the drive into a triangle wavefolder, a
+ * fold every 4 x 16384 (the louder, the more folds: bright, hollow). BITS: the drive as bits and rate taken away, up
+ * to 11 bits, each sample held 1 2 4 or 8 (a run starts every block: CTL is a multiple of 8; aliasing, grit), its
+ * low-pass closing less. Each after the low cut, before the two-pole tone and the make-up, as SOFT */
+enum { DT_SOFT, DT_HARD, DT_FOLD, DT_BITS };
+#define DIST_TONE(k, t) clamp((k) + (t)->p[P_DTONE] * 150, 2000, 32700)   /* TONE's move of the low-pass (Q15) */
+static __attribute__((noinline)) void dist_hard(track_t *t, int32_t *b, uint32_t n, int32_t g, int32_t k, int32_t mk)
+{
+    for (uint32_t i = 0; i < n; i++) {
+        int32_t x = b[i], y;
+        t->dist_hp += (x - t->dist_hp + 64) >> 7;
+        x = clamp(x - t->dist_hp, -230000, 230000);
+        y = clamp(((x >> 2) * g) >> 10, -24576, 24576);
+        t->dist_dc += (y - t->dist_dc + 256) >> 9;      /* (~14 Hz: a clip of an uneven wave has a mean, kept out of */
+        y -= t->dist_dc;                                /* the buses' feedback) */
+        t->dist_lp1 += mulq15(y - t->dist_lp1, k);
+        t->dist_lp2 += mulq15(t->dist_lp1 - t->dist_lp2, k);
+        b[i] = mulq15(t->dist_lp2, mk);
+    }
+}
+static __attribute__((noinline)) void dist_fold(track_t *t, int32_t *b, uint32_t n, int32_t g, int32_t k, int32_t mk)
+{
+    for (uint32_t i = 0; i < n; i++) {
+        int32_t x = b[i], y, u;
+        t->dist_hp += (x - t->dist_hp + 64) >> 7;
+        x = clamp(x - t->dist_hp, -230000, 230000);
+        u = ((((x >> 2) * g) >> 10) + 16384) & 65535;   /* (two's complement: the mask is the fold's period) */
+        y = (u < 32768 ? u - 16384 : 49152 - u) * 2;    /* -32768 .. 32768, the wave itself inside */
+        t->dist_dc += (y - t->dist_dc + 256) >> 9;      /* (as HARD's) */
+        y -= t->dist_dc;
+        t->dist_lp1 += mulq15(y - t->dist_lp1, k);
+        t->dist_lp2 += mulq15(t->dist_lp1 - t->dist_lp2, k);
+        b[i] = mulq15(t->dist_lp2, mk);
+    }
+}
+static __attribute__((noinline)) void dist_bits(track_t *t, int32_t *b, uint32_t n, int32_t d, int32_t k, int32_t mk)
+{
+    uint32_t s = (uint32_t)d / 11u, hm = (1u << ((uint32_t)d >> 5)) - 1u;   /* bits taken 0..11, held 1 2 4 8 */
+    int32_t h = 0, r = s ? 1 << (s - 1u) : 0;
+    for (uint32_t i = 0; i < n; i++) {
+        int32_t x = b[i];
+        t->dist_hp += (x - t->dist_hp + 64) >> 7;
+        x = clamp(x - t->dist_hp, -230000, 230000);
+        if (!(i & hm))
+            h = ((x + r) >> s) << s;                    /* (rounded: no offset) */
+        t->dist_lp1 += mulq15(h - t->dist_lp1, k);
+        t->dist_lp2 += mulq15(t->dist_lp1 - t->dist_lp2, k);
+        b[i] = mulq15(t->dist_lp2, mk);
+    }
+}
+
 /* DIST: low cut -> drive (1x..8x, exponential) -> asymmetric soft clip
  * (a little bias = even harmonics) -> tone low-pass that closes with drive ->
  * make-up gain (straight into tanh over the full band, it would sound like a
- * broken digital fuzz). State per part (track_t dist_*). */
+ * broken digital fuzz). State per part (track_t dist_*). (Skiff phase 9) DRIVE's TYPE and TONE: above */
 static void track_dist(track_t *t, int32_t *b, uint32_t n)
 {
     int32_t d = t->p[P_DIST], i, g, k, mk, bias = 2400, b0;
     if (!d)
         return;                                         /* states kept: switching on does not click */
     g = 4096 + d * d * 2;                                /* Q12: 1x .. ~9x, gentle at first */
-    k = 32000 - d * 95;                                  /* tone: transparent at low drive .. ~3 kHz, Q15 */
+    k = DIST_TONE(32000 - d * 95, t);                    /* tone: transparent at low drive .. ~3 kHz, Q15 */
     mk = 30000 - d * 120;                                /* make-up */
+    switch (t->p[P_DTYPE]) {
+    case DT_HARD: dist_hard(t, b, n, g, k, mk); return;
+    case DT_FOLD: dist_fold(t, b, n, g, k, mk); return;
+    case DT_BITS: dist_bits(t, b, n, d, DIST_TONE(32700 - d * 40, t), 32000 - d * 20); return;
+    default: break;
+    }
     b0 = softclip(bias);
     for (i = 0; i < (int32_t)n; i++) {
         int32_t x = b[i], y;
@@ -223,6 +285,42 @@ static __attribute__((noinline)) void rev_room(const int32_t *rev_in, int32_t *o
     }
 }
 
+/* (Skiff phase 9) HALL (G_RTYPE 2): ROOM's combs and allpasses at half the rate, in ROOM's own buffers: every other
+ * sample, the pair's mean in, and from the last output to this one a straight line out. Twice the lengths (combs of
+ * 50 .. 61 ms): a bigger, darker space (nothing above ~11 kHz), each SIZE a longer tail; about half ROOM's work */
+static __attribute__((noinline)) void rev_hall(const int32_t *rev_in, int32_t *out, uint32_t n)
+{
+    uint32_t i, k;
+    int32_t size = 25000 + song.g[G_RSIZE] * 50, damp = 32767 - song.g[G_RDAMP] * 200;
+    for (i = 0; i + 1u < n; i += 2u) {
+        int32_t a = 0;
+        int16_t *c = rev_comb;
+        int32_t in = mulq15((rev_in[i] + rev_in[i + 1u]) >> 1, 2580);
+        for (k = 0; k < 4u; k++) {
+            int32_t o = c[fx.comb_i[k]];
+            fx.comb_lp[k] = o + mulq15(fx.comb_lp[k] - o, 32767 - damp);
+            c[fx.comb_i[k]] = (int16_t)clamp(in + mulq15(fx.comb_lp[k], size), -32768, 32767);
+            if (++fx.comb_i[k] >= REV_COMB[k])
+                fx.comb_i[k] = 0;
+            a += o;
+            c += REV_COMB[k];
+        }
+        c = rev_ap;
+        for (k = 0; k < 2u; k++) {
+            int32_t o = c[fx.ap_i[k]];
+            int32_t v = a + (o >> 1);
+            c[fx.ap_i[k]] = (int16_t)clamp(v, -32768, 32767);
+            a = o - a;
+            if (++fx.ap_i[k] >= REV_AP[k])
+                fx.ap_i[k] = 0;
+            c += REV_AP[k];
+        }
+        out[i] += (fx.hall_y + a) >> 1;
+        out[i + 1u] += a;
+        fx.hall_y = a;
+    }
+}
+
 /* SPRING (see the top), added to out */
 static __attribute__((noinline)) void rev_spring(const int32_t *rev_in, int32_t *out, uint32_t n)
 {
@@ -278,6 +376,67 @@ static void rev_clear(void)
     for (i = 0; i < 4u; i++)
         fx.comb_lp[i] = 0;
     fx.sp_lp = fx.sp_hp = fx.sp_he = 0;
+    fx.hall_y = 0;
+}
+static void rev_model(uint32_t m, const int32_t *rev_in, int32_t *out, uint32_t n)   /* G_RTYPE m, added to out */
+{
+    if (m == 1u)
+        rev_spring(rev_in, out, n);
+    else if (m == 2u)
+        rev_hall(rev_in, out, n);
+    else
+        rev_room(rev_in, out, n);
+}
+
+/* (Skiff phase 9) the CHORUS bus in its MODE (G_CMODE) with FEEDBACK (G_CFDBK, 0 .. 127: up to 0.93 of its output fed
+ * back in), wet into wet (its part: the delay's is added after). CHORUS: the modulated delay of 5 .. 15 ms as before.
+ * FLANGER: the same line swept 1 .. 7 ms, its comb against the dry tracks the jet. PHASER: four first-order allpasses on
+ * the send, swept together by the chorus LFO once a block (RATE; DEPTH the sweep), notches against the dry. CHORUS
+ * without FEEDBACK is the loop in fx_buses, bit for bit */
+static __attribute__((noinline)) void cho_mode(const int32_t *cho_in, const int32_t *dly_in, int32_t *wet, uint32_t n,
+                                               uint32_t cinc)
+{
+    uint32_t i, k, mode = (uint32_t)song.g[G_CMODE], dl = delay_samples();
+    int32_t fb = song.g[G_CFDBK] * 240, depth = song.g[G_CDEPTH];
+    int32_t dfb = song.g[G_DFDBK] * 230, col = 2000 + song.g[G_DCOLOR] * 240, dmix = song.g[G_DMIX] * 258;
+    perf_dub_dly(&dfb, &dmix);                          /* ((phase 9) DUB's) */
+    if (mode == 2u) {                                   /* PHASER: a = -0.95 .. -0.15 by the LFO (Q15) */
+        int32_t lfo = (osc_sine(fx.cho_ph) + 32768) >> 1, a;   /* 0 .. 32767 */
+        fx.cho_ph += cinc * n;
+        a = -31130 + mulq15(lfo, 3000 + depth * 205);
+        for (i = 0; i < n; i++) {
+            int32_t x = (cho_in[i] >> 1) + mulq15(fx.cho_y, fb);
+            for (k = 0; k < 4u; k++) {                  /* (a + z^-1) / (1 + a z^-1): w = x - a w1, y = a w + w1 */
+                int32_t w = clamp(x - mulq15(fx.ph_s[k], a), -262144, 262144);
+                x = mulq15(w, a) + fx.ph_s[k];
+                fx.ph_s[k] = w;
+            }
+            fx.cho_y = clamp(x, -65536, 65536);
+            wet[i] = fx.cho_y << 1;
+        }
+    } else
+    for (i = 0; i < n; i++) {                           /* CHORUS (with FEEDBACK), FLANGER */
+        int32_t r, f, c0, c1;
+        uint32_t ri;
+        cho_buf[fx.cho_w & (CHO_LEN - 1u)] = (int16_t)clamp((cho_in[i] >> 1) + mulq15(fx.cho_y, fb), -32768, 32767);
+        fx.cho_ph += cinc;
+        r = mode == 1u ? (44 << 8) + ((osc_sine(fx.cho_ph) + 32768) * depth >> 7)   /* 1 .. 7 ms, Q8 */
+                       : (400 << 8) + ((osc_sine(fx.cho_ph) + 32768) * depth * 6 >> 8);
+        ri = (uint32_t)r >> 8;
+        f = r & 255;
+        c0 = cho_buf[(fx.cho_w - ri) & (CHO_LEN - 1u)];
+        c1 = cho_buf[(fx.cho_w - ri - 1u) & (CHO_LEN - 1u)];
+        fx.cho_y = c0 + (((c1 - c0) * f) >> 8);
+        fx.cho_w++;
+        wet[i] = fx.cho_y << 1;
+    }
+    for (i = 0; i < n; i++) {                           /* the delay as in fx_buses */
+        int32_t x = dly_buf[(fx.dly_w - dl) & (DLY_LEN - 1u)];
+        fx.dly_lp += mulq15(x - fx.dly_lp, col);
+        dly_buf[fx.dly_w & (DLY_LEN - 1u)] = (int16_t)clamp((dly_in[i] >> 1) + mulq15(fx.dly_lp, dfb), -32768, 32767);
+        fx.dly_w++;
+        wet[i] += mulq15(x << 1, dmix);
+    }
 }
 
 static int32_t part_buf[CTL];                            /* a part's block (mix_part); the fade of a model change */
@@ -291,6 +450,10 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
     int32_t dmix = song.g[G_DMIX] * 258;
     int32_t cdepth = song.g[G_CDEPTH] * 6, rt;
     uint32_t cinc = LFO_INC[song.g[G_CRATE] & 127] / CTL;
+    perf_dub_dly(&fb, &dmix);                           /* ((phase 9) DUB's) */
+    if (song.g[G_CMODE] || song.g[G_CFDBK])             /* (Skiff phase 9) another MODE, FEEDBACK: cho_mode, the delay */
+        cho_mode(cho_in, dly_in, wet, n, cinc);         /* too */
+    else
     for (i = 0; i < n; i++) {
         int32_t y = 0, x, r;
         /* chorus: modulated short delay, 5..15 ms */
@@ -313,25 +476,19 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
         y += mulq15(x << 1, dmix);
         wet[i] = y;
     }
-    rt = song.g[G_RTYPE] == 1;
+    rt = song.g[G_RTYPE] == 1 || song.g[G_RTYPE] == 2 ? song.g[G_RTYPE] : 0;   /* (phase 9) HALL) */
     if (rt != fx.rtype) {                               /* the model changed: the old one's block fades out, */
         int32_t *t = part_buf, g = 65536, d = 65536 / (int32_t)n;   /* its buffers are cleared, the new */
         for (i = 0; i < n; i++)                                     /* one starts from silence */
             t[i] = 0;
-        if (fx.rtype)
-            rev_spring(rev_in, t, n);
-        else
-            rev_room(rev_in, t, n);
+        rev_model(fx.rtype, rev_in, t, n);
         for (i = 0; i < n; i++, g -= d)
             wet[i] += mulq16(t[i], (uint32_t)g);
         rev_clear();
         fx.rtype = (uint8_t)rt;
         return;
     }
-    if (rt)
-        rev_spring(rev_in, wet, n);
-    else
-        rev_room(rev_in, wet, n);
+    rev_model((uint32_t)rt, rev_in, wet, n);
 }
 
 /* one block of the whole mix (shared with hostsim.c): events -> each part (with its modulation matrix)

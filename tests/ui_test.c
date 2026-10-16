@@ -144,6 +144,7 @@ static void ui_power_on(void)
     proj_cur = PROJ_NO_SLOT;
     memset(&favorites, 0, sizeof favorites);
     memset(undo_ring, 0, sizeof undo_ring);   /* (Skiff: the undo ring, ui.c) */
+    memcpy(dx_kit, DX_KIT_DEF, sizeof dx_kit);   /* ((Skiff phase 9) the factory kit: a DRUM-X preset loads others) */
     memset(bk_ram, 0xFF, sizeof bk_ram);         /* (Skiff: the pattern bank erased, as from a new unit) */
     bank_boot();
     memset(launch_q, 0, sizeof launch_q);        /* (.. nothing staged: launch.c) */
@@ -444,9 +445,11 @@ static int test_sound_loads(void)
     project_load(1);
     bad += check("a project load drops the copies and takes none", undo_n == 0 && undo_depth == 0);
     ui_power_on();
-    bad += check("SAMPLE factory browsing has four melodic presets and no PERC",
-                 ENGINES[4]->npresets == 4u && str_eq(ENGINES[4]->presets[0].name, "PIANO") &&
-                 str_eq(ENGINES[4]->presets[3].name, "SAX"));
+    bad += check("SAMPLE factory browsing: PIANO .. SAX, (phase 9) PERC's slot a hidden PIANO, the variations after",
+                 ENGINES[4]->npresets == 10u && str_eq(ENGINES[4]->presets[0].name, "PIANO") &&
+                 str_eq(ENGINES[4]->presets[3].name, "SAX") && str_eq(ENGINES[4]->presets[4].name, "PIANO") &&
+                 str_eq(ENGINES[4]->presets[5].name, "LOFI PIANO") && preset_shown(4) == 8u &&
+                 preset_orig(ENGINES[4], SMP_SET_PERC) == 0u && preset_orig(ENGINES[4], 5u) == 5u);
     {   /* TRANH (SET 1, preset 1) is gone: both are PIANO aliases, kept for old data, never offered */
         const param_desc_t *sd = &ENGINES[4]->edit[0];
         uint32_t all, pos, k, e, pos0, shown = 0;
@@ -462,7 +465,7 @@ static int test_sound_loads(void)
         apply_preset_to(TSEL, 1);
         bad += check("SAMPLE: old SET 1 / preset 1 (TRANH) play PIANO; browsing and knobs skip them",
                      SMP_SETS[1].z0 == SMP_SETS[0].z0 && SMP_SETS[1].nz == SMP_SETS[0].nz && pos == pos0 &&
-                     shown == 3u && e == 4u && k == 2u && TSEL->preset == 0u && TSEL->p[P_E0] == 0 &&
+                     shown == 8u && e == 4u && k == 2u && TSEL->preset == 0u && TSEL->p[P_E0] == 0 &&
                      str_eq(sd->names[1], "PIANO") && enum_step(sd, 0, 1) == 2 && enum_step(sd, 2, 1) == 0 &&
                      enum_step(sd, 1, 2) == 2 && enum_orig(sd, 1) == 0 && enum_orig(sd, 5) == 5 &&
                      enum_orig(&ENGINES[8]->edit[0], 1) == 0);
@@ -533,7 +536,7 @@ static int test_sound_loads(void)
         for (uint32_t st = 0; st < NSTEP; st++) memcpy(&legacy.t[ti].step[st], &decoded.t[ti].step[st], sizeof(step10_t));
     }
     legacy.t[3].engine = 0;
-    legacy.g[G_DRLVL] = 71; legacy.g[G_DRREV] = 43;
+    legacy.g[G_CMODE] = 71; legacy.g[G_CFDBK] = 43;      /* (the drum level and reverb send then: G_DRLVL / G_DRREV) */
     legacy.g[G_RTYPE] = 10;                               /* (id 24 was the GM drum part's MIDI channel: 10) */
     legacy.sum = proj_hash(&legacy, offsetof(project_v6_t, sum));
     memcpy(&proj_slot[1], &legacy, sizeof legacy);
@@ -972,6 +975,33 @@ static uint32_t lane_steps(const track_t *t, uint32_t l)   /* bit i: lane l stri
     return m;
 }
 
+/* (issue #3) HOME after SEQ's first page (STEP: the tiles; a drum track's grid): its footer as after any other page.
+ * The tiles' PRESETS: STEP and REC: WRITE were drawn under HOLD [HOME] SHIFT (draw_foot asked the page under HOME) */
+static int test_home_footer(void)
+{
+    static uint16_t ref[240 * 240];
+    uint32_t d, ok = 1;
+    for (d = 0; d < 2u; d++) {                          /* a melodic track, then a drum track (the report's) */
+        ui_power_on();
+        if (d) {
+            set_engine_of(&trk[0], ENGI_DRUM);
+            trk[0].engine = trk[0].eng_req;
+        }
+        open_family(FAM_ENV);
+        frame();
+        press(B_HOME);
+        frame();
+        memcpy(ref, host_screen, sizeof ref);
+        open_family(FAM_SEQ);
+        frame();
+        ok &= cur_page()->graph == GR_TILES && grid_on() == (int)d;
+        press(B_HOME);
+        frame();
+        ok &= ui.home && !memcmp(ref + foot_y() * 240, host_screen + foot_y() * 240, 240u * foot_h() * sizeof *ref);
+    }
+    return check("#3 HOME after SEQ's first page (the tiles, a drum grid): the footer as after any other page", ok);
+}
+
 static int test_grid(void)
 {
     int bad = 0;
@@ -1227,6 +1257,76 @@ static int test_favorites(void)
                  !favorite_has(NENGINES, 31) && !up_used(31) && !TSEL->user);
     up_store(31, "New sound");
     bad += check("reusing the erased slot does not restore its old star", !favorite_has(NENGINES, 31));
+    return bad;
+}
+
+/* (Skiff phase 9) PRESETS' LIST by type: KNOB 4 steps ALL, FAV, then the types (ui.c list_mode); a type lists that
+ * type's factory sounds of every engine (no user preset), the PRESETS knob browses them; it stops at FX; the type
+ * survives the settings' save and load; every factory sound the browser shows has a type */
+static int test_preset_tags(void)
+{
+    int bad = 0, ok = 1;
+    uint32_t total, all, k, e, i, r, engs = 0;
+    ui_power_on();
+    favorites.filter = 0;
+    ui_ptag = 0;
+    go_page(GR_BROWSE);
+    for (r = 0; r < NENG_SHOWN; r++)
+        for (e = eng_vis(r), k = 0; k < ENGINES[e]->npresets; k++)
+            ok &= preset_orig(ENGINES[e], k) != k ||
+                  (ENGINES[e]->presets[k].tag > PT_NONE && ENGINES[e]->presets[k].tag < PT_N);
+    bad += check("every factory sound the browser shows has a type", ok);
+    {   /* (phase 9) and a name of its own: a type's list mixes the engines (two WINDs read as one sound twice); the
+         * retired DIGITAL of a FELUCCA_FM4 build keeps its names (PAD, MARIMBA: FM6's, PHYS's) */
+        const char *nm[256];
+        uint32_t n = 0, j;
+        for (r = 0, ok = 1; r < NENG_SHOWN; r++)
+            for (e = eng_vis(r), k = 0; k < ENGINES[e]->npresets; k++)
+                if (preset_orig(ENGINES[e], k) == k && n < 256u && !(FELUCCA_FM4 && e == ENGI_DIGITAL)) {
+                    for (j = 0; j < n; j++)
+                        if (str_eq(nm[j], ENGINES[e]->presets[k].name)) {
+                            printf("ui:   %s twice\n", nm[j]);
+                            ok = 0;
+                        }
+                    nm[n++] = ENGINES[e]->presets[k].name;
+                }
+        bad += check("  every one its own name, across the engines", ok && n > 100u && n < 256u);
+    }
+    up_store(30, "Mine");
+    preset_pos(&all);
+    turn(EN_K4, 1);
+    turn(EN_K4, 1);
+    preset_pos(&total);
+    ok = list_mode() == 2u && ui_ptag == PT_BASS && !favorites.filter && total > 4u && total < all;
+    for (i = 0; i < total; i++) {
+        e = preset_at(i, &k);
+        ok &= e < NENGINES && ENGINES[e]->presets[k].tag == PT_BASS;
+        engs |= e < NENGINES ? 1u << e : 0u;
+    }
+    bad += check("LIST BASS: the factory basses only (several engines, no user preset)", ok && (engs & (engs - 1u)));
+    for (i = 0, ok = 1; i < total; i++) {
+        turn(EN_PRESET, 1);
+        ok &= !TSEL->user && ENGINES[TSEL->eng_req]->presets[TSEL->preset].tag == PT_BASS;
+    }
+    bad += check("the PRESETS knob browses the basses, every one in turn", ok);
+    for (i = 0; i < 10u; i++)
+        turn(EN_K4, 1);
+    bad += check("LIST stops at its last type, FX", list_mode() == PT_N && ui_ptag == PT_FX && !favorites.filter);
+    {
+        persist_t p;
+        settings_export(&p);
+        ui_ptag = 0;
+        settings_import(&p, (int)sizeof p);
+        bad += check("the LIST type survives the settings' save and load", ui_ptag == PT_FX);
+        p.favorites.factory[15][21] = 0x7F;
+        settings_import(&p, (int)sizeof p);
+        bad += check("an unknown stored type reads as none (LIST ALL)", !ui_ptag && !list_mode());
+    }
+    for (i = 0; i < 12u; i++)
+        turn(EN_K4, -1);
+    preset_pos(&total);
+    bad += check("LIST ALL again: the whole list", !list_mode() && total == all);
+    up_put(30, 0);
     return bad;
 }
 
@@ -1992,7 +2092,7 @@ static int test_layer(void)
     bad += check("FX tap: nothing on press, the FX page when let go", ok && !ui.home && cur_page()->fam == FAM_FX);
     frames(320);                                       /* (not a double tap: #83) */
     press(B_FX);
-    bad += check("  a second tap: the next page of the family (SLICER)", str_eq(cur_page()->title, "SLICER"));
+    bad += check("  a second tap: the next page of the family ((phase 9) DRIVE)", str_eq(cur_page()->title, "DRIVE"));
     ui_power_on();
     btn_down(B_FX);
     for (flash = 0, i = 0; i < 22u; i++) { frame(); flash |= ui.layer; }      /* 0.35 s */
@@ -2099,7 +2199,7 @@ static int test_layer(void)
     key_up(white(0)); key_up(white(4)); frame();
     bad += check("FX let go first: the key holds its effect and the map; a new key is a note", ok && !ui.layer && !perf_held);
     /* OCT UP (G4) and OCT DN (A4), the 9th and 10th white keys: held effects, silent; KNOB 4 the shimmer while
-     * held, back to 0 with FX; B4 on does nothing */
+     * held, back to 0 with FX; ((Skiff phase 9) B4 GATE .. E5 VINYL) F5 on does nothing */
     ui_power_on();
     usb.config = 1; mo = mo_w;
     btn_down(B_FX); key_down(white(8)); frame();
@@ -2110,9 +2210,13 @@ static int test_layer(void)
     key_up(white(8)); key_down(white(9)); frame();
     ok &= perf_held == PF_BIT(PF_ODN) && !gates() && mo_w == mo;
     key_up(white(9)); key_down(white(10)); frame();
-    ok &= !perf_held && (kb_layer >> white(10)) & 1u && !gates();
-    key_up(white(10)); btn_up(B_FX); frame();
-    bad += check("FX + G4 / A4: OCT UP / OCT DN held, silent, no MIDI; KNOB 4 turns; B4 nothing; FX let go: K4 back to 0",
+    ok &= perf_held == PF_BIT(PF_GATE) && !gates() && mo_w == mo;
+    key_up(white(10)); key_down(white(13)); frame();
+    ok &= perf_held == PF_BIT(PF_VIN) && !gates() && mo_w == mo;
+    key_up(white(13)); key_down(white(14)); frame();
+    ok &= !perf_held && (kb_layer >> white(14)) & 1u && !gates();
+    key_up(white(14)); btn_up(B_FX); frame();
+    bad += check("FX + G4 / A4: OCT UP / DN held, silent, no MIDI; K4 turns; B4 GATE, E5 VINYL; F5 nothing; FX let go: K4 0",
                  ok && !perf_held && !ui.layer && !perf_k[3] && mo_w == mo);
     /* REVERB > TYPE ((U3, N4) GLO's family, global): ROOM / SPRING on KNOB 1, kept by a project */
     ui_power_on();
@@ -2122,18 +2226,22 @@ static int test_layer(void)
     turn(EN_K1, 1);
     ok &= song.g[G_RTYPE] == 1 && str_eq(GP[G_RTYPE].names[song.g[G_RTYPE]], "SPRING");
     turn(EN_K1, 5);
+    ok &= song.g[G_RTYPE] == 2 && str_eq(GP[G_RTYPE].names[song.g[G_RTYPE]], "HALL");   /* ((phase 9) the last) */
+    turn(EN_K1, -1);
     ok &= song.g[G_RTYPE] == 1;
     song.playing = 0;
     project_save(2);
     turn(EN_K1, -1);
     ok &= song.g[G_RTYPE] == 0;
     project_load(2);
-    bad += check("REVERB page: TYPE ROOM -> SPRING on KNOB 1 (SIZE, DAMP beside it); a project keeps SPRING",
+    bad += check("REVERB page: TYPE ROOM -> SPRING -> HALL on KNOB 1 (SIZE, DAMP beside it); a project keeps SPRING",
                  ok && song.g[G_RTYPE] == 1);
     go_title("CHORUS");
-    bad += check("  CHORUS page (GLO's): RATE DEPTH (U3: were CRT CDP)", cur_page()->fam == FAM_GLO && cur_page()->id[0] == G_CRATE &&
-                 cur_page()->id[1] == G_CDEPTH && cur_page()->id[2] == 0xFFu && str_eq(GP[G_CRATE].label, "RATE") &&
-                 str_eq(GP[G_CDEPTH].label, "DEPTH"));
+    bad += check("  CHORUS page (GLO's): RATE DEPTH (U3: were CRT CDP), (phase 9) MODE FEEDBACK",
+                 cur_page()->fam == FAM_GLO && cur_page()->id[0] == G_CRATE && cur_page()->id[1] == G_CDEPTH &&
+                 cur_page()->id[2] == G_CMODE && cur_page()->id[3] == G_CFDBK && str_eq(GP[G_CRATE].label, "RATE") &&
+                 str_eq(GP[G_CDEPTH].label, "DEPTH") && str_eq(GP[G_CMODE].label, "MODE") &&
+                 str_eq(GP[G_CFDBK].label, "FEEDBACK"));
     /* chording: a key held before FX stays a note, its note-off arrives */
     ui_power_on();
     mo = mo_w;
@@ -2234,9 +2342,9 @@ static int test_layer(void)
         a = leds_at(0); b2 = leds_at(250);
         k = white(1);
         ok = ((a >> k) & 1u) && ((b2 >> k) & 1u);                    /* held: lit */
-        for (i = 0; i < 10u; i++)                                     /* the other effects (F3 .. A4): breathe */
+        for (i = 0; i < 14u; i++)                                     /* the other effects (F3 .. E5): breathe */
             ok &= i == 1u || ((a ^ b2) >> white(i)) & 1u;
-        for (i = 10; i < 16u; i++)                                    /* B4 .. G5: no effect, dark */
+        for (i = 14; i < 16u; i++)                                    /* F5, G5: no effect, dark */
             ok &= !((a | b2) >> white(i) & 1u);
         ok &= ((a ^ b2) >> key_at(1, 0)) & 1u && !((a | b2) >> key_at(1, NTRK) & 1u);   /* a mute breathes, a spare black dark */
         song.g[G_BPM] = 72;
@@ -2246,7 +2354,7 @@ static int test_layer(void)
         song.g[G_BPM] = 120;
     }
     key_up(white(1)); btn_up(B_FX); frame();
-    bad += check("map LEDs: held lit, the 10 effects breathe, B4 .. G5 and a too-long REPEAT dark", ok);
+    bad += check("map LEDs: held lit, the 14 effects breathe, F5 G5 and a too-long REPEAT dark", ok);
     usb.config = 0;
     return bad;
 }
@@ -2714,6 +2822,39 @@ static int test_edit_cycle(void)
             ok = !b[0];
             press(B_OCTUP);
             bad += check("INIT on DRUM: the DRUM-X kit stays, the dialog plain", ok && !memcmp(dx_kit, edited, sizeof edited));
+        }
+        {   /* (Skiff phase 9) a DRUM-X preset loads its kit as the project's (eng_drumx.c DRUMX_PKIT): a switch to DRUM-X
+             * (its first preset) and HADRON KIT keep the kit; one undo copy holds the kit across a browse; a kit edited
+             * between two loads gets a copy of its own (ui.c track_sig hashes it) */
+            static dx_lane_t edited[DV_NLANE];
+            uint32_t k;
+            set_engine_of(TSEL, ENGI_DRUM); go_home(); frame();
+            undo_clear();                             /* (no copy of the INIT tests before: this browse's own) */
+            dx_kit[DV_KICK].a[DXP_DECAY] = 9;
+            memcpy(edited, dx_kit, sizeof edited);
+            set_engine_of(TSEL, ENGI_DRUMX); frame();
+            ok = !memcmp(dx_kit, edited, sizeof edited) && TSEL->preset == 0u;
+            apply_preset(1u); frame();
+            bad += check("phase 9: a switch to DRUM-X (DRUM KIT) and HADRON KIT keep the project's kit",
+                         ok && !memcmp(dx_kit, edited, sizeof edited));
+            ok = DRUMX_PKIT[2] == 1u && !memcmp(DX_KITS[0], DX_KIT_DEF, sizeof dx_kit);
+            for (k = 2; k < ENGINES[ENGI_DRUMX]->npresets; k++) {
+                apply_preset(k); frame();
+                ok &= DRUMX_PKIT[k] && !memcmp(dx_kit, DX_KITS[DRUMX_PKIT[k] - 1u], sizeof dx_kit) && dx_kit_ok(dx_kit);
+            }
+            bad += check("phase 9: every kit preset loads its own kit, FACTORY KIT the factory's", ok);
+            hold(B_SAVE);
+            bad += check("phase 9: SAVE held after the browse: the kit (and DRUM) as before it, one undo copy",
+                         !memcmp(dx_kit, edited, sizeof edited) && TSEL->eng_req == ENGI_DRUM);
+            set_engine_of(TSEL, ENGI_DRUMX); frame();
+            apply_preset(3u); frame();                /* DEEP KIT */
+            dx_kit[DV_SNARE].a[DXP_PITCH] = 77;       /* (an edit on EDIT > SOUND) */
+            memcpy(edited, dx_kit, sizeof edited);
+            apply_preset(4u); frame();                /* CLICK KIT */
+            hold(B_SAVE);
+            bad += check("phase 9: a kit edited after a load: the next load takes a copy of its own (SAVE held: the edit)",
+                         !memcmp(dx_kit, edited, sizeof edited) && TSEL->eng_req == ENGI_DRUMX && TSEL->preset == 3u);
+            set_engine_of(TSEL, ENGI_DRUM); go_home(); frame();
         }
         memcpy(dx_kit, keep, sizeof keep);
     }
@@ -6653,8 +6794,8 @@ static int test_u4(void)
         ok = str_eq(page_head(), "OSC") && str_eq(ti, "1/4");
         go_title("ENV"); frame();
         page_pos(ti);
-        bad += check("U4 L5: the header names the page (EDIT 1 on ANALOG: OSC), the footer only where (1/4, ENV 1/2)",
-                     ok && str_eq(page_head(), "ENV") && str_eq(ti, "1/2"));
+        bad += check("U4 L5: the header names the page (EDIT 1 on ANALOG: OSC), the footer only where (1/4, ENV 1/3)",
+                     ok && str_eq(page_head(), "ENV") && str_eq(ti, "1/3"));   /* ((phase 9) ENV ENV DEST ENV 2) */
     }
     ui_power_on();                                      /* F7: no silent dead ends */
     ui_prefs |= PREF_BPM_LOCK;                          /* (SELECT: the pages) */
@@ -6703,7 +6844,7 @@ static int test_u4(void)
 static int test_u5(void)
 {
     static const char *const T[] = {"ENV DEST", "LFO DEST", "VOICE", "VOICE 2", "EDIT 1", "EDIT 2", "DELAY", "REVERB",
-                                    "CHORUS", "GLOBAL", "ARP", "ARP 2"};
+                                    "CHORUS", "GLOBAL", "ARP", "ARP 2", "ENV 2", "DRIVE"};
     int bad = 0, ok = 1;
     uint32_t i, h;
     smap_t m[12];
@@ -6859,6 +7000,11 @@ static int test_u3(void)
     turn(EN_K1, 3);
     bad += check("U3 R6: LANES: KNOB 1 the lane (the grid's too); a held step's KNOB 2 locks that lane's level",
                  ui.lane == 3u && lock_id(1) == P_LN0 + 3u && lock_id(0) == 0xFFu);
+    turn(EN_K3, 5);                                     /* ((Skiff phase 9) KNOB 3 4: the lane's TUNE, DECAY) */
+    turn(EN_K4, -7);
+    bad += check("  (phase 9) KNOB 3 TUNE, KNOB 4 DECAY: that lane's, the others untouched; a held step's locks them",
+                 TSEL->p[P_LTUNE0 + 3u] == 69 && TSEL->p[P_LDECAY0 + 3u] == -7 && TSEL->p[P_LTUNE0 + 2u] == 64 &&
+                 !TSEL->p[P_LDECAY0 + 4u] && lock_id(2) == P_LTUNE0 + 3u && lock_id(3) == P_LDECAY0 + 3u);
     ui_power_on();                                      /* A2: the project in the header, changed since */
     ok = !project_mark();
     project_save(2);
@@ -6955,22 +7101,25 @@ static int test_select_pages(void)
     turn(EN_SELECT, 1);
     ok = str_eq(cur_page()->title, "ENV DEST");
     turn(EN_SELECT, 1);
-    ok &= str_eq(cur_page()->title, "ENV DEST");                     /* (the last: no wrap) */
-    turn(EN_SELECT, -1);
+    ok &= str_eq(cur_page()->title, "ENV 2");                        /* ((Skiff phase 9) ENV 2) */
+    turn(EN_SELECT, 1);
+    ok &= str_eq(cur_page()->title, "ENV 2");                        /* (the last: no wrap) */
+    turn(EN_SELECT, -2);
     ok &= str_eq(cur_page()->title, "ENV");
     turn(EN_SELECT, -1);
     ok &= str_eq(cur_page()->title, "ENV") && song.g[G_BPM] == b0 && !ui.msg_t;
     bad += check("SELECT: ENV DEST, back to ENV, the ends where they are (no wrap), no tempo, no message", ok);
     go_title("FX"); frame();
-    turn(EN_SELECT, 2);
-    ok = str_eq(cur_page()->title, "DUCK");                          /* ((U3) FX SLICER DUCK: the buses are GLO's) */
+    turn(EN_SELECT, 3);
+    ok = str_eq(cur_page()->title, "DUCK");                          /* ((U3) FX (phase 9: DRIVE) SLICER DUCK: the buses
+                                                                      * are GLO's) */
     press(B_FX);
     ok &= str_eq(cur_page()->title, "FX");                           /* (FX's button steps on from there: round) */
-    turn(EN_SELECT, 2);
+    turn(EN_SELECT, 3);
     ok &= str_eq(cur_page()->title, "DUCK");
-    turn(EN_SELECT, -3);
+    turn(EN_SELECT, -4);
     ok &= str_eq(cur_page()->title, "FX");
-    bad += check("SELECT: two FX pages on (DUCK), the FX button round (FX), SELECT on and three back (FX)", ok);
+    bad += check("SELECT: three FX pages on (DUCK), the FX button round (FX), SELECT on and four back (FX)", ok);
     press(B_GLO);
     ok = cur_page()->fam == FAM_TRK;                                 /* (MIXER) */
     turn(EN_SELECT, 1);
@@ -7584,6 +7733,32 @@ static int test_song_page(void)
     return bad;
 }
 
+/* (Skiff phase 9) FX > DRIVE after FX: KNOB 2 its TYPE, KNOB 3 its TONE; ENV 2 after ENV DEST, hidden where ENV is
+ * (DRUM's one-shots, FM6's own envelopes) */
+static int test_p9_pages(void)
+{
+    int bad = 0, ok;
+    uint32_t i, e2 = NPAGES;
+    ui_power_on();
+    go_title("DRIVE"); frame();
+    ok = cur_page()->fam == FAM_FX && cur_page()->id[0] == P_DIST && cur_page()->id[1] == P_DTYPE &&
+         cur_page()->id[2] == P_DTONE && str_eq(PAGES[ui.page - 1u].title, "FX");
+    turn(EN_K2, 2);
+    turn(EN_K3, -5);
+    bad += check("(phase 9) FX > DRIVE after FX: KNOB 2 TYPE (FOLD after two), KNOB 3 TONE",
+                 ok && TSEL->p[P_DTYPE] == 2 && TSEL->p[P_DTONE] == -5);
+    for (i = 0; i < NPAGES; i++)
+        if (str_eq(PAGES[i].title, "ENV 2"))
+            e2 = i;
+    ok = e2 < NPAGES && str_eq(PAGES[e2 - 1u].title, "ENV DEST") && PAGES[e2].graph == GR_ADSR && page_visible(e2);
+    set_engine_of(TSEL, ENGI_DRUM);
+    ok &= !page_visible(e2);
+    set_engine_of(TSEL, ENGI_FM6);
+    ok &= !page_visible(e2);
+    bad += check("  ENV 2 after ENV DEST (its ADSR), hidden where ENV is (DRUM, FM6)", ok);
+    return bad;
+}
+
 /* Skiff: FX > DUCK (duck.c; the sound itself: tests/duck_test.c): after SLICER; KNOB 1 BY steps over the track itself
  * (T2: OFF T1 T3 T4; T4: up to T3; T1: down to OFF), KNOB 2 DEPTH, KNOB 3 REL; a sound load keeps all three (the mix's);
  * DEPTH and REL can be automation, BY not (routing) */
@@ -7777,8 +7952,10 @@ int main(void)
     bad += test_actions();
     bad += test_tracks();
     bad += test_grid();
+    bad += test_home_footer();
     bad += test_screen();
     bad += test_favorites();
+    bad += test_preset_tags();
     bad += test_display_preferences();
     bad += test_menu_tabs();
     bad += test_information();
@@ -7802,6 +7979,7 @@ int main(void)
     bad += test_scenes();                             /* Skiff: scenes (the PERFORM layer's KEYS SCENE) */
     bad += test_song_page();                          /* Skiff phase 5: SEQ > SONG */
     bad += test_duck_page();                          /* Skiff: FX > DUCK */
+    bad += test_p9_pages();                           /* (Skiff phase 9) FX > DRIVE, ENV 2 */
     bad += test_six_tracks();                         /* Skiff phase 6: six tracks on the layers */
     bad += test_div_order();
     bad += test_knob_accel();

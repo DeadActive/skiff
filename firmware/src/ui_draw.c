@@ -511,7 +511,9 @@ static void draw_foot(void)
     const engine_t *e = ENGINES[TSEL->eng_req % NENGINES];
     const char *ename = e->name;
     int32_t x, ly = foot_line_y();                     /* (BLOCKS: the one line) */
-    int hints = act_cols() || ((grid_on() || pg->graph == GR_TILES) && !ui_hints_off);   /* (the line says them, not the
+    int tiles = !ui.home && pg->graph == GR_TILES;     /* ((Skiff, issue #3) not the page under HOME: its hints were
+                                                       * drawn under HOLD HOME SHIFT) */
+    int hints = act_cols() || ((grid_on() || tiles) && !ui_hints_off);   /* (the line says them, not the
                                                        * sound; (Skiff U4) MENU > HINTS OFF: the sound) */
     sound_name(t, pn);
     if (ui.home)
@@ -527,7 +529,7 @@ static void draw_foot(void)
         uint32_t ph = song.playing && t->seq_idx / 16u == ui.bank ? t->seq_idx : 0xFFu;
         sig = str_hash(0x9E3779B9u, s) + ph * 97u + (song.seq_mode ? ui.cursor : 0xFFu) * 3001u + steps_hash(t) +
               (ui.home ? 0u : page_icon(pg)) * 7121u +
-              ui.bank * 7u + (uint32_t)t->p[P_SLEN] * 13u + favorites.filter * 9173u + (ui.edge_t != 0) * 5501u +
+              ui.bank * 7u + (uint32_t)t->p[P_SLEN] * 13u + list_mode() * 9173u + (ui.edge_t != 0) * 5501u +
               ui_hints_off * 3301u;
     }
     if (act_cols()) {                                  /* the hint, and whether OCT+ would act */
@@ -539,7 +541,7 @@ static void draw_foot(void)
     }
     if (grid_on())
         sig += 0x51EDu + (uint32_t)black_held(GK_ACC) * 977u;
-    if (pg->graph == GR_TILES)                         /* (Skiff U1) the REC hint comes and goes with the arming */
+    if (tiles)                                         /* (Skiff U1) the REC hint comes and goes with the arming */
         sig += ((song.rec >> song.sel) & 1u) * 4421u;
     if (!ui.force && sig == ui.foot_sig)
         return;
@@ -590,7 +592,7 @@ static void draw_foot(void)
             cv_text(x, ly, &AF_S, "ACCENT", T_ACCENT);
         else
             cv_key_hint(x, ly - KC_TY, KC_KEYS, "STEPS", 1, T_BG);
-    } else if (pg->graph == GR_TILES && !ui_hints_off) {   /* (Skiff) STEP's tiles: what PRESETS does, as the mockup's */
+    } else if (tiles && !ui_hints_off) {               /* (Skiff) STEP's tiles: what PRESETS does, as the mockup's */
         x = cv_key_hint(8, ly - KC_TY, KC_PRESETS, "STEP", 1, T_BG);
         if (!((song.rec >> song.sel) & 1u))            /* (Skiff U1) not armed, the keys only play: REC writes */
             cv_key_hint(x + 10, ly - KC_TY, KC_REC, "WRITE", 1, T_BG);
@@ -617,8 +619,8 @@ static void draw_foot(void)
         GFX_HOOK_ALIGN(0, ly + AF_S_CAP_Y, 0, ly + AF_S_CAP_Y + AF_S_CAP_H, AL_V, "footer icons on the names' line");
         x += cv_icon_in(x, ly + AF_S_CAP_Y, 0, AF_S_CAP_H, 16, trk_icon(song.sel, 1), T_ACCENT, T_BG) + 5;
         x = cv_text_fit(x, ly, &AF_S, ename, T_THEME, T_BG, 80);
-        if (favorites.filter)                          /* ((Skiff U2) PRESETS lists the favourites only) */
-            x = cv_text(x + 6, ly, &AF_S, "FAV", T_ACCENT);
+        if (list_mode())                               /* ((Skiff U2) PRESETS lists the favourites; phase 9: a type) */
+            x = cv_text(x + 6, ly, &AF_S, LIST_NAME[list_mode()], T_ACCENT);
         cv_free_text(x + 10, ly, &AF_S, pn, T_TEXT, T_BG, tx - 12 - (x + 10));
         if (pi != ICON_NONE) {
             GFX_HOOK_ALIGN(0, ly + AF_S_CAP_Y, 0, ly + AF_S_CAP_Y + AF_S_CAP_H, AL_V,
@@ -777,7 +779,7 @@ static void draw_columns(void)
         draw_column(0, "No.", val, u, VAL(0u), -1, ICON_NONE);
         draw_column(1, "ENG", ENGINES[TSEL->eng_req]->name, "", VAL(1u), -1, engine_icon(ENGINES[TSEL->eng_req]->name));
         draw_column(2, "FAV", preset_favorite() ? "ON" : "OFF", "", VAL(2u), -1, ICON_X_STAR);
-        draw_column(3, "LIST", favorites.filter ? "FAV" : "ALL", "", VAL(3u), -1, ICON_X_FOLDER);
+        draw_column(3, "LIST", LIST_NAME[list_mode()], "", VAL(3u), -1, ICON_X_FOLDER);
         return;
     }
     if (sheet_of(cur_page()->graph)) {                   /* (Skiff phase 7, 8; FM6 LAB) a sheet's window (SHEETS) */
@@ -966,7 +968,8 @@ static void draw_columns(void)
         }
         param_format(d, *vp, val, &unit);
         card_mot_of(vp);                                /* (a global: never) */
-        draw_column(c, cur_page()->graph == GR_LANES ? "LEVEL" : d->label, val, unit, card_dead(cur_page(), c) ? T_DIM : VAL(c),
+        draw_column(c, cur_page()->graph == GR_LANES && c == 1u ? "LEVEL" : d->label, val, unit,   /* ((phase 9) TUNE DECAY) */
+                    card_dead(cur_page(), c) ? T_DIM : VAL(c),
                     d->fmt == F_ENUM && d->max < 2 ? -1 : RATIO(d, enum_rank(d, *vp)), param_icon(d, *vp));
     }
 }

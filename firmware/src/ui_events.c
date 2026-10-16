@@ -27,14 +27,23 @@ static int ev_id_ok(const track_t *t, uint32_t id)
         return 0;
     if (id >= P_LN0 && id <= P_LN7)
         return drum_track(t);
+    if (id >= P_LTUNE0 && id <= P_LDECAY7)            /* ((Skiff phase 9) the lanes' TUNE and DECAY: DRUM's own) */
+        return t->eng_req % NENGINES == ENGI_DRUM;
     d = track_desc(t, id);
     return d && d->label && d->label[0] && d->label[0] != '-' && d->max > d->min;
 }
 /* its name in the list and on the card (b holds 12): the page's word before the card's label where the label alone
- * would say two things (ENV ATK, ENV FLT: ENV DEST's, LFO FLT: LFO DEST's) */
+ * would say two things (ENV ATK, ENV FLT: ENV DEST's, LFO FLT: LFO DEST's; (Skiff phase 9) ENV2 ATTACK, DRIVE TYPE;
+ * a lane's: SNARE TUNE, CL HAT DCAY) */
 static void ev_name(const track_t *t, uint32_t id, char *b)
 {
-    const char *pre = id >= P_ATK && id <= P_ED_SHP ? "ENV " : id >= P_LRATE && id <= P_LD_AMP ? "LFO " : "";
+    const char *pre = id >= P_ATK && id <= P_ED_SHP ? "ENV " : id >= P_LRATE && id <= P_LD_AMP ? "LFO " :
+                      id >= P_EG2_ATK && id <= P_EG2_REL ? "ENV2 " : id == P_DTYPE || id == P_DTONE ? "DRIVE " : "";
+    if (id >= P_LTUNE0 && id <= P_LDECAY7) {
+        str_cpy(b, drum_lane_name(t, (id - P_LTUNE0) % NLANE), 12);
+        str_cpy(b + str_len(b), id < P_LDECAY0 ? " TUNE" : " DCAY", 12 - str_len(b));
+        return;
+    }
     str_cpy(b, pre, 12);
     str_cpy(b + str_len(b), id == P_LEVEL ? "LEVEL" : id == P_GLIDE ? "GLIDE" :
                             id >= P_LN0 && id <= P_LN7 && t->eng_req % NENGINES == ENGI_DRUM ? drum_lane_name(t, id - P_LN0) :

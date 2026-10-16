@@ -304,8 +304,8 @@ int main(void)
         memcpy(v8, st.raw, 68);
         v8[66] = 91;
         for (k = 0; k < PROJ_NT; k++) {
-            for (j = 0; j < 91u; j++) v8[pos++] = st.raw[pos9 + (j < 83u ? j : j + (P_E0 - 83u))];
-            pos9 += P_COUNT;
+            for (j = 0; j < 91u; j++) v8[pos++] = st.raw[pos9 + (j < 83u ? j : j + (PROJ_NP - 8u - 83u))];
+            pos9 += PROJ_NP;
             memcpy(v8 + pos, st.raw + pos9, 2u + NSTEP * 9u);
             pos += 2u + NSTEP * 9u; pos9 += 2u + NSTEP * 9u + PROJ_NUDGE_BYTES;   /* (Skiff: SKF1's NUDGE plane) */
         }
@@ -510,7 +510,7 @@ int main(void)
         ok &= put_all(0, &w, sizeof w, st_crc32(&w, sizeof w)) == 0 && trk[0].step[0].note[0] == 60u &&
               st_load(OBJ_PROJECT0, &st, sizeof st) == (int)PROJ_SKF->size && *(const uint32_t *)st.raw == PROJ_SKF->magic &&
               *(const uint32_t *)proj_slot[0].raw == PROJ_SKF->magic && pool_used(0) &&
-              st.raw[68u + PROJ_SKF->nt * (P_COUNT + 2u)] == 1u;
+              st.raw[68u + PROJ_SKF->nt * (PROJ_NP + 2u)] == 1u;
         bad += check("(phase 5) an older archive: its projects as they came, SKF2 once its music is restored", ok);
     }
     /* (phase 6) project objects of 1280 (SKF2), 2048 (SKF3) and 3840 bytes (a retained slot holding one): each kept in

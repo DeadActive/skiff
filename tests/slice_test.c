@@ -341,21 +341,28 @@ int main(int argc, char **argv)
     int32_t worst;
     long n;
 
-    /* 1 */
-    check("BREAK: build-time table == decoder states", !(bad = table_check(&SLC_BREAK)), "%u of %u differ", bad,
-          SLC_GRID + SLC_BREAK.nauto);
-
-    /* 2: the detector on BREAK (hits = its build-time AUTO table) */
+    /* 1, 2: the built-in loops (Skiff phase 9: BREAK and FUNK from assets/breaks/): their build-time tables == the
+     * decoder's states, and their AUTO slices == what the detector finds in them (gen_samples.py runs slc_scan's
+     * integer steps: the same starts, to the sample) */
     {
+        static const slc_src_t *const BUILT[] = {&SLC_BREAK, &SLC_FUNK};
         static slc_src_t tmp;
-        tmp = SLC_BREAK;
-        tmp.len = 0;
-        slc_scan(&tmp, SLC_BREAK.len);
-        tmp.len = SLC_BREAK.len;
-        bad = memcmp(tmp.grid, SLC_BREAK.grid, sizeof tmp.grid) != 0;
-        check("BREAK: slc_scan grid == build-time grid", !bad, 0);
-        check("BREAK: slc_scan finds the hits (-6 .. +1 ms)",
-              match(&tmp, SLC_BREAK.apos, SLC_BREAK.nauto, 132, 22, msg, sizeof msg, &worst), "%s", msg);
+        char what[96];
+        for (i = 0; i < NELEM(BUILT); i++) {
+            const slc_src_t *b = BUILT[i];
+            const char *name = i ? "FUNK" : "BREAK";
+            snprintf(what, sizeof what, "%s: build-time table == decoder states", name);
+            check(what, !(bad = table_check(b)), "%u of %u differ", bad, SLC_GRID + b->nauto);
+            tmp = *b;
+            tmp.len = 0;
+            slc_scan(&tmp, b->len);
+            tmp.len = b->len;
+            snprintf(what, sizeof what, "%s: slc_scan grid == build-time grid", name);
+            check(what, !memcmp(tmp.grid, b->grid, sizeof tmp.grid), 0);
+            snprintf(what, sizeof what, "%s: slc_scan finds its AUTO slices, exactly", name);
+            check(what, match(&tmp, b->apos, b->nauto, 132, 22, msg, sizeof msg, &worst) && tmp.nauto == b->nauto &&
+                  !memcmp(tmp.apos, b->apos, b->nauto * sizeof b->apos[0]), "%s", msg);
+        }
     }
 
     /* 2: the user loop, through the slot image and smp_user_scan */
@@ -488,8 +495,8 @@ int main(int argc, char **argv)
         track_t *t = &trk[0];
         voice_t *v;
         uint32_t a, b, st, ok = 1, j, p0;
-        check("engine 13 is SLICE (the protocol's number), two factory presets",
-              ENGINES[SLC_ENG] == &ENG_SLICE && ENG_SLICE.npresets == 2u && str_eq(ENG_SLICE.presets[0].name, "CHOP") &&
+        check("engine 13 is SLICE (the protocol's number), its factory presets CHOP STUTTER, (phase 9) 9 in all",
+              ENGINES[SLC_ENG] == &ENG_SLICE && ENG_SLICE.npresets == 9u && str_eq(ENG_SLICE.presets[0].name, "CHOP") &&
               str_eq(ENG_SLICE.presets[1].name, "STUTTER"), 0);
         slc_bounds(s, SLC_DIV_MAN, 3, &a, &b, &st);
         ok &= slc_count(s, SLC_DIV_MAN) == s->nauto && a == s->apos[3] && b == s->apos[4] && st == s->ast[3];
@@ -852,9 +859,31 @@ int main(int argc, char **argv)
 #else
     check("PIANO (SRC 4): none in a build without the CC0 samples", !slc_get(SLC_SRC_PIANO), 0);
 #endif
-    check("SRC: BREAK USR1 USR2 USR3 PIANO (append-only: 1.0.3's numbers kept)",
-          ENG_SLICE.edit[0].max == 4 && str_eq(N_SLC_SRC[0], "BREAK") && str_eq(N_SLC_SRC[1], "USR1") &&
-          str_eq(N_SLC_SRC[3], "USR3") && str_eq(N_SLC_SRC[4], "PIANO") && SLC_BREAK.len != 0u, 0);
+    check("SRC: BREAK USR1 USR2 USR3 PIANO FUNK (append-only: 1.0.3's numbers kept)",
+          ENG_SLICE.edit[0].max == 5 && str_eq(N_SLC_SRC[0], "BREAK") && str_eq(N_SLC_SRC[1], "USR1") &&
+          str_eq(N_SLC_SRC[3], "USR3") && str_eq(N_SLC_SRC[4], "PIANO") && str_eq(N_SLC_SRC[5], "FUNK") &&
+          SLC_BREAK.len != 0u && slc_get(SLC_SRC_FUNK) == &SLC_FUNK && !SLC_SRC_USR(SLC_SRC_FUNK) &&
+          !SLC_SRC_USR(SLC_SRC_PIANO) && !SLC_SRC_USR(0u) && SLC_SRC_USR(1u) && SLC_SRC_USR(3u), 0);
+    {   /* (Skiff phase 9) SRC 5 FUNK: DIV 8, the lowest key plays its first eighth of the material */
+        track_t *t = &trk[0];
+        voice_t *v;
+        uint32_t ok;
+        int32_t o[2 * CTL], pk = 0;
+        voices_off();
+        host_tracks_init();
+        host_preset(t, SLC_ENG, 0);
+        t->p[P_E0] = (int16_t)SLC_SRC_FUNK;
+        t->p[P_E1] = 1;
+        trk_note_on(t, 60, 100);
+        v = voice_of(t, 60);
+        ok = v && ((uint32_t)v->s[4] & 7u) == SLC_SRC_FUNK && v->ph[0] == 0u && v->ph[2] == slc_gpos(&SLC_FUNK, 16u);
+        for (i = 0; i < 40u; i++) {
+            mix_block(o, CTL);
+            for (n = 0; n < (long)CTL; n++)
+                pk = abs(o[2 * n]) > pk ? abs(o[2 * n]) : pk;
+        }
+        check("FUNK (SRC 5): DIV 8, a key plays its slice, sounding", ok && pk > 2000, "peak %d", pk);
+    }
     sine_ok("SLICE on an empty USR2: A4", sine_run(SLC_ENG, 2, 69), 440.0);
     sine_ok("SLICE on an empty USR2: A3", sine_run(SLC_ENG, 2, 57), 220.0);
     sine_ok("SAMPLE on an empty USR2: A4", sine_run(4u, (int16_t)(SMP_NSETS + 1), 69), 440.0);

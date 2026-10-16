@@ -74,6 +74,10 @@ enum {                          /* per-track parameters */
     P_LN0, P_LN1, P_LN2, P_LN3, P_LN4, P_LN5, P_LN6, P_LN7,   /* DRUM lane levels (eng_drum.c, #97): KICK .. BELL */
     P_DIR,                                     /* (Skiff) play direction (seq.c seq_next): DIR_FWD REV PING RAND */
     P_DKSRC, P_DKAMT, P_DKREL,                 /* (Skiff) ducking (duck.c): the track it ducks under, DEPTH, RELEASE */
+    P_DTYPE, P_DTONE,                          /* (Skiff phase 9) FX > DRIVE (fx.c track_dist): DIST's kind, its tone */
+    P_EG2_ATK, P_EG2_DEC, P_EG2_SUS, P_EG2_REL,   /* (Skiff phase 9) ENV 2 (voice.c env2_tick): a MOD source */
+    P_LTUNE0, P_LTUNE1, P_LTUNE2, P_LTUNE3, P_LTUNE4, P_LTUNE5, P_LTUNE6, P_LTUNE7,   /* (Skiff phase 9) the DRUM lanes' */
+    P_LDECAY0, P_LDECAY1, P_LDECAY2, P_LDECAY3, P_LDECAY4, P_LDECAY5, P_LDECAY6, P_LDECAY7,   /* TUNE and DECAY */
     P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7,
     P_COUNT
 };
@@ -87,12 +91,13 @@ enum {                          /* global parameters */
     G_ENGSEL, G_ENGGO,          /* no page: the editor switches the engine with a SET of G_ENGSEL; G_ENGGO is
                                  * unused (ids are fixed by the formats and the protocol) */
     G_CLRSEQ, G_INITSND,
-    G_RTYPE,                    /* REVERB TYPE: 0 ROOM, 1 SPRING (fx.c). Was G_DRCH, the GM drum part's MIDI
+    G_RTYPE,                    /* REVERB TYPE: 0 ROOM, 1 SPRING, (Skiff phase 9) 2 HALL (fx.c). Was G_DRCH, the GM drum part's MIDI
                                  * channel (inert since 1.0, never read); projects of formats before FUN7 load it
                                  * as ROOM (project.c proj_rtype_room) */
-    G_DRLVL, G_DRREV,           /* inert (label "-", on no page): the GM drum part they set is gone; kept
-                                 * because the ids and G_COUNT are fixed by the formats and the protocol (only
-                                 * the import of an old project reads them: proj_drums_to_part) */
+    G_CMODE, G_CFDBK,           /* (Skiff phase 9) GLO > CHORUS's MODE (0 CHORUS, 1 FLANGER, 2 PHASER) and FEEDBACK
+                                 * (fx.c cho_mode). Were G_DRLVL / G_DRREV, the GM drum part's level and reverb send
+                                 * (inert since 1.0): an import of a format before SKF3 reads them as those
+                                 * (project.c proj_drums_to_part), then sets them 0 (proj_import) */
     G_COUNT
 };
 
@@ -155,6 +160,7 @@ enum { V_POLY, V_MONO, V_LEGATO, V_UNISON };   /* P_VOICE */
 typedef struct {
     uint8_t note, vel, gate, active;
     uint8_t stage;               /* env: 0 off, 1 attack, 2 decay/sustain, 3 release */
+    uint8_t stage2;              /* (Skiff phase 9) ENV 2's (voice.c env2_tick): the same, its release at the gate's end */
     int32_t env;                 /* Q24 */
     int32_t env_out;             /* last control-rate amplitude, Q15 */
     int32_t pitch16, pitch_cur;  /* 1/16 semitone, with glide */
@@ -165,6 +171,7 @@ typedef struct {
     uint32_t age;
     uint8_t mvel;                /* mod.c: the note-on velocity (before UNISON scaling) and RAND of the note */
     int16_t mrnd;
+    int32_t env2;                /* (Skiff phase 9) ENV 2, Q24: a MOD source only (mod.c MS_ENV2) */
 } voice_t;
 
 typedef struct {                 /* per-voice control-rate modulation, computed in voice.c */
@@ -188,9 +195,12 @@ typedef struct {
                                   * arp is the track's too: a preset does not set it) */
     struct { uint8_t id; int8_t v; } more[4];   /* (Skiff) up to four more of the sound's values, {P_* id, value}: the
                                   * LFO, GLIDE, ENV -> PITCH (sound parameters only, never param_kept's: editor_test); id 0 ends */
+    uint8_t tag;                 /* (Skiff phase 9) its type, PT_*: PRESETS' LIST shows one (ui.c preset_in_list) */
 } preset_t;
 #define FX(d, c, dl, r) .fx = {(d) + 1, (c) + 1, (dl) + 1, (r) + 1}
 #define MORE(...) .more = {__VA_ARGS__}
+#define TAG(t) .tag = (t)
+enum { PT_NONE, PT_BASS, PT_LEAD, PT_PAD, PT_KEYS, PT_PLUCK, PT_DRUM, PT_FX, PT_N };   /* (stored: the LIST setting) */
 
 struct track;
 typedef struct {                 /* an engine (engines.c ENGINES[]; the eng_*.c files) */
@@ -384,6 +394,7 @@ typedef struct track {
     /* mix runtime */
     int32_t peak;
     int32_t dist_hp, dist_lp1, dist_lp2;   /* DIST insert state (fx.c) */
+    int32_t dist_dc;                       /* (Skiff phase 9) the DC after HARD's and FOLD's clip (fx.c dist_hard) */
     uint8_t tail;                /* blocks to mix after the last voice (the DIST tail) */
     int16_t armp, aholdp;        /* P_AMODE / P_AHOLD as last seen by the ISR */
     /* engine switch (voice.c engine_block): the old engine's voices fade out, then it switches */
@@ -396,6 +407,7 @@ typedef struct track {
     uint8_t m_vel, m_key, m_vi;  /* the latest note-on: velocity, note, voice index (per-block destinations) */
     int16_t m_rnd;               /* .. its RAND */
     int32_t m_env;               /* the amp envelope of voice m_vi, last block (Q15) */
+    int32_t m_env2;              /* (Skiff phase 9) .. its ENV 2 (Q15; while a MOD slot uses it) */
 } track_t;
 
 typedef struct {

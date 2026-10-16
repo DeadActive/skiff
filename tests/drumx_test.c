@@ -135,6 +135,38 @@ int main(int argc, char **argv)
         snprintf(nm, sizeof nm, "%s: sounds, under full scale, no DC, ends", NAME[l]);
         check(nm, pk > 1036 && pk < 32000 && fabs(dc) < pk * 0.02 && ended, "peak %d, DC %.0f", pk, dc);
     }
+    /* 1b (Skiff phase 9) every kit a preset loads (eng_drumx.c DRUMX_PKIT): the same, every lane at A and at B */
+    for (i = 2; i < ENG_DRUMX.npresets; i++) {
+        int32_t lo = 32767, hi = 0;
+        int all = 1;
+        char why[48] = "";
+        for (l = 0; l < 16u; l++) {
+            track_t *t = &trk[0];
+            int32_t pk = 0;
+            double dc = 0;
+            uint32_t j;
+            host_tracks_init();
+            host_preset(t, ENGI_DRUMX, i);
+            t->p[P_E0] = l < 8u ? 0 : 127;
+            for (j = 0; j < 4u; j++)
+                t->p[P_DIST + j] = 0;
+            strike(t, l & 7u, FS / 2u);
+            for (j = 0; j < FS / 2u; j++) {
+                pk = abs(buf[j]) > pk ? abs(buf[j]) : pk;
+                dc += buf[j];
+            }
+            dc /= FS / 2u;
+            if (!(pk > 1036 && pk < 32000 && fabs(dc) < pk * 0.02 && !strike(t, l & 7u, MAXN)) && all) {
+                snprintf(why, sizeof why, "; %s at %s: peak %d, DC %.0f", NAME[l & 7u], l < 8u ? "A" : "B", pk, dc);
+                all = 0;
+            }
+            lo = pk < lo ? pk : lo;
+            hi = pk > hi ? pk : hi;
+        }
+        snprintf(nm, sizeof nm, "%s: every lane at A and B sounds, under full scale, no DC, ends",
+                 ENG_DRUMX.presets[i].name);
+        check(nm, all && !memcmp(dx_kit, DX_KITS[DRUMX_PKIT[i] - 1u], sizeof dx_kit), "peaks %d .. %d%s", lo, hi, why);
+    }
 
     /* 2 */
     {

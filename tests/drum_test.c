@@ -730,6 +730,62 @@ static void lane_levels(void)
     fails += bad != 0;
 }
 
+/* (Skiff phase 9) each lane's TUNE and DECAY (P_LTUNE0.., P_LDECAY0..; EDIT > LANES): TUNE 64 and DECAY 0 play as
+ * designed, another lane's leave a lane bit for bit; TUNE 127 (+12 semitones) raises a pitched lane (more zero
+ * crossings), DECAY +63 rings longer and -64 shorter (the energy after the first 23 ms). One note struck alone, nb blocks
+ * of the part */
+static double lane_try(uint32_t note, uint32_t id, int16_t v, uint32_t nb, uint64_t *hash, uint32_t *cross, double *late)
+{
+    int32_t o[CTL], last = 0;
+    double e = 0;
+    uint32_t i, k;
+    kit_fresh();
+    trk[0].p[id] = v;
+    trk_note_on(&trk[0], note, 110);
+    *hash = 1469598103934665603ull;
+    *cross = 0;
+    *late = 0;
+    for (i = 0; i < nb; i++) {
+        track_render(&trk[0], o, CTL);
+        for (k = 0; k < CTL; k++) {
+            e += (double)o[k] * o[k];
+            *late += i >= 32u ? (double)o[k] * o[k] : 0.0;
+            *cross += (o[k] < 0) != (last < 0);
+            last = o[k];
+            *hash = (*hash ^ (uint32_t)o[k]) * 1099511628211ull;
+        }
+    }
+    return e;
+}
+static void lane_tune_decay(void)
+{
+    static const uint8_t NOTE[NLANE] = {36, 38, 39, 42, 46, 45, 37, 56};
+    static const uint8_t PITCHED[NLANE] = {1, 0, 0, 0, 0, 1, 1, 1};   /* (the snare, the clap, the hats: mostly noise) */
+    uint32_t l, bad = 0, c0, c1, cx;
+    uint64_t h0, h1, h2;
+    double l0, l1, lx;
+    kit_fresh();
+    for (l = 0; l < NLANE; l++)
+        bad += trk[0].p[P_LTUNE0 + l] != 64 || trk[0].p[P_LDECAY0 + l] != 0;
+    for (l = 0; l < NLANE; l++) {
+        (void)lane_try(NOTE[l], P_LTUNE0 + l, 64, 128, &h0, &c0, &l0);
+        (void)lane_try(NOTE[l], P_LTUNE0 + (l + 1u) % NLANE, 127, 128, &h1, &cx, &lx);
+        (void)lane_try(NOTE[l], P_LDECAY0 + (l + 3u) % NLANE, -64, 128, &h2, &cx, &lx);
+        bad += h1 != h0 || h2 != h0;                  /* another lane's: this one as it was */
+        (void)lane_try(NOTE[l], P_LTUNE0 + l, 127, 128, &h1, &c1, &lx);
+        bad += h1 == h0 || (PITCHED[l] && c1 < c0 + c0 / 4u);
+        (void)lane_try(NOTE[l], P_LDECAY0 + l, 63, 128, &h1, &cx, &l1);
+        (void)lane_try(NOTE[l], P_LDECAY0 + l, -64, 128, &h2, &cx, &lx);
+        bad += !(l1 > l0 && lx < l0);
+        if (bad)
+            printf("drum_test:   lane %u: crossings %u -> %u at TUNE 127; late energy %.3g, DECAY +63 %.3g, -64 %.3g\n", l,
+                   c0, c1, l0, l1, lx);
+    }
+    printf("drum_test: (phase 9) lane TUNE and DECAY: another lane's leave a lane bit for bit; TUNE +12 st raises a "
+           "pitched lane, DECAY +63 longer, -64 shorter: %s\n", bad ? "FAIL" : "ok");
+    fails += bad != 0;
+}
+
 static void engine(void)
 {
     /* the 8 lanes: KICK SNARE CLAP HAT CL HAT OP TOM RIM BELL (the closed hat first: it would choke the open one) */
@@ -1372,6 +1428,7 @@ int main(int argc, char **argv)
     retired();
     lane_budget();
     lane_levels();
+    lane_tune_decay();
     engine();
     if (argc > 1)
         demos(argv[1]);

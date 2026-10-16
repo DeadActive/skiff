@@ -177,7 +177,7 @@ static int projects(void)
               after.t[0].step[i].vel == before.t[0].step[i].vel;
     bad += check("FUN8: x1..x4 round trip with their velocity, accent, chance (0 and 30 %) and lane hits", ok &&
                  step_ratchet(&after.t[3].step[5]) == 4u && after.t[3].step[5].hit == 0x81);
-    pos = 68u + P_COUNT + 2u + 3u * 9u;              /* step 3 of track 1: x4 -> bit 7 of its velocity and chance */
+    pos = 68u + PROJ_NP + 2u + 3u * 9u;              /* step 3 of track 1: x4 -> bit 7 of its velocity and chance */
     bad += check("  x4 is bit 7 of the velocity and the chance bytes", (packed.raw[pos + 5] & 128u) && (packed.raw[pos + 8] & 128u) &&
                  (packed.raw[pos + 5] & 127u) == before.t[0].step[3].vel);
     for (k = 0; k < NTRK; k++)
@@ -186,15 +186,15 @@ static int projects(void)
     project_capture(&before);
     proj_pack(&packed, &before);
     ok = 1;
-    for (k = 0, pos = 68u; k < PROJ_NT; k++, pos += P_COUNT + 2u + NSTEP * 9u + PROJ_NUDGE_BYTES)   /* ((Skiff) SKF1) */
+    for (k = 0, pos = 68u; k < PROJ_NT; k++, pos += PROJ_NP + 2u + NSTEP * 9u + PROJ_NUDGE_BYTES)   /* ((Skiff) SKF1) */
         for (i = 0; i < NSTEP; i++)
-            ok &= packed.raw[pos + P_COUNT + 2u + i * 9u + 5u] < 128u && packed.raw[pos + P_COUNT + 2u + i * 9u + 8u] < 128u;
+            ok &= packed.raw[pos + PROJ_NP + 2u + i * 9u + 5u] < 128u && packed.raw[pos + PROJ_NP + 2u + i * 9u + 8u] < 128u;
     bad += check("  a project without ratchets: every velocity and chance byte below 128, as firmware before wrote", ok);
     {   /* a FUN7 image (its tracks without patches) as firmware before RATCH wrote it: x1 */
         project_store_t old;
         uint32_t sum, magic = PROJ_MAGIC_V7, size = PROJ_STORE_V7;
         project_t fun7;
-        uint32_t src = 68u, dst = 68u, n = P_COUNT + 2u + NSTEP * 9u;
+        uint32_t src = 68u, dst = 68u, n = PROJ_NP + 2u + NSTEP * 9u;
         memcpy(&old, &packed, sizeof old);
         for (k = 0; k < PROJ_NT; k++, src += n + PROJ_NUDGE_BYTES, dst += n)   /* ((Skiff) SKF1's NUDGE planes out) */
             memmove(old.raw + dst, packed.raw + src, n);
@@ -421,7 +421,7 @@ static int flam(void)
     project_capture(&before);
     proj_power_on(&before, PROJ_NT); before.sum = proj_sum(&before);   /* ((Skiff phase 6) four tracks in SKF1) */
     ok = proj_pack(&packed, &before) && proj_import(&after, &packed, sizeof packed) && !memcmp(&before, &after, sizeof before);
-    pos = 68u + P_COUNT + 2u + 3u * 9u;              /* step 3 of track 1 */
+    pos = 68u + PROJ_NP + 2u + 3u * 9u;              /* step 3 of track 1 */
     ok &= (packed.raw[pos + 4] & 128u) && (after.t[0].step[3].flags & SF_FLAM) && (after.t[0].step[3].flags & SF_ACCENT);
     packed.raw[pos + 5] |= 128u;                     /* FLAM with RATCH x2: no such step, refused */
     {

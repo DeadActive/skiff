@@ -9,7 +9,7 @@
  * 3. a REPEAT too long for the loop (1/8 and REVERSE below 81 BPM) does nothing at all.
  * 4. the SLICER: its recordings are not used meanwhile and are dropped afterwards.
  * 5. the keys: a layer key plays nothing and sends no MIDI; a key held before FX stays a note; the white
- *    keys past the first 10 are the layer's too but do nothing.
+ *    keys past the first 14 are the layer's too but do nothing.
  * 6. idle: nothing held, nothing ramping, the mix is bit-identical (and the goldens of regress.c too).
  * 7. no clicks, no overflow; the filters, the CRUSH and THROW macros and the mutes do what they say.
  * 8. cost: instructions per sample of the song, idle and with every effect at once (proc_pid_rusage).
@@ -23,7 +23,12 @@
  *    away after the input stops; KNOB 4 at 0 is plain (the delay holds only the input); the cost: over the
  *    idle song, and the harmonizer's own over REPEAT 1/16 alone (the layer's stage, which every effect of it
  *    pays): about 2 % at most (device estimate: 1.7 % per 100 instructions per sample).
- * Demos (WAV) into DEMO_DIR; with a second directory, the harmonizer's (a melody with OCT UP, OCT DN, and
+ * 10. (Skiff phase 9) GATE: open the first half of every 1/16 bit for bit, shut the second, the input back when let
+ *    go. DUB: the dry mix into the delay's send alone, whole; the delay's feedback up to DUB_FB in 0.2 s and back in
+ *    under 1 s after (its return at MIX's default at least meanwhile). FLANGE: a 1 kHz sine's level swept by the comb
+ *    (notches pass it), under full scale. VINYL: a 1 kHz sine's pitch wobbling (the wow, +-0.4 %: zero crossings), a
+ *    6 kHz one low-passed, crackle in silence (~21 pops a second). Each: the input back when let go.
+ * Demos (WAV) into DEMO_DIR (with phase 9's fx_gate, fx_dub, fx_flange, fx_vinyl); with a second directory, the harmonizer's (a melody with OCT UP, OCT DN, and
  * OCT UP with the shimmer) into it. */
 #define main hostsim_main
 #include "hostsim.c"
@@ -55,6 +60,7 @@ static void perf_reset(void)
     memset(&pf, 0, sizeof pf);
     pf.src = pf.next = PF_N;
     pf.lc = PF_TOP;
+    pf.gg = 32768;
     for (uint32_t k = 0; k < NTRK; k++)
         pf.mg[k] = 32768;
     perf_held = perf_act = 0;
@@ -390,7 +396,7 @@ static int test_keys(void)
     fm1_in.notes = 0;
     fm1_in.buttons = 0;
     keyboard_block();
-    {   /* the white keys past the first 10 (B4 on), and black keys past the mutes: the layer's, nothing */
+    {   /* the white keys past the first 14 (F5 on), and black keys past the mutes: the layer's, nothing */
         uint32_t q, ok = 1, assigned = 0;
         for (q = 0; q < 27u; q++)
             if (perf_key(q) < PF_N)
@@ -409,8 +415,9 @@ static int test_keys(void)
             ok &= !kb_layer && !perf_held && mo_w == mo0;
         }
         fm1_in.buttons = 0;
-        bad += check("the keys without an effect (white from B4, black past the tracks' mutes): silent, nothing held",
-                     ok && assigned == 0x17FFFu);   /* F3 .. A4 but G#4 ((phase 6) D#4 and F#4 mute T5 and T6) */
+        bad += check("the keys without an effect (white from F5, black past the tracks' mutes): silent, nothing held",
+                     ok && assigned == 0xAD7FFFu);  /* F3 .. G4 but G#4, the white A4 .. E5 ((phase 6) D#4 and F#4 mute T5
+                                                     * and T6; (phase 9) B4 .. E5 GATE DUB FLANGE VINYL) */
         kb_mask = perf_mask = 0;
     }
     usb.config = 0;
@@ -702,6 +709,134 @@ static int test_harm(void)
     return bad;
 }
 
+/* --------------------------------- 10. (Skiff phase 9) GATE, DUB, FLANGE, VINYL --- */
+static int cmp_dbl(const void *a, const void *b)
+{
+    double x = *(const double *)a, y = *(const double *)b;
+    return x < y ? -1 : x > y;
+}
+static int test_p9(void)
+{
+    int bad = 0, ok;
+    uint32_t t, k;
+    char what[200];
+    {   /* GATE held for 4 sixteenths at 120 BPM: each 1/16's first half the input (after the 2.9 ms edge), the second
+         * silent (DEPTH 0); let go in an open half: the input */
+        ev_t ev[] = {{0, PF_GATE + 1}, {4u * P16 + 32u, -(PF_GATE + 1)}};
+        test_signal(220, 16000, 330, 12000);
+        run(120, 1, ev, 2, 6u * P16);
+        ok = 1;
+        for (k = 0; k < 4u; k++) {
+            uint32_t a = k * P16, h = a + P16 / 2u;
+            ok &= same(a + (k ? 130u : 0u), h);
+            for (t = h + 130u; t < a + P16; t++)
+                ok &= out_l[t] == 0 && out_r[t] == 0;
+        }
+        ok &= same(4u * P16 + 130u, 6u * P16);        /* (let go on a 1/16's opening edge: it opens on) */
+        bad += check("GATE: the first half of every 1/16 bit for bit, the second shut; let go: the input", ok);
+    }
+    {   /* DUB, the stages alone on a steady mix */
+        static int32_t ml[CTL], mr[CTL], sd[CTL], sr[CTL], bl[CTL], br[CTL];
+        int32_t fb = 0, mix = 0;
+        uint32_t f, up = 0, down = 0;
+        perf_reset();
+        for (t = 0; t < CTL; t++)
+            ml[t] = mr[t] = 10000;
+        perf_press(PF_DUB, 1);
+        for (f = 0; f < FS / 2u; f += CTL) {
+            memset(sd, 0, sizeof sd);
+            memset(sr, 0, sizeof sr);
+            perf_begin(CTL);
+            perf_pre(ml, mr, sd, sr, CTL);
+            perf_block(bl, br, CTL);
+            if (!up && pf.dfb == DUB_FB)
+                up = f + CTL;
+        }
+        ok = sd[CTL - 1u] == 10000 && sr[CTL - 1u] == 0;
+        perf_dub_dly(&fb, &mix);
+        ok &= fb == DUB_FB && mix == DUB_FB * 3 / 4;
+        fb = mix = 32000;
+        perf_dub_dly(&fb, &mix);
+        ok &= fb == 32000 && mix == 32000;
+        perf_press(PF_DUB, 0);
+        for (f = 0; f < 3u * FS / 2u; f += CTL) {
+            memset(sd, 0, sizeof sd);
+            memset(sr, 0, sizeof sr);
+            perf_begin(CTL);
+            perf_pre(ml, mr, sd, sr, CTL);
+            perf_block(bl, br, CTL);
+            if (!down && !pf.dfb)
+                down = f + CTL;
+        }
+        snprintf(what, sizeof what, "DUB: the mix into the delay's send alone, whole; its feedback up in %.2f s, back in %.2f s",
+                 up / (double)FS, down / (double)FS);
+        bad += check(what, ok && !sd[CTL - 1u] && up && up < FS / 4u && down > FS / 2u && down < FS && !pf.busy);
+        fb = 1000;
+        mix = 2000;
+        perf_dub_dly(&fb, &mix);
+        bad += check("  let go and rung out: the song's feedback and return again", fb == 1000 && mix == 2000);
+    }
+    {   /* FLANGE for 2 bars (4 s at 120 BPM: the sweep up and down): a 1 kHz sine's 10 ms peaks rise and fall by more
+         * than 4x as the comb's notches pass it, under full scale; let go: the input */
+        ev_t ev[] = {{0, PF_FLG + 1}, {4u * FS, -(PF_FLG + 1)}};
+        int32_t lo = 1 << 30, hi = 0, pk;
+        test_signal(1000, 12000, 1000, 12000);
+        run(120, 1, ev, 2, 5u * FS);
+        for (t = FS / 10u; t + 441u < 4u * FS; t += 441u) {
+            pk = peak(out_l, t, t + 441u);
+            lo = pk < lo ? pk : lo;
+            hi = pk > hi ? pk : hi;
+        }
+        snprintf(what, sizeof what, "FLANGE: a 1 kHz sine swept by the comb: 10 ms peaks %d .. %d; let go: the input", lo, hi);
+        bad += check(what, hi > 4 * lo && hi < 32767 && same(4u * FS + 512u, 5u * FS));
+    }
+    {   /* VINYL: the pitch of a 1 kHz sine from its upward zero crossings (the mean of the middle 12 of each 20
+         * periods: a pop near a crossing left out), over 3.6 s (two turns of the record) */
+        ev_t ev[] = {{0, PF_VIN + 1}, {4u * FS, -(PF_VIN + 1)}};
+        static double per[8000], win[400];
+        double last = -1, mean = 0, mn = 1e9, mx = 0, dev, rin = 0, rout = 0;
+        uint32_t np = 0, nw = 0, pops = 0;
+        test_signal(1000, 12000, 1000, 12000);
+        run(120, 1, ev, 2, 5u * FS);
+        for (t = FS / 5u; t < 19u * FS / 5u; t++)
+            if (out_l[t - 1u] < 0 && out_l[t] >= 0) {
+                double x = t - 1u + (double)-out_l[t - 1u] / (out_l[t] - out_l[t - 1u]);
+                if (last >= 0 && np < 8000u)
+                    per[np++] = x - last;
+                last = x;
+            }
+        for (k = 0; k + 20u <= np && nw < 400u; k += 20u) {
+            double w[20], s = 0;
+            memcpy(w, per + k, sizeof w);
+            qsort(w, 20, sizeof w[0], cmp_dbl);
+            for (t = 4; t < 16u; t++)
+                s += w[t];
+            win[nw++] = s / 12.0;
+        }
+        for (k = 0; k < nw; k++) {
+            mean += win[k] / nw;
+            mn = win[k] < mn ? win[k] : mn;
+            mx = win[k] > mx ? win[k] : mx;
+        }
+        dev = nw ? (mx - mn) / (2.0 * mean) * 100.0 : 0;
+        ok = same(4u * FS + 512u, 5u * FS);
+        test_signal(6000, 12000, 6000, 12000);
+        run(120, 1, ev, 1, 2u * FS);
+        for (t = FS / 2u; t < 2u * FS; t++) {
+            rin += (double)in_l[t] * in_l[t];
+            rout += (double)out_l[t] * out_l[t];
+        }
+        test_signal(0, 0, 0, 0);
+        run(120, 1, ev, 1, 2u * FS);
+        for (t = 1; t < 2u * FS; t++)
+            pops += abs(out_l[t]) > abs(out_l[t - 1u]);
+        snprintf(what, sizeof what, "VINYL: the wow +-%.2f %% (1 kHz, %u windows), 6 kHz at %.2f, %u pops in 2 s; let go: the input",
+                 dev, nw, sqrt(rout / rin), pops);
+        bad += check(what, ok && nw > 100u && dev > 0.25 && dev < 0.6 && sqrt(rout / rin) < 0.8 && pops >= 24u && pops <= 70u);
+    }
+    return bad;
+}
+
 /* -------------------------------------------------------------- 8. cost --- */
 static uint64_t instr_now(void)
 {
@@ -779,6 +914,37 @@ static void demo_at(uint32_t t)
         if (D[i].t == t)
             perf_press((uint32_t)abs(D[i].e) - 1u, D[i].e > 0);
 }
+/* (Skiff phase 9) a demo each of GATE, DUB, FLANGE, VINYL: the song a bar, the effect held two, a bar after */
+static uint32_t p9_e;
+static void p9_at(uint32_t t)
+{
+    uint32_t bar = 4u * FS * 60u / 120u;
+    if (t == ((bar + CTL - 1u) / CTL) * CTL)
+        perf_press(p9_e, 1);
+    if (t == ((3u * bar + CTL - 1u) / CTL) * CTL)
+        perf_press(p9_e, 0);
+}
+static void p9_demos(const char *dir)
+{
+    static const uint8_t E[4] = {PF_GATE, PF_DUB, PF_FLG, PF_VIN};
+    static const char *const NAME[4] = {"fx_gate", "fx_dub", "fx_flange", "fx_vinyl"};
+    char path[512];
+    FILE *f;
+    uint32_t t, m, frames = 4u * 4u * FS * 60u / 120u;
+    for (m = 0; m < 4u; m++) {
+        song_setup();
+        p9_e = E[m];
+        song_render(frames, p9_at);
+        snprintf(path, sizeof path, "%s/%s.wav", dir, NAME[m]);
+        if (!(f = fopen(path, "wb")))
+            return;
+        wav_hdr(f, frames);
+        for (t = 0; t < frames; t++)
+            wav_put(f, song_l[t], song_r[t]);
+        fclose(f);
+        printf("perform: demo %s (the song, then %s held for bars 2 and 3)\n", path, NAME[m] + 3);
+    }
+}
 static void demos(const char *dir)
 {
     char path[512];
@@ -794,6 +960,7 @@ static void demos(const char *dir)
         wav_put(f, song_l[t], song_r[t]);
     fclose(f);
     printf("perform: demo %s (REPEAT 1/8, a 1/16 -> 1/32 roll, LPF, HPF, REVERSE, TAPE STOP, FREEZE, MUTE 1, KNOB 3 THROW)\n", path);
+    p9_demos(dir);
 }
 
 /* the harmonizer on a melody: plain, OCT UP (a bar), OCT DN (a bar), OCT UP with the shimmer (a bar) */
@@ -852,6 +1019,7 @@ int main(int argc, char **argv)
     bad += test_idle();
     bad += test_misc();
     bad += test_harm();
+    bad += test_p9();
     bad += test_cost();
     if (argc > 1)
         demos(argv[1]);

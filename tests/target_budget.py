@@ -28,10 +28,14 @@ FUNCS = ["analog_render", "digital_render", "digital_render_legacy", "digital_re
          "click_render",                                    # the metronome's click (click.c), while it sounds
          "mod_begin", "mod_voice", "mod_end",                 # the modulation matrix (mod.c), called when active
          "perf_begin", "perf_mute", "perf_pre", "perf_block", "perf_master",   # the FX layer (perform.c), when busy
+         "perf_gate", "perf_dub",                         # (Skiff phase 9) its GATE, DUB (FLANGE / VINYL: perf_mdl, a
+                                                          # sample a call, no loop: as perf_harm, not here)
          "duck_block", "duck_apply",                       # (Skiff) ducking (duck.c): each block; a ducked track
          "launch_step", "launch_swap",                     # (Skiff) live switching (launch.c): a staged pattern
          "throw_on", "throw_off",                         # (Skiff) throws (throw.c): while one is out
-         "rev_room", "rev_spring"]                # the reverb bus (fx.c): REVERB TYPE ROOM / SPRING
+         "rev_room", "rev_spring",                # the reverb bus (fx.c): REVERB TYPE ROOM / SPRING
+         "dist_hard", "dist_fold", "dist_bits",   # (Skiff phase 9) FX > DRIVE's TYPEs (fx.c), on a track that uses one
+         "rev_hall", "cho_mode"]                  # (Skiff phase 9) REVERB TYPE HALL; CHORUS MODE / FEEDBACK (fx.c)
 # built only with FELUCCA_FM4=1 (DIGITAL, src/eng_digital.c; not in the default build, so not in BUDGET): absent,
 # they are skipped; present, checked against these (their budget lines until the engine was retired in 1.0)
 OPTIONAL = {"digital_render": 12, "digital_render_legacy": 333, "digital_render_custom": 558,

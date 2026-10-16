@@ -7,7 +7,7 @@
 
 Outputs in build/: felucca.bin (app), loader/ota.bin (update loader),
 felucca.fwsc (package). A release build (--release X.Y) writes skiff-X.Y.fwsc and a folder
-release-X.Y/ with the package, the app, SHA256SUMS, the sample attribution and the licence files.
+release-X.Y/ with the package, the app, SHA256SUMS, the samples' attributions and the licence files.
 See BUILDING.md for the toolchain and the SDK.
 
 The JieLi toolchain is Linux x86-64 only. JIELI_TOOLCHAIN points at it; on
@@ -382,6 +382,7 @@ def main():
             shutil.copy(SRC / doc, rel / doc)
         if att.exists():
             shutil.copy(att, rel / "ATTRIBUTION.txt")
+        shutil.copy(SRC / "assets" / "breaks" / "ATTRIBUTION.txt", rel / "ATTRIBUTION-BREAKS.txt")   # (Skiff phase 9)
         print(f"release  {rel}/")
     return 0
 

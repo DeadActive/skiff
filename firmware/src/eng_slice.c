@@ -2,21 +2,22 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* SLICE: a sample slicer, played from the keys and the sequencer. Felucca's own design.
  *
- * Material (SRC): the built-in BREAK (tools/gen_samples.py: one bar of 16ths at 120 BPM arranged
- * from Felucca's generated drums, stored after the SAMPLE sets), a user slot USR1..3 (the same
- * slots as SAMPLE's, eng_sample.c), whose zones are played one after the other as one recording
- * (a zone that shares its data with an earlier one is skipped), or PIANO (SRC 4, since 1.0.4: one
- * note, the SAMPLE engine's PIANO zone of middle C, played from its data in SMP_DATA: no copy).
+ * Material (SRC): the built-in BREAK (tools/gen_samples.py: one bar of 16ths at 120 BPM, stored after
+ * the SAMPLE sets; (Skiff phase 9) made with the YuE2 music model, assets/breaks/), a user slot USR1..3 (the
+ * same slots as SAMPLE's, eng_sample.c), whose zones are played one after the other as one recording
+ * (a zone that shares its data with an earlier one is skipped), PIANO (SRC 4, since 1.0.4: one
+ * note, the SAMPLE engine's PIANO zone of middle C, played from its data in SMP_DATA: no copy), or
+ * (Skiff phase 9) FUNK (SRC 5: two beats at 86.33 BPM, built in as BREAK is).
  * A source with no material (an empty or invalid slot; PIANO in a build without the CC0 samples)
  * plays a plain sine at the key's pitch (+ PTCH) instead, through DCAY, TONE and the ADSR (MODE ONE
  * acts as GATE there: no slice end), and the UI says so (ui_input.c sample_notice).
  *
  * Slices (DIV): 4 / 8 / 16 / 32 equal ones, AUTO: one per onset, or MAN: set by hand on the EDIT family's SLICES
- * page (ui_slice.c) for a user slot (BREAK and PIANO: MAN plays AUTO). IMA ADPCM can only be entered
+ * page (ui_slice.c) for a user slot (the built-in ones: MAN plays AUTO). IMA ADPCM can only be entered
  * at a known decoder state, so each source keeps a table (slc_src_t): the states at the 128 grid
  * points k * len / 128 (every equal slice starts on one, and they are the reverse checkpoints) and
- * up to 32 AUTO starts with their states. BREAK's and PIANO's tables are written at build time (BREAK's
- * hits are its AUTO slices; PIANO has one, the attack); a user slot's is computed by slc_scan when the slot becomes valid
+ * up to 32 AUTO starts with their states. The built-in sources' tables are written at build time (BREAK's
+ * and FUNK's AUTO slices are what slc_scan finds in them; PIANO has one, the attack); a user slot's is computed by slc_scan when the slot becomes valid
  * (smp_user_scan: boot, upload end; main loop, never the audio ISR): two decoding passes; per hop
  * of 32 samples the peak of the first difference (hats, snares, clicks stand out, a kick's tail
  * does not) and the plain peak (low hits); an onset is a hop where either rises 1.75x over its
@@ -60,11 +61,14 @@ typedef struct {
 
 static const slc_src_t SLC_BREAK = SLC_BREAK_INIT;
 static const slc_src_t SLC_PIANO = SLC_PIANO_INIT;
+static const slc_src_t SLC_FUNK = SLC_FUNK_INIT;     /* (Skiff phase 9) */
 static slc_src_t slc_usr[SMP_USER_SLOTS];
-/* append-only: stored sounds keep their SRC numbers (1.0.4 added PIANO) */
-static const char *const N_SLC_SRC[] = {"BREAK", "USR1", "USR2", "USR3", "PIANO"};
+/* append-only: stored sounds keep their SRC numbers (1.0.4 added PIANO, Skiff phase 9 FUNK) */
+static const char *const N_SLC_SRC[] = {"BREAK", "USR1", "USR2", "USR3", "PIANO", "FUNK"};
 #define SLC_SRC_PIANO 4u
-#define SLC_NSRC 5
+#define SLC_SRC_FUNK 5u
+#define SLC_NSRC 6
+#define SLC_SRC_USR(src) ((src) - 1u < SMP_USER_SLOTS)   /* (Skiff phase 9) USR1..3; the others are built in */
 #define SLC_SINE 7u                  /* a voice's source when it has no material: the sine */
 static const char *const N_SLC_DIV[] = {"4", "8", "16", "32", "AUTO", "MAN"};
 static const char *const N_SLC_MODE[] = {"ONE", "GATE", "LOOP"};
@@ -87,15 +91,18 @@ static volatile uint8_t slc_man_cur[SMP_USER_SLOTS];
 static void (*slc_man_load)(uint32_t k);        /* slice_store.c: a slot was read (smp_user_scan): its stored slices */
 static uint8_t slc_man_save;                     /* bit k: slot k's slices changed, to flash (slice_store.c) */
 
-/* the SRC of a part's sound (0..4: a stored value out of range reads as the nearest) */
+/* the SRC of a part's sound (0..5: a stored value out of range reads as the nearest) */
 static uint32_t slc_src_of(const int16_t *p) { return (uint32_t)clamp(p[P_E0], 0, SLC_NSRC - 1); }
-/* source 0 = BREAK, 1..3 = USR1..3, 4 = PIANO; 0 = no material (an empty or erased slot, no PIANO in the build) */
+/* source 0 = BREAK, 1..3 = USR1..3, 4 = PIANO, 5 = FUNK; 0 = no material (an empty or erased slot, no PIANO in
+ * the build) */
 static const slc_src_t *slc_get(uint32_t src)
 {
     if (!src)
         return SLC_BREAK.len ? &SLC_BREAK : 0;
     if (src == SLC_SRC_PIANO)
         return SLC_PIANO.len ? &SLC_PIANO : 0;
+    if (src == SLC_SRC_FUNK)
+        return SLC_FUNK.len ? &SLC_FUNK : 0;
     src--;
     return src < SMP_USER_SLOTS && usr_nz[src] && slc_usr[src].len ? &slc_usr[src] : 0;
 }
@@ -610,8 +617,16 @@ static void slice_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
 
 /* two factory sounds, both on BREAK (always there) */
 static const preset_t SLICE_PRESETS[] = {
-    {"CHOP", {0, 2, 0, 0, SLC_ONE, 0, 127, 127}, {0, 127, 127, 30}, 0, 0, FX(0, 0, 0, 12)},
-    {"STUTTER", {0, 1, 0, 0, SLC_GATE, 0, 90, 110}, {0, 127, 127, 12}, 0, 0, FX(10, 0, 20, 10)},
+    {"CHOP", {0, 2, 0, 0, SLC_ONE, 0, 127, 127}, {0, 127, 127, 30}, 0, 0, FX(0, 0, 0, 12), TAG(PT_DRUM)},
+    {"STUTTER", {0, 1, 0, 0, SLC_GATE, 0, 90, 110}, {0, 127, 127, 12}, 0, 0, FX(10, 0, 20, 10), TAG(PT_DRUM)},
+    /* (Skiff phase 9) more for every engine: basses, kits */
+    {"LOW BREAK", {0, 2, 0, -7, 0, 0, 127, 100}, {0, 127, 127, 30}, 0, 0, FX(0, 0, 0, 10), TAG(PT_DRUM)},
+    {"BACK BREAK", {0, 2, 0, 0, 0, 1, 127, 127}, {0, 127, 127, 30}, 0, 0, FX(0, 0, 0, 10), TAG(PT_DRUM)},
+    {"BREAK HITS", {0, 4, 0, 0, 0, 0, 127, 127}, {0, 127, 127, 30}, 0, 0, FX(0, 0, 0, 10), TAG(PT_DRUM)},
+    {"SHORT CHOP", {0, 2, 0, 0, 0, 0, 80, 127}, {0, 127, 127, 20}, 0, 0, FX(0, 0, 0, 10), TAG(PT_DRUM)},
+    {"FAST BREAK", {0, 2, 0, 5, 0, 0, 110, 127}, {0, 127, 127, 25}, 0, 0, FX(35, 0, 10, 10), MORE({P_DTYPE, 1}), TAG(PT_DRUM)},
+    {"ROLL LOOP", {0, 3, 0, 0, 2, 0, 127, 127}, {0, 127, 127, 20}, 0, 0, FX(0, 0, 0, 10), TAG(PT_FX)},
+    {"FUNK BREAK", {5, 1, 0, 0, 0, 0, 127, 127}, {0, 127, 127, 30}, 0, 0, FX(0, 0, 0, 10), TAG(PT_DRUM)},
 };
 
 /* the lowest key is slice 0 (C4 + ROOT), no scale */

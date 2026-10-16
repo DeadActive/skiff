@@ -7,7 +7,8 @@
  *
  * A pattern is BK_REC bytes:
  *   0          the version (0: empty)
- *   1          P_COUNT when it was saved (its motion's ids: project.c proj_motion_ids)
+ *   1          the parameter count its motion's ids are of (project.c proj_motion_ids): (Skiff phase 9) PROJ_NP,
+ *              which firmware before reads, unless the motion names a parameter added since: then P_COUNT
  *   2..6       LEN DIV SWING GATE DIR, each + 64 (the sound's own values, not an automated one)
  *   7          its motion records (0..64), bit 7: the automation plays (motion.on)
  *   8..583     the 64 steps, 9 bytes each (project.c step_put9)
@@ -197,10 +198,15 @@ static int bk_write(uint32_t c)
  * automation on or not: 0 for a step no format can hold (none the UI makes) */
 static int bk_pack_raw(uint8_t *r, uint32_t k, const step_t *st, const int16_t *tv, const motion_store_t *ms, int on)
 {
-    uint32_t i, n = 0;
+    uint32_t i, n = 0, np = PROJ_NP;
+    /* ((Skiff phase 9) the motion's ids as a store of PROJ_NP has them, which firmware before reads; today's when it
+     * names a parameter added since) */
+    for (i = 0; i < ms->count && i < MOTION_MAX; i++)
+        if ((ms->event[i].place >> 6) == k && MOTION_ID(&ms->event[i]) >= PROJ_NP - 8u && MOTION_ID(&ms->event[i]) < P_E0)
+            np = P_COUNT;
     memset(r, 0, BK_REC);
     r[0] = BK_VER;
-    r[1] = P_COUNT;
+    r[1] = (uint8_t)np;
     for (i = 0; i < 5u; i++)
         r[2u + i] = (uint8_t)(tv[i] + 64);
     for (i = 0; i < NSTEP; i++)
@@ -213,7 +219,7 @@ static int bk_pack_raw(uint8_t *r, uint32_t k, const step_t *st, const int16_t *
         if ((e->place >> 6) != k)
             continue;
         m[0] = e->place & 63u;
-        m[1] = e->param;
+        m[1] = (uint8_t)(np == P_COUNT || MOTION_ID(e) < P_E0 ? e->param : e->param - PROJ_NX);   /* (the lock bit kept) */
         m[2] = (uint8_t)e->value;
         m[3] = (uint8_t)((uint16_t)e->value >> 8);
         n++;

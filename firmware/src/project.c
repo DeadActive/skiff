@@ -23,7 +23,7 @@
  * added since (SLICE 8, ..) were appended, no index moved.
  *
  * Track 4 was the GM drum part until 1.0 (no engine: its byte 0; its level and reverb send in the
- * globals G_DRLVL / G_DRREV, which are inert now). A project says which it has in `parts`: 4 (PROJ_PARTS)
+ * globals G_DRLVL / G_DRREV, now (Skiff phase 9) G_CMODE / G_CFDBK). A project says which it has in `parts`: 4 (PROJ_PARTS)
  * when written since, 0 before (a reserved byte, always written 0: the format and its size did not
  * change). proj_drums_to_part turns such a track 4 into a DRUM part with its default kit (the GM map, so
  * its drum steps still play drums; until 1.0.2 it was the SAMPLE engine's PERC set), keeping its steps, its
@@ -167,7 +167,14 @@ _Static_assert(PROJ_SCENES >= PROJ_SC2, "SKF2's scenes are the first bytes of to
  * magic, size, tracks, scene bytes): 68..697 the six tracks' parameters (np 103), engines and presets, 698..889 the
  * lists, 890..895 the entries, 896..977 the scenes; (phase 7) the DRUM-X kit at 1175 (PROJ_DX_AT: PROJ_DX_MARK, then
  * its 8 lanes, 11 bytes each, drumx_voice.c dx_lane_t; a record of before, 0 there: the factory kit), the FM6 patches
- * at 1264, the name at 2032, the hash. The tracks' parameters may grow up to the kit (np 135). SKF2 holds no kit */
+ * at 1264, the name at 2032, the hash. SKF2 holds no kit.
+ * (Skiff phase 9) Every format stores PROJ_NP parameters a track, the layout before phase 9 (P_COUNT 103), by count:
+ * the first PROJ_NP - 8 ids in order, then P_E0..P_E7 (proj_np_put; params_by_count reads them), so firmware before,
+ * which refuses a count above its own, reads what this one writes. The parameters added since (PROJ_NX of them, P_DTYPE
+ * .. P_LDECAY7) are SKF3's PX block, before the kit (PROJ_PX_AT, 981..1174: PROJ_PX_MARK, their count n, then each
+ * track's n values + 64), written only when one is not its default: a project that uses none is the bytes it was, and
+ * one without the block (every one of before) reads them as the defaults. Firmware before reads it without them. SKF1
+ * and SKF2 hold none: only old records are written as them again (proj_fetch, a rename, a backup), their defaults */
 #define PROJ_MAGIC3 0x534B4633u
 #define PROJ_STORE3 2048u
 typedef struct { uint32_t magic, size, nt, sc, dx; } proj_fmt_t;   /* (dx: 1 = it holds the DRUM-X kit) */
@@ -178,9 +185,18 @@ static const proj_fmt_t PROJ_SKF3 = {PROJ_MAGIC3, PROJ_STORE3, 6u, PROJ_SCENES, 
 #define PROJ_FM6_AT(f) (PROJ_NAME_AT(f) - (f)->nt * FM6_PACKED)
 #define PROJ_DX_MARK 0x58u                    /* ('X') the kit follows */
 #define PROJ_DX_AT(f) (PROJ_FM6_AT(f) - 1u - DV_NLANE * sizeof(dx_lane_t))   /* (a dx format's) */
-#define PROJ_HEAD_END(f) ((f)->dx ? PROJ_DX_AT(f) : PROJ_FM6_AT(f))      /* where the tracks, lists and scenes end */
+#define PROJ_NP 103u                          /* (phase 9) the parameters a track a store holds (see above) */
+#define PROJ_NX (P_E0 - (PROJ_NP - 8u))       /* .. the ones after them, in the PX block */
+#define PROJ_PX_MAX 32u                       /* .. its room: so many a track */
+#define PROJ_PX_MARK 0x50u                    /* ('P') the PX block follows */
+#define PROJ_PX_AT(f) (PROJ_DX_AT(f) - 2u - (f)->nt * PROJ_PX_MAX)   /* (a dx format's) */
+#define PROJ_HEAD_END(f) ((f)->dx ? PROJ_PX_AT(f) : PROJ_FM6_AT(f))      /* where the tracks, lists and scenes end */
 _Static_assert(sizeof(dx_lane_t) == 11u, "a DRUM-X lane is 11 bytes in SKF3");
 _Static_assert(NTRK == 6u, "SKF3: six tracks");
+_Static_assert(P_COUNT >= PROJ_NP && PROJ_NX <= PROJ_PX_MAX, "the parameters past PROJ_NP fit the PX block");
+_Static_assert(68u + 6u * (PROJ_NP + 2u + NENT * 2u + 1u) + PROJ_SCENES <=
+               PROJ_STORE3 - 4u - PROJ_NAME_LEN - 6u * FM6_PACKED - 1u - DV_NLANE * 11u - 2u - 6u * PROJ_PX_MAX,
+               "SKF3's tracks, lists and scenes end before its PX block");
 typedef union { uint32_t align; uint8_t raw[PROJ_STORE_SIZE]; } project_store_t;
 _Static_assert(G_COUNT == 27u, "FUN7 globals retain original IDs");
 _Static_assert(sizeof(project_store_t) == 3840u && PROJ_STORE_V7 == sizeof(project_v6_t), "SKF1 / FUN7 sizes");
@@ -324,8 +340,8 @@ static void proj_drums_to_part(project_t *q)
         return;
     d->engine = ENGI_DRUM;                      /* DRUM's first kit: independent of today's power-on drum sound */
     d->preset = PROJ_DEF_KEEP;
-    d->p[P_LEVEL] = (int16_t)clamp(q->g[G_DRLVL], 0, 127);   /* the drum part's level and reverb send */
-    d->p[P_REV] = (int16_t)clamp(q->g[G_DRREV], 0, 127);
+    d->p[P_LEVEL] = (int16_t)clamp(q->g[G_CMODE], 0, 127);   /* the drum part's level and reverb send (the ids */
+    d->p[P_REV] = (int16_t)clamp(q->g[G_CFDBK], 0, 127);     /* G_DRLVL / G_DRREV then: core.h) */
     q->parts = PROJ_PARTS;
     q->sum = proj_sum(q);
 }
@@ -535,6 +551,7 @@ static void proj_fm6_init(project_t *q)
 }
 static int proj_import_old(project_t *q, const void *b, int n);
 static int proj_import_any(project_t *q, const void *b, int n);
+static const proj_fmt_t *proj_fmt_of(const void *b, int n);
 /* every track's engine one this firmware has (DIGITAL, 1, is one: it converts): a project of another number
  * is not one (it never was: no engine number past the last was ever stored) */
 static int proj_engines_ok(const project_t *q)
@@ -552,6 +569,10 @@ static int proj_import(project_t *q, const void *b, int n)
     uint32_t k;
     if (!proj_import_any(q, b, n) || !proj_engines_ok(q))
         return 0;
+    if (proj_fmt_of(b, n) != &PROJ_SKF3 && (q->g[G_CMODE] || q->g[G_CFDBK])) {   /* (Skiff phase 9) the CHORUS MODE */
+        q->g[G_CMODE] = q->g[G_CFDBK] = 0;          /* and FEEDBACK: in an older format the old GM drum part's level */
+        q->sum = proj_sum(q);                       /* and reverb send, read above: as at power-on) */
+    }
     proj_fm4(q);
     proj_perc(q);
     for (k = NHEAVY; k < NTRK; k++)                /* (Skiff phase 6) a light track holding PHYS or GRAIN (no firmware */
@@ -736,23 +757,48 @@ static int proj_mot_get(motion_store_t *m, const uint8_t *b)
     return 1;
 }
 
+/* (Skiff phase 9) a track's values p -> the PROJ_NP bytes a store holds (+ 64, by count: the first PROJ_NP - 8 ids,
+ * then P_E0..P_E7; see PROJ_NP): 0 for a value no format holds */
+static int proj_np_put(uint8_t *b, const int16_t *p)
+{
+    uint32_t i;
+    for (i = 0; i < PROJ_NP; i++) {
+        int32_t v = p[i < PROJ_NP - 8u ? i : P_E0 + i - (PROJ_NP - 8u)];
+        if (v < -64 || v > 127) return 0;
+        b[i] = (uint8_t)(v + 64);
+    }
+    return 1;
+}
+/* .. motion m in the ids of a store of PROJ_NP (proj_motion_ids the other way): 0 for one past them (phase 9's) */
+static int proj_motion_np(motion_store_t *m)
+{
+    uint32_t i;
+    for (i = 0; i < m->count && i < MOTION_MAX; i++) {
+        uint32_t id = MOTION_ID(&m->event[i]);
+        if (id >= P_E0)
+            m->event[i].param = (uint8_t)((m->event[i].param & MOTION_LOCK) | (id - PROJ_NX));
+        else if (id >= PROJ_NP - 8u)
+            return 0;
+    }
+    return 1;
+}
+
 /* A stable serialized schema: first header retains FUN6's fields; at byte66
  * np, format flags, then four byte-param tracks and nine-byte steps; FUN8: the patches at PROJ_FM6_OFF.
  * (Skiff phase 6) The first PROJ_NT tracks: SKF1 holds no more */
 static int proj_pack(project_store_t *out, const project_t *q)
 {
     uint8_t *b = out->raw; uint32_t pos = 68u, t, i; uint32_t magic = PROJ_MAGIC, size = PROJ_STORE_SIZE, sum;
+    motion_store_t mo = q->motion;
     for (t = 0; t < PROJ_NT; t++)
         for (i = 0; i < FM6_PACKED; i++)
             if (q->fm6[t][i] > 127u) return 0;
-    if (!chain_valid(&q->chain) || !motion_valid(&q->motion) || P_COUNT > 127u) return 0;
+    if (!chain_valid(&q->chain) || !motion_valid(&q->motion) || P_COUNT > 127u || !proj_motion_np(&mo)) return 0;
     memset(out, 0, sizeof *out); memcpy(b, &magic, 4); memcpy(b + 4, &size, 4);
-    memcpy(b + 8, q->g, sizeof q->g); b[62] = q->sel; b[63] = q->parts; b[64] = q->phys; b[66] = P_COUNT;
+    memcpy(b + 8, q->g, sizeof q->g); b[62] = q->sel; b[63] = q->parts; b[64] = q->phys; b[66] = PROJ_NP;
     for (t = 0; t < PROJ_NT; t++) {
-        for (i = 0; i < P_COUNT; i++) {
-            if (q->t[t].p[i] < -64 || q->t[t].p[i] > 127) return 0;
-            b[pos++] = (uint8_t)(q->t[t].p[i] + 64);
-        }
+        if (!proj_np_put(b + pos, q->t[t].p)) return 0;   /* ((phase 9) PROJ_NP, by count) */
+        pos += PROJ_NP;
         b[pos++] = q->t[t].engine; b[pos++] = q->t[t].preset;
         for (i = 0; i < NSTEP; i++, pos += 9u)
             if (!step_put9(b + pos, &q->t[t].step[i]))
@@ -762,7 +808,7 @@ static int proj_pack(project_store_t *out, const project_t *q)
     }
     if (pos + sizeof q->chain + PROJ_MOT_BYTES > PROJ_FM6_OFF) return 0;
     memcpy(b + pos, &q->chain, sizeof q->chain); pos += sizeof q->chain;
-    proj_mot_put(b + pos, &q->motion);
+    proj_mot_put(b + pos, &mo);
     memcpy(b + PROJ_FM6_OFF, q->fm6, PROJ_NT * FM6_PACKED);
     {   /* the name (0-padded; stops at the first 0) */
         char n[PROJ_NAME_LEN + 1u];
@@ -875,18 +921,33 @@ static int proj_pack2(project_store_t *out, const project_t *q, const proj_fmt_t
     if (!proj_ent_ok(q) || P_COUNT > 127u) return 0;
     memset(out, 0, sizeof *out); memcpy(b, &f->magic, 4); memcpy(b + 4, &f->size, 4);
     memcpy(b + 8, q->g, sizeof q->g); b[62] = q->sel; b[63] = q->parts; b[64] = q->phys; b[65] = q->song;
-    b[66] = P_COUNT;
+    b[66] = PROJ_NP;
     for (t = 0; t < f->nt; t++) {
-        for (i = 0; i < P_COUNT; i++) {
-            if (q->t[t].p[i] < -64 || q->t[t].p[i] > 127) return 0;
-            b[pos++] = (uint8_t)(q->t[t].p[i] + 64);
-        }
+        if (!proj_np_put(b + pos, q->t[t].p)) return 0;   /* ((phase 9) PROJ_NP, by count) */
+        pos += PROJ_NP;
         b[pos++] = q->t[t].engine; b[pos++] = q->t[t].preset;
     }
     memcpy(b + pos, q->ent, f->nt * NENT * 2u); pos += f->nt * NENT * 2u;
     memcpy(b + pos, q->cur, f->nt); pos += f->nt;
     memcpy(b + pos, q->scene, f->sc); pos += f->sc;
     if (pos > PROJ_HEAD_END(f)) return 0;
+    if (f->dx) {                                      /* ((phase 9) the parameters past PROJ_NP: the PX block, if one */
+        uint32_t any = 0, j;                          /* is not its default) */
+        for (t = 0; t < f->nt; t++)
+            for (j = 0; j < PROJ_NX; j++) {
+                int32_t v = q->t[t].p[PROJ_NP - 8u + j];
+                if (v < -64 || v > 127) return 0;
+                any |= v != TP[PROJ_NP - 8u + j].def;
+            }
+        if (any) {
+            uint8_t *x = b + PROJ_PX_AT(f);
+            x[0] = PROJ_PX_MARK;
+            x[1] = (uint8_t)PROJ_NX;
+            for (t = 0; t < f->nt; t++)
+                for (j = 0; j < PROJ_NX; j++)
+                    x[2u + t * PROJ_NX + j] = (uint8_t)(q->t[t].p[PROJ_NP - 8u + j] + 64);
+        }
+    }
     if (f->dx && q->dx_on && dx_kit_ok(q->dx)) {     /* (phase 7) the DRUM-X kit (none: 0, the factory's) */
         b[PROJ_DX_AT(f)] = PROJ_DX_MARK;
         memcpy(b + PROJ_DX_AT(f) + 1u, q->dx, sizeof q->dx);
@@ -940,6 +1001,17 @@ static int proj_unpack2(project_t *q, const uint8_t *b, const proj_fmt_t *f)
         params_by_count(q->t[t].p, values, np, def);
         for (i = 0; i < NSTEP; i++)
             q->t[t].step[i].time = ST_REST;          /* (empty: the patterns hold the steps) */
+    }
+    if (f->dx && np == PROJ_NP && b[PROJ_PX_AT(f)] == PROJ_PX_MARK) {   /* ((phase 9) the parameters past PROJ_NP: */
+        const uint8_t *x = b + PROJ_PX_AT(f);         /* n of them a track, the ones this firmware knows taken) */
+        uint32_t n = x[1], j;
+        if (n > PROJ_PX_MAX) return 0;
+        for (t = 0; t < f->nt; t++)
+            for (j = 0; j < n; j++) {
+                if (x[2u + t * n + j] > 191u) return 0;
+                if (j < PROJ_NX)
+                    q->t[t].p[PROJ_NP - 8u + j] = (int16_t)(x[2u + t * n + j] - 64);
+            }
     }
     memcpy(q->ent, b + pos, f->nt * NENT * 2u); pos += f->nt * NENT * 2u;
     memcpy(q->cur, b + pos, f->nt); pos += f->nt;

@@ -21,6 +21,7 @@ static const char *const N_ALLOC[] = {"ROT", "REUSE"};
 static const char *const N_DIR[] = {"FWD", "RVRS", "PING", "RAND"};   /* ((Skiff U4, L2) RVRS: REV is reverb) */   /* (Skiff) DIR_* (seq.c seq_next) */
 static const char *const N_DKSRC[] = {"OFF", "T1", "T2", "T3", "T4", "T5", "T6"};   /* (Skiff) P_DKSRC: the track ducked under */
 _Static_assert(sizeof N_DKSRC / sizeof N_DKSRC[0] == NTRK + 1u, "DUCK's BY: OFF and every track");
+static const char *const N_DTYPE[] = {"SOFT", "HARD", "FOLD", "BITS"};   /* (Skiff phase 9) P_DTYPE: DT_* (fx.c) */
 #define TRK_STR_(n) #n
 #define TRK_STR(n) TRK_STR_(n)
 static const char *const N_ORDER[] = {"NOTE", "PLAYED"};
@@ -30,12 +31,13 @@ static const char *const N_ROUTE[] = {"CH1-" TRK_STR(NTRK), "SEL"};   /* MIDI IN
                                                                          * ignored / all -> selected */
 static const char *const N_NOTE[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 static const char *const N_DASH[] = {"--"};
-static const char *const N_RTYPE[] = {"ROOM", "SPRING"};   /* G_RTYPE: the reverb bus's model (fx.c) */
+static const char *const N_RTYPE[] = {"ROOM", "SPRING", "HALL"};   /* G_RTYPE: the reverb bus's model (fx.c) */
+static const char *const N_CMODE[] = {"CHORUS", "FLANGER", "PHASER"};   /* (Skiff phase 9) G_CMODE (fx.c cho_mode) */
 static const char *const N_GO[] = {"--", "GO"};
 static const char *const N_SLCR[] = {"OFF", "GATE", "STUT"};             /* SL_OFF .. SL_STUT (slicer.c) */
 static const char *const N_SLDIV[] = {"1/8", "1/16", "1/32", "8T", "16T", "32T"};   /* SL_DEN */
 /* modulation matrix (mod.c): sources, destinations (E1..E8 = P_E0..P_E7: shown with the engine's labels) */
-static const char *const N_MSRC[] = {"OFF", "LFO", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR"};
+static const char *const N_MSRC[] = {"OFF", "LFO", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR", "ENV2"};   /* ((phase 9) ENV2) */
 static const char *const N_MDST[] = {"OFF", "PITCH", "CUT", "SHP", "AMP", "PAN", "DIST", "CHO", "DLY", "REV", "RATE",
                                      "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8"};
 static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS",
@@ -126,6 +128,16 @@ static const param_desc_t TP[P_COUNT] = {
     [P_DKSRC] = PE("BY", N_DKSRC, 0),              /* (Skiff) ducking (duck.c): under that track's hits, */
     [P_DKAMT] = PD("DEPTH", F_PCT, 0, 127, 96),    /* this far down (100 %: silent), */
     [P_DKREL] = PD("RELEASE", F_TIME, 0, 127, 73),     /* back in this long (199 ms) */
+    [P_DTYPE] = PE("TYPE", N_DTYPE, 0),            /* (Skiff phase 9) FX > DRIVE (fx.c track_dist): DIST's clipper, */
+    [P_DTONE] = PD("TONE", F_BIPCT, -64, 63, 0),   /* its tone moved from where the drive puts it (0: as before) */
+    [P_EG2_ATK] = PD("ATTACK", F_TIME, 0, 127, 0),   /* (Skiff phase 9) ENV 2 (voice.c env2_tick): MOD's ENV2 */
+    [P_EG2_DEC] = PD("DECAY", F_TIME, 0, 127, 60),
+    [P_EG2_SUS] = PD("SUSTAIN", F_PCT, 0, 127, 0),
+    [P_EG2_REL] = PD("RELEASE", F_TIME, 0, 127, 40),
+/* (Skiff phase 9) the DRUM engine's lanes, each moved from its design (eng_drum.c drum_render): 64 = as designed */
+#define LANE2(k) [P_LTUNE0 + (k)] = PD("TUNE", F_ST16, 0, 127, 64), [P_LDECAY0 + (k)] = PD("DECAY", F_BIPCT, -64, 63, 0)
+    LANE2(0), LANE2(1), LANE2(2), LANE2(3), LANE2(4), LANE2(5), LANE2(6), LANE2(7),
+#undef LANE2
 };
 
 static const param_desc_t GP[G_COUNT] = {
@@ -155,11 +167,10 @@ static const param_desc_t GP[G_COUNT] = {
     [G_INITSND] = PE("INIT", N_GO, 0),
     /* the reverb's model on the REVERB page: the id of the old GM drum channel (G_DRCH, inert since 1.0) */
     [G_RTYPE] = PE("TYPE", N_RTYPE, 0),
-    /* inert: they set the GM drum part (level, reverb send), which is gone (drums are the DRUM engine
-     * on any part). On no page; kept so the ids and G_COUNT, which the project format and the
-     * editor protocol depend on, do not move */
-    [G_DRLVL] = PD("-", F_INT, 0, 0, 0),
-    [G_DRREV] = PD("-", F_INT, 0, 0, 0),
+    /* (Skiff phase 9) GLO > CHORUS's MODE and FEEDBACK, in the ids of the old GM drum part's level and reverb send
+     * (inert since 1.0: core.h), so G_COUNT, which the project format and the editor protocol depend on, stays */
+    [G_CMODE] = PE("MODE", N_CMODE, 0),
+    [G_CFDBK] = PD("FEEDBACK", F_PCT, 0, 127, 0),
 };
 
 static const param_desc_t *track_desc(const track_t *t, uint32_t id)
@@ -379,7 +390,8 @@ enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_
        GR_LANES,                   /* (Skiff U3, R6) EDIT > LANES (DRUM): the eight lane levels, KNOB 1 the lane (ui.lane) */
        GR_ENVDST, GR_LFODST, GR_DELAY, GR_REVERB, GR_CHORUS, GR_GLOBAL, GR_VOICE, GR_VOICE2,
        GR_ARP2,                    /* (Skiff U5, V1) the pages' own graphs, the scope's before (ui_pgraph.c); ARP 2: ARP's */
-       GR_FMOP, GR_FMALL };        /* (FM6 LAB) EDIT > OPERATOR and ALL OPS: FM6's patch, two sheets (ui_fm6.c) */
+       GR_FMOP, GR_FMALL,          /* (FM6 LAB) EDIT > OPERATOR and ALL OPS: FM6's patch, two sheets (ui_fm6.c) */
+       GR_DRIVE };                 /* (Skiff phase 9) FX > DRIVE: the TYPE's transfer at the drive (ui_pgraph.c) */
 
 typedef struct {
     const char *title;
@@ -394,10 +406,12 @@ typedef struct {
 static const page_t PAGES[] = {
     {"ENV", FAM_ENV, SC_TRACK, GR_ADSR, {P_ATK, P_DEC, P_SUS, P_REL}},
     {"ENV DEST", FAM_ENV, SC_TRACK, GR_ENVDST, {P_ED_FLT, P_ED_PIT, P_ED_SHP, 0xFF}},   /* (P_ED_FX: nothing reads it) */
+    {"ENV 2", FAM_ENV, SC_TRACK, GR_ADSR, {P_EG2_ATK, P_EG2_DEC, P_EG2_SUS, P_EG2_REL}},   /* (Skiff phase 9) MOD's ENV2 */
     {"LFO", FAM_LFO, SC_TRACK, GR_LFO, {P_LRATE, P_LWAVE, P_LPHASE, P_LFADE}},
     {"LFO DEST", FAM_LFO, SC_TRACK, GR_LFODST, {P_LD_PIT, P_LD_FLT, P_LD_SHP, P_LD_AMP}},
     {"MOD", FAM_LFO, SC_TRACK, GR_MOD, {0xFF, P_M1SRC, P_M1DST, P_M1AMT}},   /* KNOB 1: the slot (mod_ui_slot) */
     {"FX", FAM_FX, SC_TRACK, GR_FX, {P_DIST, P_CHOR, P_DLY, P_REV}},
+    {"DRIVE", FAM_FX, SC_TRACK, GR_DRIVE, {P_DIST, P_DTYPE, P_DTONE, 0xFF}},   /* (Skiff phase 9) DIST's TYPE, TONE */
     {"SLICER", FAM_FX, SC_TRACK, GR_SLCR, {P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH}},
     {"DUCK", FAM_FX, SC_TRACK, GR_DUCK, {P_DKSRC, P_DKAMT, P_DKREL, 0xFF}},   /* (Skiff) ducking (duck.c) */
     {"SCL", FAM_SCL, SC_TRACK, GR_SCALE, {P_ROOT, P_SCALE, P_QUANT, P_TRANS}},
@@ -406,7 +420,8 @@ static const page_t PAGES[] = {
     {"EDIT 2", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E4, P_E5, P_E6, P_E7}},
     {"OPERATOR", FAM_EDIT, SC_TRACK, GR_FMOP, {0xFF, 0xFF, 0xFF, 0xFF}},   /* (FM6 LAB) FM6 only: an operator's values */
     {"ALL OPS", FAM_EDIT, SC_TRACK, GR_FMALL, {0xFF, 0xFF, 0xFF, 0xFF}},   /* (FM6 LAB) FM6 only: the voice's (ui_fm6.c) */
-    {"LANES", FAM_EDIT, SC_TRACK, GR_LANES, {0xFF, 0xFF, 0xFF, 0xFF}},   /* DRUM only: LANE, its LEVEL (page_desc) */
+    {"LANES", FAM_EDIT, SC_TRACK, GR_LANES, {0xFF, 0xFF, 0xFF, 0xFF}},   /* DRUM only: LANE, its LEVEL TUNE DECAY
+                                                                         * (page_desc) */
     {"SOUND", FAM_EDIT, SC_TRACK, GR_DXSND, {0xFF, 0xFF, 0xFF, 0xFF}},     /* (Skiff phase 7, 8) DRUM-X only: a sound of the
                                                                          * project's kit on one sheet (ui_dx.c) */
     {"SLICES", FAM_EDIT, SC_TRACK, GR_SLICES, {0xFF, 0xFF, 0xFF, 0xFF}},   /* SLICE only: the slices by hand (ui_slice.c) */
@@ -419,8 +434,8 @@ static const page_t PAGES[] = {
     {"VOICE 2", FAM_EDIT, SC_TRACK, GR_VOICE2, {P_ALLOC, P_DETUNE, 0xFF, 0xFF}},   /* ((U3, R4) PAN MUTE: MIXER's) */
     {"MIXER", FAM_TRK, SC_TRK, GR_TRK, {0, 1, 2, 3}},   /* GLO button; LEVEL PAN REV MUTE */
     {"DELAY", FAM_GLO, SC_GLOBAL, GR_DELAY, {G_DTIME, G_DFDBK, G_DCOLOR, G_DMIX}},   /* ((U3, N4) the buses: FX's before) */
-    {"REVERB", FAM_GLO, SC_GLOBAL, GR_REVERB, {G_RTYPE, G_RSIZE, G_RDAMP, 0xFF}},   /* TYPE: ROOM / SPRING */
-    {"CHORUS", FAM_GLO, SC_GLOBAL, GR_CHORUS, {G_CRATE, G_CDEPTH, 0xFF, 0xFF}},
+    {"REVERB", FAM_GLO, SC_GLOBAL, GR_REVERB, {G_RTYPE, G_RSIZE, G_RDAMP, 0xFF}},   /* TYPE: ROOM / SPRING / HALL */
+    {"CHORUS", FAM_GLO, SC_GLOBAL, GR_CHORUS, {G_CRATE, G_CDEPTH, G_CMODE, G_CFDBK}},   /* ((phase 9) MODE, FEEDBACK) */
     {"GLOBAL", FAM_GLO, SC_GLOBAL, GR_GLOBAL, {G_BPM, G_SWING, 0xFF, 0xFF}},   /* ((U3, R8) CLK TUNE: the MENU's) */
     {"PRESETS", FAM_SAVE, SC_GLOBAL, GR_BROWSE, {0xFF, 0xFF, 0xFF, 0xFF}},   /* browser: PRESETS knob / KNOB 1 */
     {"USER", FAM_SAVE, SC_GLOBAL, GR_USER, {0xFF, 0xFF, 0xFF, 0xFF}},       /* user presets: SLOT LOAD ERASE SAVE */
@@ -443,8 +458,9 @@ static uint32_t page_lane(void);   /* (Skiff U3, R6) EDIT > LANES: the lane KNOB
 
 static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **valp)
 {
-    uint32_t id = pg->graph != GR_LANES ? pg->id[slot] : slot == 1u ? P_LN0 + page_lane() : 0xFFu;   /* (LANES: its
-                                                       * LEVEL) */
+    uint32_t id = pg->graph != GR_LANES ? pg->id[slot] : slot == 1u ? P_LN0 + page_lane() :   /* (LANES: its LEVEL, */
+                  slot == 2u ? P_LTUNE0 + page_lane() : slot == 3u ? P_LDECAY0 + page_lane() : 0xFFu;   /* (phase 9)
+                                                       * TUNE, DECAY) */
     if (id == 0xFFu) {
         *valp = 0;
         return 0;

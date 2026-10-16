@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 """The README's pictures from the firmware's own screen renders (tests/ui_render.c: build/ui_new/ppm), pixel for pixel
-at twice their size: docs/img/<screen>.png, docs/img/themes.png (HOME in every THEME, 3 x 2) and docs/img/fm6_themes.png (FM6's
-OPERATOR in CRYPT, NEON and QUARK).
+at twice their size: docs/img/<screen>.png, docs/img/themes.png (HOME in every THEME, 3 x 2), docs/img/fm6_themes.png (FM6's
+OPERATOR in CRYPT, NEON and QUARK) and docs/img/new_1_2.png (1.2's release: a type's list, DRIVE, the FX layer held).
 
   tools/gen_readme_shots.py build/ui_new/ppm
 """
@@ -15,7 +15,8 @@ SHOTS = ["step_tiles", "roll_chords", "drum", "chance_flam", "auto_list", "layer
          "song_playing", "pool", "layer_perform_scenes", "layer_glo_active",
          "env", "lfo_dest", "dly", "reverb_spring", "global_swing", "voice_glide", "edit_analog", "edit_fm6",
          "dx_sound", "slices_break", "edit_phys", "chord", "fx_duck", "menu", "splash",
-         "fm_op_tone", "fm_op_env", "fm_op_keys", "fm_all_lfo"]
+         "fm_op_tone", "fm_op_env", "fm_op_keys", "fm_all_lfo",
+         "presets_bass", "drive_fold", "env_2", "lanes_tune", "chorus_flanger", "six_fx", "perform_held"]   # (phase 9)
 THEMES = ["SKIFF", "HI-CON", "PAPER", "CRYPT", "NEON", "QUARK"]
 
 
@@ -33,6 +34,10 @@ def main(ppm):
     for i, t in enumerate(["CRYPT", "NEON", "QUARK"]):
         fm6.paste(big(f"{t}_fm_op_tone"), (i * (480 + gap), 0))
     fm6.save(out / "fm6_themes.png", optimize=True)
+    new = Image.new("RGBA", (3 * 480 + 2 * 24, 480), (0, 0, 0, 0))   # (1.2) its release notes' picture
+    for i, s in enumerate(["SKIFF_presets_bass", "CRYPT_drive_fold", "NEON_perform_held"]):
+        new.paste(big(s), (i * (480 + gap), 0))
+    new.save(out / "new_1_2.png", optimize=True)
     print(f"wrote {len(SHOTS)} screens and themes.png to {out}")
 
 

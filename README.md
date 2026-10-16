@@ -16,9 +16,10 @@ synths and drums, patterns and songs, live performance, and a screen that shows 
 
 ![Skiff on the FM-1's screen: HOME, a step page, PERFORM, the MIXER, DELAY and the SHIFT map](docs/skiff.png)
 
-Skiff turns the FM-1 into a six-track groovebox: fourteen synth and drum engines, a 64-step sequencer with chords,
-ratchets, trig conditions and parameter locks, a shared pool of patterns played through per-track lists and scenes,
-and a performance layer for launching it all live. Every page draws what its knobs do, and holding HOME shows what
+Skiff turns the FM-1 into a six-track groovebox: fourteen synth and drum engines with 143 factory sounds you can list
+by type (only the basses, only the pads), a 64-step sequencer with chords, ratchets, trig conditions and parameter
+locks, a shared pool of patterns played through per-track lists and scenes, and a performance layer for launching it
+all live. Every page draws what its knobs do, and holding HOME shows what
 every button, encoder and key does right there. FM6 sounds can be built from a bare sine on the unit itself, every
 operator's envelope drawn as it plays and coloured by how bright the FM makes it. A browser editor reaches all of it
 from a computer.
@@ -35,12 +36,12 @@ Custom firmware, at your own risk; the way back to the official firmware is belo
 connect the FM-1 by USB and follow it. The same page takes the FM-1 back to the official V15 firmware, saving a
 complete backup of your music first.
 
-**With Python 3:** download `skiff-1.1.fwsc` from the [latest release](https://github.com/illuminus5/skiff/releases/latest)
+**With Python 3:** download `skiff-1.2.fwsc` from the [latest release](https://github.com/illuminus5/skiff/releases/latest)
 and, with this repository's `tools/` folder,
 
 ```
 pip install mido python-rtmidi
-python tools/fm1_install.py skiff-1.1.fwsc
+python tools/fm1_install.py skiff-1.2.fwsc
 ```
 
 It takes about two minutes and the FM-1 restarts on Skiff.
@@ -54,14 +55,14 @@ Edge, over USB MIDI).
 | | |
 | --- | --- |
 | **Tracks** | 6, each with its own engine, sound, sequence and mix; 8 voices shared between them (T5 and T6 play every engine but PHYS and GRAIN) |
-| **Engines** | 14: ANALOG, FM6, PHASE, LOFI, SAMPLE, VOICE, TRIO, WHEEL, GRAIN, PHYS, NOISE, SLICE, DRUM, DRUM-X; 100 factory sounds; every value of an FM6 patch (6 operators, 32 algorithms) editable on the unit |
+| **Engines** | 14: ANALOG, FM6, PHASE, LOFI, SAMPLE, VOICE, TRIO, WHEEL, GRAIN, PHYS, NOISE, SLICE, DRUM, DRUM-X; 143 factory sounds, at least 8 an engine, each a BASS, LEAD, PAD, KEYS, PLUCK, DRUM or FX sound that SAVE › PRESETS lists by type; presets for all six of DRUM's kits and eight DRUM-X kits among them; every value of an FM6 patch (6 operators, 32 algorithms) editable on the unit |
 | **Sequencer** | 64 steps a track; LENGTH 1–64; 1/1 to 1/32, triplets, 2 and 4 bars a step; chords of up to 4 notes, velocity, accent, slide, tie; per-step chance, ratchet ×1–4 or FLAM, 12 trig conditions (FILL, !FILL, 1:2 … 4:4), NUDGE (−32 to +31 64ths of a step); swing, gate; FWD, RVRS, PING or RAND |
 | **Recording** | live with overdub, FEEL (keeps where you played), count-in and click; step recording; TAKE keeps the last loop you played, after the fact |
 | **Automation** | knob moves and parameter locks (hold a step, turn a knob), 64 records, listed and edited on SEQ › AUTOMATION |
 | **Patterns and songs** | a pool of 64 patterns shared by every project; each track a list of 16 entries (A–P), each a pattern played 1–16 times; SONG walks each track down its list |
-| **Performance** | PERFORM: launch any track's entries and stage mutes on LOOP, BAR, BEAT or NOW; 16 scenes; throws (CUTOFF, REVERB, DELAY, DIST) that glide back; the FX layer: repeat, reverse, filter sweeps, tape stop, freeze, harmonizer, cuts |
-| **Sound** | per track: an envelope, an LFO with depths per destination, a 4-slot modulation matrix, DIST, the SLICER (16 patterns), DUCK (sidechain); arpeggiator (14 modes), chord keys (9 chords, 5 voicings), 16 scales; MONO, LEGATO, UNISON, glide |
-| **Effects** | chorus, delay and reverb (ROOM or SPRING) as sends |
+| **Performance** | PERFORM: launch any track's entries and stage mutes on LOOP, BAR, BEAT or NOW; 16 scenes; throws (CUTOFF, REVERB, DELAY, DIST) that glide back; the FX layer: repeat, reverse, filter sweeps, tape stop, freeze, harmonizer, gate, dub echo, flanger, vinyl, cuts |
+| **Sound** | per track: an envelope and a second one for modulation (ENV 2), an LFO with depths per destination, a 4-slot modulation matrix, DIST in four types (SOFT, HARD, FOLD, BITS) with a TONE, the SLICER (16 patterns), DUCK (sidechain); a drum kit's lanes tuned and their decay set one by one; arpeggiator (14 modes), chord keys (9 chords, 5 voicings), 16 scales; MONO, LEGATO, UNISON, glide |
+| **Effects** | chorus (CHORUS, FLANGER or PHASER, with FEEDBACK), delay and reverb (ROOM, SPRING or HALL) as sends |
 | **Memory** | 4 projects, 32 user sounds, 3 user sample slots; the music comes back at power-on (RESTORE LAST); 8 levels of undo |
 | **Screen** | 240 × 240 colour; a graph on every page; HOME held shows every control's job; 6 themes; LARGE mode with tall cards |
 | **MIDI and USB** | USB MIDI in and out, TRS MIDI in; clock from inside, USB or TRS; channels 1–6 play tracks 1–6; a stereo USB audio input to record the master on a computer |
@@ -69,6 +70,51 @@ Edge, over USB MIDI).
 | **Audio** | 44.1 kHz |
 
 ## A tour
+
+### Find a sound by type
+
+Every factory sound has a type: **BASS**, **LEAD**, **PAD**, **KEYS**, **PLUCK**, **DRUM** or **FX**. When a track needs
+a bass, list the basses and step through them, across every engine, until one fits:
+
+<table>
+<tr>
+<td width="40%"><img src="docs/img/presets_bass.png" alt="SAVE › PRESETS with LIST on BASS"><br><sub><b>LIST: BASS</b>: the basses of every engine, ENG saying whose each one is</sub></td>
+<td>
+
+1. **Pick the track** with ALGORITHM, say track 2.
+2. **Tap SAVE** for SAVE › PRESETS (turn SELECT to it if another SAVE page opens) and turn **KNOB 4, LIST,** to
+   **BASS**. The list now holds only the basses: 18 of them, from eight engines.
+3. **Turn PRESETS** (or KNOB 1): each bass plays on the track as you reach it. One from another engine switches the
+   track to that engine; its notes, its mix and its effects stay as they are.
+4. **Stop on the one that fits.** Gone past the sound you had? **SAVE held** brings it back: a run of PRESETS turns
+   is one undo.
+
+</td>
+</tr>
+</table>
+
+The LIST stays where you leave it, through a power-off too, and it is the unit's, not the track's. While it is on a
+type, the PRESETS knob steps through that type on HOME and the sound pages too, and the footer says BASS beside the
+engine, so you can browse from whichever page you are on. For track 3's pad: ALGORITHM to track 3, LIST to PAD. Back on
+**ALL**, PRESETS steps through all 143 again.
+
+- **FAV** lists your favourites. On SAVE › PRESETS, turn **KNOB 3, FAV,** right to mark the sound playing, left to
+  unmark it. Your own sounds (SAVE › USER) are listed on ALL and FAV.
+- **KNOB 2, ENG,** jumps to the next engine's first sound, whatever the LIST.
+- Tracks 5 and 6 leave PHYS and GRAIN out of every list, since they don't play them: 17 basses there.
+
+| Type | Sounds | From |
+| --- | ---: | --- |
+| BASS | 18 | ANALOG 6, FM6 4, LOFI 2, TRIO 2, PHASE, VOICE, WHEEL, PHYS |
+| LEAD | 23 | ANALOG 6, LOFI 4, PHASE 3, SAMPLE 3, TRIO 3, VOICE 2, FM6, WHEEL |
+| PAD | 22 | ANALOG 6, GRAIN 6, VOICE 4, PHYS 2, FM6, PHASE, SAMPLE, TRIO |
+| KEYS | 23 | FM6 7, WHEEL 6, PHASE 3, PHYS 3, SAMPLE 2, ANALOG, TRIO |
+| PLUCK | 11 | PHYS 3, LOFI 2, SAMPLE 2, ANALOG, FM6, PHASE, TRIO |
+| DRUM | 31 | DRUM 10, DRUM-X 10, SLICE 8, PHYS 2, ANALOG |
+| FX | 15 | NOISE 8, ANALOG 2, GRAIN 2, VOICE, TRIO, SLICE |
+
+A DRUM-X kit preset loads its whole kit, the project's one kit for every DRUM-X track; SAVE held brings the kit back
+too. Switching a track to DRUM-X keeps the kit the project has.
 
 ### Sequencer
 
@@ -97,6 +143,11 @@ Edge, over USB MIDI).
 <td><img src="docs/img/layer_glo_active.png" alt="The GLO layer"><br><sub><b>GLO layer</b>: levels, solos, mutes, FILL, tap tempo</sub></td>
 <td><img src="docs/img/global_swing.png" alt="GLOBAL"><br><sub><b>GLOBAL</b>: tempo and swing, the swung steps drawn</sub></td>
 <td><img src="docs/img/fx_duck.png" alt="FX › DUCK"><br><sub><b>DUCK</b>: a track dips under another's hits, the pump drawn over a bar</sub></td>
+</tr>
+<tr>
+<td><img src="docs/img/six_fx.png" alt="The FX layer"><br><sub><b>FX layer</b> (hold FX): 14 effects on the white keys, an octave a row; cuts on the black</sub></td>
+<td><img src="docs/img/perform_held.png" alt="The FX layer, effects held"><br><sub>Effects held, a repeat waiting for its sixteenth</sub></td>
+<td></td>
 </tr>
 </table>
 
@@ -140,6 +191,12 @@ the modulators make it bite).
 <td><img src="docs/img/chord.png" alt="CHORD"><br><sub><b>CHORD</b>: the chord on the keys</sub></td>
 <td><img src="docs/img/menu.png" alt="MENU"><br><sub><b>MENU</b>: four tabs of settings</sub></td>
 </tr>
+<tr>
+<td><img src="docs/img/drive_fold.png" alt="FX › DRIVE"><br><sub><b>DRIVE</b>: the TYPE's curve, a sine through it</sub></td>
+<td><img src="docs/img/env_2.png" alt="ENV › ENV 2"><br><sub><b>ENV 2</b>: a second envelope, for the MOD matrix</sub></td>
+<td><img src="docs/img/lanes_tune.png" alt="EDIT › LANES"><br><sub><b>LANES</b>: a drum lane's level, tune and decay</sub></td>
+<td><img src="docs/img/chorus_flanger.png" alt="CHORUS as a flanger"><br><sub><b>CHORUS</b>: FLANGER's comb</sub></td>
+</tr>
 </table>
 
 ### Themes
@@ -172,7 +229,10 @@ FM6 patches from `.syx` files and saves complete backups.
 
 - **Six tracks**, each its own engine and sound; 8 voices shared between them. T5 and T6 play every engine but
   PHYS and GRAIN. ALGORITHM selects the track on every page; HOME, PERFORM, SONG and the MIXER show all six
-- **Fourteen engines** (below), DRUM-X among them, each with its own factory presets
+- **Fourteen engines** (below), DRUM-X among them, each with at least 8 factory presets, 143 in all
+- **Sounds by type:** every factory sound is a BASS, LEAD, PAD, KEYS, PLUCK, DRUM or FX sound; SAVE › PRESETS'
+  LIST (KNOB 4) shows one type across every engine, and the PRESETS knob then steps through it on every page
+  ([Find a sound by type](#find-a-sound-by-type))
 - **FM6 from scratch** (1.1): every value of an FM6 patch on the unit (EDIT › OPERATOR and ALL OPS), INIT a bare
   sine, the sound saved as a user sound; the operators' envelopes drawn as they play, each carrier shaded by its
   brightness, in every theme's own look
@@ -199,15 +259,18 @@ FM6 patches from `.syx` files and saves complete backups.
 - **SEQ TOOLS** (hold SEQ): CLEAR, REVERSE, SHIFT < / >, RANDOM, COOK; on a drum track BEAT and each lane's
   tools
 - **DUCK** (FX › DUCK): a track dips under another track's hits, the sidechain pump
-- **Effects:** DIST and the SLICER per track; chorus, delay and reverb (ROOM or SPRING) buses on GLO; the FX
-  layer (hold FX): repeat, reverse, filter sweeps, tape stop, freeze, harmonizer, and cuts on the black keys
+- **Effects:** per track DIST, in four types on FX › DRIVE (SOFT, HARD, FOLD, BITS) with a TONE, and the SLICER;
+  the buses on GLO: chorus (CHORUS, FLANGER or PHASER, with FEEDBACK), delay and reverb (ROOM, SPRING or HALL); the
+  FX layer (hold FX): fourteen effects on the white keys and cuts on the black ([the keys](#the-fx-layers-keys))
 - **Quick layers:** hold FX, GLO, SCL, EDIT, ARP or SEQ for its map on the keys and knobs; SHIFT + the button
   keeps it open. The GLO layer: solos, mutes, FILL, tap tempo
 - **DRUM-X** (from [JIANT FM](https://github.com/juanjiant-bit/JIANT)): a synthesized kit of 8 sounds, each
-  with an A and a B patch and MORPH between them, one kit per project, edited a sound at a time on EDIT › SOUND
+  with an A and a B patch and MORPH between them, one kit per project, edited a sound at a time on EDIT › SOUND;
+  eight kits come as presets, each loading its own (FACTORY, DEEP, CLICK, INDUSTRIAL, SOFT, GLITCH, TRIBAL, LASER)
 - **Chord keys, arpeggiator, scales:** in-key chords with voicings; an arpeggiator with 14 modes, CHANCE,
   SWING and HOLD; 16 scales with a white-key mode; MONO, LEGATO, UNISON and glide
-- **Modulation matrix:** 4 slots a track, MIDI controllers as sources
+- **Modulation matrix:** 4 slots a track; the sources the LFO, ENV and a second envelope of its own (ENV › ENV 2),
+  velocity, the key, a random value and MIDI controllers
 - **Presets and projects:** factory presets, 32 user sounds and 4 projects, named on the device; the music
   comes back at power-on (RESTORE LAST, an autosave of its own)
 - **Screen and LEDs:** the BLOCKS look in Barlow Condensed with Fukiai icons; six themes; MENU › LARGE for tall
@@ -252,10 +315,33 @@ by the keys, with what each key is in Skiff.
   F3 held clears the track's sequence, then CLICK, COUNT-IN, CLICK LEVEL, FEEL
 - **EDIT** opens the EDIT pages everywhere; on STEP and ROLL with REC armed it clears the cursor step
 - **SELECT** turns the pages of a family; **GLO + SELECT** sets the tempo (MENU › BPM LOCK, on by default)
-- **PRESETS** changes the sound; on the step pages it moves the cursor, on lists it picks
+- **PRESETS** changes the sound; on the step pages it moves the cursor, on lists it picks. With SAVE › PRESETS'
+  LIST on a type (BASS, PAD ..) it steps through that type only
 - On action pages and in dialogs, **OCT+** does it and **OCT−** goes back
 - Hold a step on SEQ › STEP and turn KNOB 1–4 to lock those parameters on that step
 - Save a sound: stop, tap SAVE (USER), pick a slot with KNOB 1, OCT+, name it with the keys, OCT+
+
+### The FX layer's keys
+
+Hold **FX** and press a key: its effect plays while the key is held (SHIFT + FX keeps the layer open, and then a key
+latches its effect). Effects of different kinds stack; of the ones that play back what was just heard (REPEAT,
+REVERSE, TAPE STOP, FREEZE, OCT UP and DN, FLANGE, VINYL) the last one pressed plays, and letting it go returns to
+the one held before.
+
+| Key | Effect | Key | Effect |
+| --- | --- | --- | --- |
+| F3 | REPEAT 1/8 | F4 | FREEZE |
+| G3 | REPEAT 1/16 | G4 | OCT UP: the mix an octave up beside itself |
+| A3 | REPEAT 1/32 | A4 | OCT DN: an octave down |
+| B3 | REVERSE | B4 | GATE: the mix chopped on the sixteenths |
+| C4 | LPF: a low-pass closing over a bar | C5 | DUB: the mix into the delay, its feedback up; the echoes ring out after |
+| D4 | HPF: a high-pass opening over a bar | D5 | FLANGE: a jet sweep, a bar each way |
+| E4 | TAPE STOP | E5 | VINYL: a record's wow, a darker top, crackle |
+
+REPEAT and REVERSE start on the next sixteenth. The black keys F#3, G#3, A#3, C#4, D#4 and F#4 cut tracks 1–6 while
+held. KNOB 1–4 are the layer's macros: FILTER (left a low-pass, right a high-pass), CRUSH, THROW (the mix into the
+delay and the reverb) and DEPTH, how much of the effect you hear (with OCT UP or DN, its shimmer instead; with GATE,
+how deep it cuts).
 
 ## Engines
 
@@ -276,18 +362,21 @@ In the order the device lists them:
 - **GRAIN**: granular textures from the built-in samples or a user slot
 - **PHYS**: physical models: modal resonators, strings, struck membranes, sympathetic strings
 - **NOISE**: noise from analog to digital: colours, crackle, shift-register and metallic tones
-- **SLICE**: a drum break, a piano note (both built in) or your own sample cut into slices, one per key;
+- **SLICE**: two drum breaks, a piano note (all built in) or your own sample cut into slices, one per key;
   set the slices by hand on the SLICES page
 - **DRUM**: an 8-lane kit of Felucca's own drum voices on the General MIDI key map. KIT picks the
   standard kit or one of five virtual-analog (VA) kits in the manner of
   classic analog drum machines (the numbers are a hint), every lane its own voice: **80** (deep sine kick with a long decay, noisy snare,
   six-square hats), **10** (swept kick, white-noise snare, long-tailed claps, a cymbal), **66** (soft
   round kick, bright snare, noise hats, a conga), **55** (dropping kick, high metal hats, a metal bell)
-  and **77** (swelling kick, multi-burst claps, claves, a cymbal). All of them are synthesized, no samples.
-  EDIT › LANES sets each lane's level (KNOB 1 the lane, KNOB 2 its level)
+  and **77** (swelling kick, multi-burst claps, claves, a cymbal). All of them are synthesized, no samples, and
+  each has presets (BOOM KIT, CRISP KIT, RHYTHM BOX, ELECTRO KIT, STUDIO KIT ..). EDIT › LANES sets each lane on its
+  own: KNOB 1 the lane, KNOB 2 its level, KNOB 3 its tune (±12 semitones), KNOB 4 its decay (0 as the kit has it)
 - **DRUM-X**: a synthesized 8-sound kit from [JIANT FM](https://github.com/juanjiant-bit/JIANT), after the idea of
   Sonic Charge's Microtonic: each sound an oscillator (SIN, FM, MTL, BEL) with a pitch envelope and filtered noise,
-  two patches A and B with MORPH between them; one kit a project, edited on EDIT › SOUND, a sound at a time
+  two patches A and B with MORPH between them; one kit a project, edited on EDIT › SOUND, a sound at a time. Its
+  presets FACTORY KIT, DEEP KIT, CLICK KIT, INDUSTRIAL, SOFT KIT, GLITCH KIT, TRIBAL KIT and LASER KIT each load a
+  kit of their own (SAVE held brings the one before back); OWN KIT and HADRON KIT keep the project's kit
 
 **SLICER** (FX › SLICER, every track): a tempo-synced 16-step gate or stutter, with 16 patterns.
 
@@ -297,10 +386,23 @@ In the order the device lists them:
 The DIGITAL engine of Felucca 0.9 became FM6: projects and presets with DIGITAL sounds load as FM6 sounds converted
 from them. The SAMPLE engine's PERC kit was removed in Felucca 1.0.2: sounds and projects that used it load as the
 DRUM engine's kit, on the same key map. FM6's patch bank (the B slots) was removed in 1.0.3: user presets keep their
-own FM6 patch. SLICE gained a second built-in sound in 1.0.4, PIANO, next to BREAK. A missing sample (an empty user
+own FM6 patch. SLICE gained a second built-in sound in 1.0.4, PIANO, next to BREAK; this version a new BREAK (one bar
+at 120 BPM) and FUNK (SOURCE 5: two beats at 86 BPM), both made with the YuE2 music model. A missing sample (an empty user
 slot) plays a plain sine at the note's pitch on SAMPLE, GRAIN and SLICE, and the screen says NO SAMPLE once. DRUM's
 KIT variants HAND, CYM and H+CYM were retired in 1.0.5: sounds and projects that used them play the 66, 10 and 77
 kits. Felucca's projects become Skiff's at the first start: each track's steps a pattern on its entry A.
+</details>
+
+<details>
+<summary><b>Going back to Skiff 1.1</b></summary>
+
+Projects, patterns and sounds saved with this version open on Skiff 1.1, without what 1.1 doesn't have: DIST's TYPE
+and TONE (it plays SOFT), ENV 2's settings, the drum lanes' TUNE and DECAY, the chorus's MODE and FEEDBACK (it plays
+CHORUS); a HALL reverb plays as SPRING. A MOD slot whose source is ENV2 becomes EXPR there, which with no MIDI
+expression coming in is its whole amount all the time: set it OFF on 1.1. Saving there leaves the new settings out for
+good. A pattern with automation on one of them keeps its steps and its other automation. A track on a sound added in
+this version keeps playing it as it was saved, under the name of one of 1.1's sounds. SLICE's FUNK plays PIANO there,
+and BREAK 1.1's own break.
 </details>
 
 ## Menu
@@ -431,6 +533,7 @@ Skiff stands on Felucca. If it is useful to you, support Felucca's author:
   [SIL OFL 1.1](LICENSES/OFL-BarlowCondensed.txt); [Inter Tight](https://github.com/rsms/inter-tight) by The Inter Project Authors (the control card), [SIL OFL 1.1](LICENSES/OFL-InterTight.txt);
   the browser emulator's labels: [DotGothic16](https://github.com/fontworks-fonts/DotGothic16) by The DotGothic16 Project Authors, [SIL OFL 1.1](LICENSES/OFL-DotGothic16.txt)
 - Samples: [Versilian Studios](https://versilian-studios.com/) [VSCO-2 Community Edition](https://github.com/sgossner/VSCO-2-CE) and [VCSL](https://github.com/sgossner/VCSL), CC0 1.0: the SAMPLE sets, also SLICE's PIANO ([attribution](assets/samples-cc0/ATTRIBUTION.txt))
+- SLICE's BREAK and FUNK: made with [YuE2](https://github.com/multimodal-art-projection/YuE) by Multimodal Art Projection ([how](assets/breaks/ATTRIBUTION.txt))
 - VOICE engine: after [klattsch](https://github.com/tgies/klattsch) by Tony Gies (MIT); formant data from Klatt (1980) and Hillenbrand et al. (1995)
 - PHYS engine: models ported from [DaisySP](https://github.com/electro-smith/DaisySP) by Electrosmith and Emilie Gillet ([MIT](LICENSES/MIT-DaisySP.txt)) and from Emilie Gillet's [eurorack](https://github.com/pichenettes/eurorack) code ([MIT](LICENSES/MIT-Rings.txt))
 - FM6 engine: msfa from [Dexed](https://github.com/asb2m10/dexed) by Google Inc. and Pascal Gauthier ([Apache-2.0](LICENSES/Apache-2.0-msfa.txt))

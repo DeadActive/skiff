@@ -439,6 +439,20 @@ static int last_track(void)
     r[BK_MOT + 3u] = 0u;
     ok &= pat_keep_rec(id, r) == 0 && !pat_decode(&trk[k], id, st, v, &ms) && !ms.count && st[5].note[0] == 45u;
     bad += check("  a record holding a value outside -64..127: its automation dropped, the steps load", ok);
+    /* (Skiff phase 9) the motion's ids as a store of PROJ_NP has them (firmware before reads the record), unless the
+     * motion names a parameter added since: then today's */
+    fresh();
+    simple(k, 40, 64, DIR_FWD);
+    ok = motion_put(&trk[k], 3, P_E5, 20, MOTION_LOCK) == 0 && keep_all() == 0 && trk_pid[k] != 0u;
+    id = trk_pid[k] - 1u;
+    ok &= !pat_read(id, r) && r[1] == PROJ_NP && r[BK_MOT + 1u] == ((P_E5 - PROJ_NX) | MOTION_LOCK) &&
+          !pat_decode(&trk[k], id, st, v, &ms) && ms.count == 1u && ms.event[0].param == (P_E5 | MOTION_LOCK);
+    bad += check("  (phase 9) a lock on E5: the record of 103 parameters (E5 at 100), back at today's P_E5", ok);
+    ok = motion_put(&trk[k], 4, P_DTONE, -9, MOTION_LOCK) == 0 && keep_all() == 0 && trk_pid[k] == id + 1u;
+    ok &= !pat_read(id, r) && r[1] == P_COUNT && !pat_decode(&trk[k], id, st, v, &ms) && ms.count == 2u;
+    for (i = n = 0; i < ms.count; i++)
+        n += ms.event[i].param == (P_E5 | MOTION_LOCK) || ms.event[i].param == (P_DTONE | MOTION_LOCK);
+    bad += check("  .. and one on DRIVE's TONE (phase 9's): the record of today's ids, both back", ok && n == 2u);
     return bad;
 }
 

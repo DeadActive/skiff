@@ -51,7 +51,7 @@ static int pow_on(const project_t *q)
 /* (Skiff) an SKF1 record as FUN9 laid it out (no NUDGE planes; the patches at 3120, the name at 3632) */
 static void fun9_from(uint8_t *v9, const project_store_t *st)
 {
-    uint32_t k, pos = 68u, pos9 = 68u, n = P_COUNT + 2u + NSTEP * 9u, sum;
+    uint32_t k, pos = 68u, pos9 = 68u, n = PROJ_NP + 2u + NSTEP * 9u, sum;
     memset(v9, 0, PROJ_STORE_V9);
     memcpy(v9, st->raw, 68);
     for (k = 0; k < PROJ_NT; k++, pos += n, pos9 += n + PROJ_NUDGE_BYTES)
@@ -207,7 +207,8 @@ int main(void)
 
     bad += check("layout: SLICER after DETUNE, then the matrix just before P_E0 ((Skiff) DIR, the ducking after the lane levels)",
                  P_SLCR == P_DETUNE + 1 && P_SLDEPTH + 1 == P_M1SRC && P_M4AMT + 1 == P_FM1_ATK && P_FM4_LEVEL + 1 == P_CHRD && P_VOIC + 1 == P_LN0 &&
-                 P_LN7 + 1 == P_DIR && P_DIR + 1 == P_DKSRC && P_DKREL + 1 == P_E0 && P_E0 == 95 && P_COUNT == PROJ_NP_V3 + 46u &&
+                 P_LN7 + 1 == P_DIR && P_DIR + 1 == P_DKSRC && P_DKREL + 1 == P_DTYPE && P_LDECAY7 + 1 == P_E0 && P_E0 == 117 &&
+                 P_COUNT == PROJ_NP_V3 + 68u && PROJ_NP == 103u && PROJ_NX == 22u &&
                  PROJ_NP_V3 == PROJ_NP_V2 + 4u);
     bad += check("SKF1 fits one flash object, the retained cache in NOINIT", sizeof(project_store_t) <= 4096u - 256u &&
                  sizeof(project_store_t) == 3840u && 0xC8u + 4u * sizeof(project_store_t) <= 0x3D50u);
@@ -228,11 +229,11 @@ int main(void)
     bad += check("FUN2 -> FUN6: converted, valid format 5 slot", ok && proj_ok(&q) && q.magic == PROJ_MAGIC);
     ok = q.sel == 2;
     for (i = 0; i < G_COUNT; i++)
-        ok &= q.g[i] == (i == G_RTYPE ? 0 : (int16_t)(500 + i));
-    bad += check("FUN2 -> FUN6: globals (id 24, the old drum channel: ROOM) and selected track", ok);
+        ok &= q.g[i] == (i == G_RTYPE || i == G_CMODE || i == G_CFDBK ? 0 : (int16_t)(500 + i));
+    bad += check("FUN2 -> FUN6: globals (id 24, the old drum channel: ROOM; 25 26 CHORUS MODE, FEEDBACK 0) and selected track", ok);
     ok = 1;
     for (t = 0; t < PROJ_NT; t++)
-        ok &= track_ok(&q.t[t], &v2.t[t], t, t == 3u, 127, 127);   /* (G_DRLVL / G_DRREV 525 / 526: 127) */
+        ok &= track_ok(&q.t[t], &v2.t[t], t, t == 3u, 127, 127);   /* (G_DRLVL / G_DRREV 525 / 526: 127; G_CMODE / G_CFDBK now) */
     bad += check("FUN2 -> FUN6: every parameter mapped, SLICER and matrix OFF (4 tracks; more: power-on)", ok && pow_on(&q));
 
     bad += check("FUN2 -> FUN6: engine bytes kept (WHEEL 7, ANALOG 0, TRIO 6)",
@@ -259,26 +260,28 @@ int main(void)
     ok = proj_import(&q, &buf, (int)sizeof v3) && proj_ok(&q) && q.magic == PROJ_MAGIC && q.sel == 3 &&
          q.parts == PROJ_PARTS;
     for (i = 0; i < G_COUNT; i++)
-        ok &= q.g[i] == (i == G_RTYPE ? 0 : (int16_t)(600 + i));
+        ok &= q.g[i] == (i == G_RTYPE || i == G_CMODE || i == G_CFDBK ? 0 : (int16_t)(600 + i));
     for (t = 0; t < PROJ_NT; t++)
         ok &= track_v3_ok(&q.t[t], &v3.t[t], t);
-    bad += check("FUN3 -> FUN6: every parameter kept, the matrix OFF, steps, globals (24: ROOM)", ok && pow_on(&q));
+    bad += check("FUN3 -> FUN6: every parameter kept, the matrix OFF, steps, globals (24: ROOM; 25 26: 0)", ok && pow_on(&q));
 
     /* a FUN3 written before 1.0 (parts 0: track 4 the drum part, engine byte 0) */
     v3.parts = 0;
     v3.t[3] = v3.t[0];
     v3.t[3].engine = 0;
     v3.t[3].preset = 0;
-    v3.g[G_DRLVL] = 90;
-    v3.g[G_DRREV] = 20;
+    v3.g[G_CMODE] = 90;                               /* (the drum level and reverb send: G_DRLVL / G_DRREV then) */
+    v3.g[G_CFDBK] = 20;
     v3.sum = proj_hash(&v3, sizeof v3 - 4u);
     memcpy(&buf, &v3, sizeof v3);
     ok = proj_import(&q2, &buf, (int)sizeof v3) && proj_ok(&q2) && q2.parts == PROJ_PARTS && q2.t[3].engine == ENGI_DRUM &&
          q2.t[3].preset == PROJ_DEF_KEEP && q2.t[3].p[P_LEVEL] == 90 && q2.t[3].p[P_REV] == 20 &&
          q2.t[3].p[P_PAN] == oldv3(0, P_PAN) && q2.t[3].p[P_SLEN] == oldv3(0, P_SLEN) &&
          q2.t[3].p[P_SLCR] == oldv3(0, P_SLCR) && q2.t[3].p[P_M1SRC] == 0 &&
-         steps_grid_same(q2.t[3].step, v3.t[0].step) && !memcmp(&q2.t[0], &q.t[0], sizeof q.t[0]) && pow_on(&q2);
-    bad += check("FUN3 before 1.0: the drum track -> part 4 (LEVEL / REV from G_DRLVL / G_DRREV), never a later one", ok);
+         steps_grid_same(q2.t[3].step, v3.t[0].step) && !memcmp(&q2.t[0], &q.t[0], sizeof q.t[0]) && pow_on(&q2) &&
+         !q2.g[G_CMODE] && !q2.g[G_CFDBK];
+    bad += check("FUN3 before 1.0: the drum track -> part 4 (LEVEL / REV from G_DRLVL / G_DRREV), never a later one; "
+                 "(phase 9) those ids then 0: CHORUS, no FEEDBACK", ok);
 
     /* a FUN6 round trip: stored as is (a matrix slot set; an engine added since: SLICE, 8; a DRUM track with
      * notes on its lanes stays so: only an older format is converted) */
@@ -451,7 +454,7 @@ int main(void)
         project_store_t st, st2;
         uint32_t i, zero = 1;
         bad += check("SKF1 name at the end of the reserved tail, the FM6 patches before it, after the data (32 spare)",
-                     PROJ_NAME_OFF == 3824u && PROJ_FM6_OFF == 3312u && 68u + PROJ_NT * (P_COUNT + 2u + NSTEP * 9u +
+                     PROJ_NAME_OFF == 3824u && PROJ_FM6_OFF == 3312u && 68u + PROJ_NT * (PROJ_NP + 2u + NSTEP * 9u +
                      PROJ_NUDGE_BYTES) + sizeof(chain_config_t) + sizeof(motion_store_t) + 32u == PROJ_FM6_OFF);
         memset(&a, 0, sizeof a);
         a.magic = PROJ_MAGIC; a.size = sizeof a; a.parts = PROJ_PARTS; a.phys = PROJ_PHYS;
@@ -495,6 +498,9 @@ int main(void)
         memset(&a, 0, sizeof a);
         a.magic = PROJ_MAGIC; a.size = sizeof a; a.parts = PROJ_PARTS; a.phys = PROJ_PHYS;
         chain_defaults(&a.chain);
+        for (k = 0; k < PROJ_NT; k++)                   /* ((phase 9) SKF1 holds none past PROJ_NP: their defaults) */
+            for (i = PROJ_NP - 8u; i < P_E0; i++)
+                a.t[k].p[i] = TP[i].def;
         for (k = 0; k < PROJ_NT; k++)
             for (i = 0; i < NSTEP; i += 5u) {
                 a.t[k].step[i] = (step_t){{(uint8_t)(48u + i)}, 1, ST_NOTE, 0, 100};
@@ -503,6 +509,10 @@ int main(void)
         a.sum = proj_sum(&a);
         ok = proj_pack(&st, &a) && proj_import(&c, &st, sizeof st) && !memcmp(c.t, a.t, PROJ_NT * sizeof a.t[0]) && pow_on(&c);
         bad += check("SKF1: each step's NUDGE round trips (-32, 31, -1, 1, ..), the rest of the step kept", ok);
+        a.motion.count = 1;                             /* ((phase 9) a lock on DRIVE's TONE: SKF1 cannot name it) */
+        a.motion.event[0] = (motion_event_t){1u << 6 | 2u, (uint8_t)(P_DTONE | MOTION_LOCK), 5};
+        bad += check("  (phase 9) SKF1 refuses a motion record of a parameter added since 103", !proj_pack(&st, &a));
+        a.motion.count = 0;
         a.t[2].step[7].nudge = NUDGE_MAX + 1;
         bad += check("SKF1: a NUDGE outside -32..31 cannot be packed", !proj_pack(&st, &a));
         a.t[2].step[7].nudge = 0;
@@ -551,7 +561,7 @@ int main(void)
                          ok && proj_pack(&st2, &c) && !memcmp(&st, &st2, sizeof st));
             m.motion.on = (uint8_t)((1u << NTRK) - 1u);        /* every track's automation on (as at power-on) */
             m.sum = proj_sum(&m);
-            ok = proj_pack(&st2, &m) && st2.raw[68u + PROJ_NT * (P_COUNT + 2u + NSTEP * 9u + PROJ_NUDGE_BYTES) +
+            ok = proj_pack(&st2, &m) && st2.raw[68u + PROJ_NT * (PROJ_NP + 2u + NSTEP * 9u + PROJ_NUDGE_BYTES) +
                                                sizeof(chain_config_t) + 1u] == 0x0Fu &&
                  proj_import(&c, &st2, sizeof st2) && c.motion.on == 0x0Fu && c.motion.count == 2u;
             bad += check("  saved with every track's automation on: SKF1 holds the four tracks' bits (more: left out)", ok);
@@ -565,8 +575,8 @@ int main(void)
             m.motion.count = 2; m.motion.event[1] = m.motion.event[2];   /* (back to two: then a value of 200 stored) */
             m.sum = proj_sum(&m);
             ok = proj_pack(&st2, &m);
-            st2.raw[68u + PROJ_NT * (P_COUNT + 2u + NSTEP * 9u + PROJ_NUDGE_BYTES) + sizeof(chain_config_t) + 4u + 2u] = 200u;
-            st2.raw[68u + PROJ_NT * (P_COUNT + 2u + NSTEP * 9u + PROJ_NUDGE_BYTES) + sizeof(chain_config_t) + 4u + 3u] = 0u;
+            st2.raw[68u + PROJ_NT * (PROJ_NP + 2u + NSTEP * 9u + PROJ_NUDGE_BYTES) + sizeof(chain_config_t) + 4u + 2u] = 200u;
+            st2.raw[68u + PROJ_NT * (PROJ_NP + 2u + NSTEP * 9u + PROJ_NUDGE_BYTES) + sizeof(chain_config_t) + 4u + 3u] = 0u;
             {
                 uint32_t sum = proj_hash(st2.raw, PROJ_STORE_SIZE - 4u);
                 memcpy(st2.raw + PROJ_STORE_SIZE - 4u, &sum, 4);
@@ -595,7 +605,7 @@ int main(void)
                 f.sum = proj_sum(&f);
                 ok = proj_pack(&st, &f) && proj_import(&g, &st, sizeof st) && !memcmp(&f.motion, &g.motion, sizeof f.motion);
                 bad += check("SKF1 round trip: locks on a lane level (P_LN2) and an engine value (P_E5) kept", ok &&
-                             st.raw[68u + PROJ_NT * (P_COUNT + 2u + NSTEP * 9u + PROJ_NUDGE_BYTES) + sizeof(chain_config_t) +
+                             st.raw[68u + PROJ_NT * (PROJ_NP + 2u + NSTEP * 9u + PROJ_NUDGE_BYTES) + sizeof(chain_config_t) +
                                     4u + 8u + 1u] ==
                              (P_LN2 | MOTION_LOCK) && g.motion.event[3].param == (P_E5 | MOTION_LOCK));
             }
@@ -607,8 +617,8 @@ int main(void)
             memcpy(v8, st.raw, 68);
             v8[66] = 91;
             for (k = 0; k < PROJ_NT; k++) {
-                for (j = 0; j < 91u; j++) v8[pos++] = st.raw[pos9 + (j < 83u ? j : j + (P_E0 - 83u))];
-                pos9 += P_COUNT;
+                for (j = 0; j < 91u; j++) v8[pos++] = st.raw[pos9 + (j < 83u ? j : j + (PROJ_NP - 8u - 83u))];
+                pos9 += PROJ_NP;
                 memcpy(v8 + pos, st.raw + pos9, 2u + NSTEP * 9u);
                 pos += 2u + NSTEP * 9u; pos9 += 2u + NSTEP * 9u + PROJ_NUDGE_BYTES;   /* (Skiff: SKF1's NUDGE plane) */
             }
@@ -826,8 +836,9 @@ int main(void)
         memset(&a, 0, sizeof a);
         for (t = 0; t < PROJ_NT; t++) {
             a.t[t].engine = (uint8_t)(t == 3u ? ENGI_DRUM : 0u);
-            for (i = 0; i < P_COUNT; i++)
-                a.t[t].p[i] = (int16_t)clamp(param_desc_of(a.t[t].engine, i)->def + (int32_t)t, -64, 127);
+            for (i = 0; i < P_COUNT; i++)                 /* ((phase 9) SKF2 holds none past PROJ_NP: their defaults) */
+                a.t[t].p[i] = (int16_t)clamp(param_desc_of(a.t[t].engine, i)->def +
+                                             (i >= PROJ_NP - 8u && i < P_E0 ? 0 : (int32_t)t), -64, 127);
         }
         a.parts = PROJ_PARTS; a.phys = PROJ_PHYS; a.sel = 2; a.g[G_BPM] = 133;
         a.ent[0][0][0] = 5 + 1; a.ent[0][0][1] = 2 - 1; a.ent[0][3][0] = 63 + 1; a.ent[3][15][0] = 0 + 1; a.ent[3][15][1] = 16 - 1;
@@ -849,7 +860,7 @@ int main(void)
         ok = !proj_import(&c, &st2, (int)PROJ_STORE2);
 #define SKF2_BAD(off, v) (st2 = st, st2.raw[(off)] = (v), sum = proj_hash(st2.raw, PROJ_STORE2 - 4u), \
                           memcpy(st2.raw + PROJ_STORE2 - 4u, &sum, 4), !proj_import(&c, &st2, (int)PROJ_STORE2))
-        e = 68u + PROJ_NT * (P_COUNT + 2u);           /* the lists */
+        e = 68u + PROJ_NT * (PROJ_NP + 2u);           /* the lists */
         ok &= SKF2_BAD(e, NPAT + 1u) && SKF2_BAD(e + 1u, 16u) && SKF2_BAD(e + PROJ_NT * NENT * 2u, 16u) &&
               SKF2_BAD(65u, 2u) && !SKF2_BAD(e, NPAT) && !SKF2_BAD(e + 1u, 15u);
 #undef SKF2_BAD
@@ -883,12 +894,25 @@ int main(void)
                      !memcmp(c.ent, a.ent, sizeof a.ent) && !memcmp(c.cur, a.cur, sizeof a.cur) && c.song == 1u &&
                      !memcmp(c.scene, a.scene, sizeof a.scene) && !memcmp(c.name, a.name, sizeof a.name) &&
                      c.fm6[k][5] == 77u && c.sel == k && c.g[G_BPM] == 97);
-        e = 68u + NTRK * (P_COUNT + 2u);              /* the lists (698 with 103 parameters), the entries, the scenes */
+        e = 68u + NTRK * (PROJ_NP + 2u);              /* the lists (698 with 103 parameters), the entries, the scenes */
         ok = ((const uint32_t *)st.raw)[0] == PROJ_MAGIC3 && ((const uint32_t *)st.raw)[1] == 2048u &&
              st.raw[e + (k * NENT + 15u) * 2u] == 64u && st.raw[e + NTRK * NENT * 2u + k] == 15u &&
              st.raw[e + NTRK * NENT * 2u + NTRK + PROJ_SC2] == 0x05u && e + NTRK * NENT * 2u + NTRK + 82u <= 1264u &&
              st.raw[1264u + k * FM6_PACKED + 5u] == 77u && !memcmp(st.raw + 2032u, "SKF3 TEST", 9);
         bad += check("  2048 bytes: lists, entries, 82 scene bytes after the six tracks; FM6 at 1264, the name at 2032", ok);
+        ok = PROJ_PX_AT(&PROJ_SKF3) == 981u && st.raw[981] == PROJ_PX_MARK && st.raw[982] == PROJ_NX &&
+             st.raw[983u + k * PROJ_NX + (P_DTONE - (PROJ_NP - 8u))] == (uint8_t)(a.t[k].p[P_DTONE] + 64);
+        bad += check("  (phase 9) the parameters past 103: the PX block at 981 (its mark, 22 a track), round trip", ok);
+        {
+            static project_t d;
+            d = a;
+            for (t = 0; t < NTRK; t++)
+                for (i = PROJ_NP - 8u; i < P_E0; i++)
+                    d.t[t].p[i] = TP[i].def;
+            ok = proj_pack2(&st2, &d, &PROJ_SKF3) && !st2.raw[981] && proj_import(&c, &st2, (int)PROJ_STORE3) &&
+                 c.t[1].p[P_EG2_DEC] == TP[P_EG2_DEC].def && c.t[1].p[P_LTUNE3] == 64;
+            bad += check("  .. all at their defaults: no block (a project of before), read as the defaults", ok);
+        }
         bad += check("  read from a retained 3840-byte slot too; loaded and saved again: byte for byte",
                      proj_import(&c, &st, (int)sizeof st) && c.ent[k][15][0] == 64u &&
                      proj_pack2(&st2, &c, &PROJ_SKF3) && !memcmp(&st, &st2, sizeof st));

@@ -620,12 +620,49 @@ static int demos(const char *dir)
     return n == 5u;
 }
 
+/* (Skiff phase 9) ENV 2 (voice.c env2_tick), a MOD source of its own: its own times (a pluck under a slow amp attack),
+ * released with the gate, back to 0; not run without a slot of it */
+static void test_env2(void)
+{
+    track_t *t = &trk[0];
+    uint32_t i, peak_at = 0;
+    int32_t top = 0, amp_at_top = 0;
+    fresh(0, 0);
+    t->p[P_ATK] = 100;                                  /* a slow amp attack */
+    t->p[P_EG2_ATK] = 0;
+    t->p[P_EG2_DEC] = 30;
+    t->p[P_EG2_SUS] = 0;
+    t->p[P_EG2_REL] = 20;
+    slot(t, 0, MS_ENV2, MD_CUT, 60);
+    trk_note_on(t, 60, 100);
+    for (i = 0; i < 400u; i++) {                        /* 290 ms */
+        blocks(1);
+        if (t->v[t->m_vi].env2 > top) {
+            top = t->v[t->m_vi].env2;
+            peak_at = i;
+            amp_at_top = t->v[t->m_vi].env;
+        }
+    }
+    check("ENV 2 (phase 9): its own times, a pluck at once under a slow amp attack",
+          top == 1 << 24 && peak_at < 4u && amp_at_top < (1 << 20) && t->v[t->m_vi].env2 < top / 4 &&
+          t->v[t->m_vi].env > (1 << 21) && t->m_env2 == t->v[t->m_vi].env2 >> 9);
+    t->p[P_EG2_SUS] = 127;
+    trk_note_off(t, 60);
+    blocks(400);
+    check("  released with the gate, back to 0", !t->v[t->m_vi].env2 && !t->v[t->m_vi].stage2);
+    fresh(0, 0);
+    trk_note_on(t, 60, 100);
+    blocks(50);
+    check("  no slot of it: not run (ENV 2 stays 0)", !t->v[t->m_vi].env2 && t->v[t->m_vi].stage2 == 1u);
+}
+
 int main(int argc, char **argv)
 {
     test_off();
     test_math();
     test_midi();
     test_cost();
+    test_env2();
     if (argc > 1)
         check("demos written", demos(argv[1]));
     printf("%s\n", bad ? "MOD MATRIX TEST FAILED" : "mod matrix test passed");

@@ -988,7 +988,7 @@ static void graph_slices(void)
     str_cpy(t + 4, u, sizeof t - 4);
     str_cpy(t + str_len(t), " S", sizeof t - str_len(t));
     cv_text(12, 106, &AF_S, t, T_MID);
-    cv_text_r(228, 106, &AF_S, N_SLC_SRC[src], src && src != SLC_SRC_PIANO ? T_THEME : T_DIM, T_SURF);
+    cv_text_r(228, 106, &AF_S, N_SLC_SRC[src], SLC_SRC_USR(src) ? T_THEME : T_DIM, T_SURF);
 }
 #endif
 
@@ -1532,7 +1532,7 @@ static void graph_browse(void)
     uint32_t total, cur = preset_pos(&total), e, k;
     int32_t row;
     if (!total) {
-        panel_note("NO FAVORITES", "list ALL to add sounds", 0);
+        panel_note(ui_ptag ? "NO SOUNDS" : "NO FAVORITES", ui_ptag ? "list ALL" : "list ALL to add sounds", 0);
         return;
     }
     for (row = -3; row <= 3; row++) {
@@ -2340,6 +2340,10 @@ static void draw_graph(void)
         case GR_ENVDST:                              /* (Skiff U5, V1: ui_pgraph.c, from the panel's top) */
             cv_oy = 0;
             graph_envdst(t, c);
+            break;
+        case GR_DRIVE:                               /* (Skiff phase 9) */
+            cv_oy = 0;
+            graph_drive(t, c);
             break;
         case GR_LFODST:
             cv_oy = 0;

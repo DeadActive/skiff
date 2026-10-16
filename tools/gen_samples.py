@@ -21,12 +21,13 @@ Set 4 was PERC, the GM-mapped drum kit (Felucca's generated drums and CC0 hand p
 loads as DRUM with its default kit (core.h drum_from_perc); what that cannot reach (GRAIN's
 SRC, a value sent live) plays the alias, PIANO.
 
-The SLICE engine's built-in BREAK (eng_slice.c) is rendered here: one bar of 16ths arranged
-from Felucca's generated drums (tools/gen_waves.py, the Hügelton Sample Pack; no third-party
-loop), stored after every set (their
-offsets do not move) and NOT one of the SAMPLE sets (the SET list, its presets and the
-USR1-3 numbers stay as they were). Its slice table (decoder states on a 128-point grid,
-the hits as AUTO slices) is written with it: SLC_BREAK_INIT.
+The SLICE engine's built-in loops (eng_slice.c) are encoded here from assets/breaks/ (Skiff phase 9:
+made with the YuE2 music model, see ATTRIBUTION.txt there; before, BREAK was arranged from
+Felucca's generated drums): BREAK, one bar at 120 BPM, and FUNK, two beats at 86.33 BPM. They
+are stored after every set (their offsets do not move) and are NOT SAMPLE sets (the SET list,
+its presets and the USR1-3 numbers stay as they were). Each one's slice table (decoder states
+on a 128-point grid, AUTO slices where the firmware's own detector finds the hits) is written
+with it: SLC_BREAK_INIT, SLC_FUNK_INIT.
 
 SLICE's SRC PIANO (added in 1.0.4 after BREAK and USR1-3) is the PIANO set's middle C zone itself:
 no data of its own, only its slice table (one AUTO slice, the note's attack): SLC_PIANO_INIT.
@@ -40,7 +41,6 @@ import hashlib
 import math
 import os
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -49,9 +49,9 @@ import sampleio as sio  # noqa: E402
 from sampleio import detect_hz, hz_to_midi, ima_encode, key_split, onset, peak, read_any_wav, resample  # noqa: E402
 
 SRC = Path(__file__).resolve().parents[1]
-GENDIR = SRC / "build" / "genwav"
 CACHE = SRC / "build" / "gen_samples.cache"
 CC0 = SRC / "assets" / "samples-cc0"
+BREAKS = SRC / "assets" / "breaks"           # (Skiff phase 9) SLICE's BREAK and FUNK
 TR = 22050                                   # stored sample rate
 
 # CC0 library: set -> kind ("oneshot" decaying, "sus" looped sustain, "kit" one sample per key)
@@ -67,25 +67,20 @@ KIT_BASE = 53                     # F3, the lowest FM-1 key
 
 NOTE = {"C": 0, "C#": 1, "D": 2, "D#": 3, "E": 4, "F": 5, "F#": 6, "G": 7, "G#": 8, "A": 9, "A#": 10, "B": 11}
 
-# the generated drums by role (from gen_waves.py's file names), for SLICE's BREAK
-GM_ROLE_WORDS = [("bassdrum", "kick"), ("kick", "kick"), ("snare", "snare"), ("hihat", "chh"), ("chat", "chh"),
-                 ("ohat", "ohh"), ("clap", "clap"), ("tom lo", "tomlo"), ("tom hi", "tomhi"), ("tom", "tom"),
-                 ("rim", "rim"), ("cowbell", "cowbell"), ("tamb", "tamb"), ("shaker", "shaker"),
-                 ("conga", "conga"), ("claves", "claves"), ("wood", "wood"), ("crash", "crash"), ("ride", "ride")]
-GM_KEEP = {"crash": 0.5, "ride": 0.5, "ohh": 0.5}  # the cymbals cut to 0.5 s ...
-GM_FADE = {"crash": 0.2, "ride": 0.2}            # ... with a long raised-cosine fade (s); the others 30 ms linear
-
-# SLICE's BREAK: (step, GM role, gain) on a bar of 16ths; the open hat is choked by the next hat
-BREAK_BPM, BREAK_STEPS = 120, 16
-BREAK_HITS = [(0, "kick", 1.0), (0, "chh", 0.55), (2, "kick", 0.7), (2, "chh", 0.4), (4, "snare", 1.0),
-              (4, "chh", 0.45), (6, "chh", 0.4), (7, "kick", 0.8), (8, "chh", 0.55), (9, "snare", 0.3),
-              (10, "kick", 0.9), (10, "ohh", 0.4), (12, "snare", 1.0), (12, "chh", 0.45), (14, "chh", 0.4),
-              (14, "snare", 0.35)]
+BREAK_BPM, BREAK_STEPS = 120, 16          # SLICE's BREAK: one bar of 16ths (assets/breaks/break.wav)
 SLC_PIANO_NOTE = 60                          # SLICE's SRC PIANO: the PIANO zone of this root (middle C)
-SLC_GRID, SLC_AUTO = 128, 32                # eng_slice.c slc_src_t
+SLC_GRID, SLC_AUTO, SLC_HOP = 128, 32, 32   # eng_slice.c slc_src_t, its AUTO detector's hop
 
 ENV = {"wave":(5, 80, 100, 50), "kit": (0, 127, 127, 60), "multi": (0, 85, 0, 75),
        "oneshot": (0, 127, 127, 70), "sus": (12, 80, 120, 60)}
+SET_TAG = {"PIANO": "PT_KEYS", "FLUTE": "PT_LEAD", "SAX": "PT_LEAD"}   # (Skiff phase 9) core.h PT_*: PRESETS' LIST
+SET_VARIANTS = [   # (Skiff phase 9) SAMPLE's presets after PERC's slot: (name, e, env, mono, fx, tag[, more]), apply9.py
+    ("LOFI PIANO", [0, 0, 110, 1, 30, 0, 30, 0], [0, 127, 127, 70], 0, [40, 10, 20, 40], "PT_KEYS", [("P_DTYPE", 3), ("P_LRATE", 40), ("P_LD_PIT", 1)]),
+    ("MUSIC BOX", [0, 24, 0, 0, 110, 0, 0, 0], [0, 90, 0, 80], 0, [0, 30, 40, 60], "PT_PLUCK"),
+    ("FLUTE PAD", [2, 0, 0, 1, 90, 0, 0, 0], [80, 90, 120, 100], 0, [0, 60, 25, 90], "PT_PAD"),
+    ("DARK SAX", [3, -12, 0, 1, 26, 0, 48, 0], [22, 80, 120, 55], 1, [0, 15, 20, 60], "PT_LEAD", [("P_LD_PIT", 1), ("P_LRATE", 84), ("P_LFADE", 100)]),
+    ("KOTO", [0, 12, 0, 0, 120, 0, 22, 0], [0, 72, 0, 50], 0, [0, 0, 25, 30], "PT_PLUCK", [("P_ED_PIT", 2)]),
+]
 
 # PIANO's notes cut to 0.75 s (saves flash), faded out over the last SET_FADE s
 SET_KEEP = {"PIANO": 0.75}
@@ -168,48 +163,12 @@ def cc0_entries(setname, kind):
     return out
 
 
-def gm_role(name):
-    n = name.lower()
-    return next((r for w, r in GM_ROLE_WORDS if w in n), None)
-
-
-def gm_kit_sources():
-    """role -> wav path: Felucca's own synthesized drums (generated by gen_waves.py)"""
-    src = {}
-    for p in sorted(GENDIR.glob("D *.wav")):
-        r = gm_role(p.stem)
-        if r and r not in src:
-            src[r] = p
-    return src
-
-
-def gm_kit_entry(role, path):
-    sr, x = wav(path)
-    x = resample(x[max(0, onset(x) - 16):], sr, TR)
-    x = x[:int(GM_KEEP.get(role, 0.45) * TR)]
-    pk = peak(x)
-    end = len(x)                                    # drop the silent tail
-    while end > 64 and abs(x[end - 1]) < 0.004 * pk:
-        end -= 1
-    x = x[:end]
-    if role in GM_FADE:
-        cos_fade(x, min(len(x) // 2, int(GM_FADE[role] * TR)))
-    else:
-        fade = min(len(x) // 4, int(0.03 * TR))
-        for i in range(fade):
-            x[len(x) - fade + i] *= 1 - i / fade
-    return [int(v * 30000 / pk) for v in x]
-
-
-def ima_states(data, positions):
-    """IMA ADPCM decoder state before sample p for each p (ascending), packed as eng_slice.c reads it:
-    (predictor & 0xFFFF) | index << 16 (segment 0)"""
-    pred, idx, out, want = 0, 0, [], list(positions)
-    for n in range(max(want) + 1 if want else 0):
-        while want and want[0] == n:
-            out.append((pred & 0xFFFF) | idx << 16)
-            want.pop(0)
-        code = (data[n >> 1] >> (4 * (n & 1))) & 15
+def ima_steps(data, n):
+    """an IMA ADPCM decoder (from predictor 0 / index 0, as eng_slice.c's) over n samples of data: its
+    (predictor, index) before each sample, and after the last; a predictor after a sample is that sample"""
+    pred, idx, out = 0, 0, [(0, 0)]
+    for k in range(n):
+        code = (data[k >> 1] >> (4 * (k & 1))) & 15
         step = sio.IMA_STEP[idx]
         vd = step >> 3
         if code & 4:
@@ -220,25 +179,40 @@ def ima_states(data, positions):
             vd += step >> 2
         pred = max(-32768, min(32767, pred - vd if code & 8 else pred + vd))
         idx = max(0, min(88, idx + sio.IMA_IDX[code & 7]))
+        out.append((pred, idx))
     return out
 
 
-def break_loop():
-    """SLICE's BREAK: BREAK_HITS from Felucca's generated drums at TR -> (int16 samples, hit positions)"""
-    src = gm_kit_sources()                          # generated sounds only: the same on every build
-    n = int(round(TR * 60 / BREAK_BPM * 4))
-    x = [0.0] * n
-    pos = [s * n // BREAK_STEPS for s in range(BREAK_STEPS + 1)]
-    for step, role, gain in BREAK_HITS:
-        smp = gm_kit_entry(role, src[role])
-        if role == "ohh":                           # choked by the next hat
-            nxt = min([s for s, r, _ in BREAK_HITS if r in ("chh", "ohh") and s > step] or [BREAK_STEPS])
-            keep, fade = pos[nxt] - pos[step], int(0.004 * TR)
-            smp = [v * min(1.0, (keep - i) / fade) for i, v in enumerate(smp[:keep])]
-        for i, v in enumerate(smp):                 # the tails wrap round: a seamless loop
-            x[(pos[step] + i) % n] += v * gain
-    pk = peak(x)
-    return [int(v * 30000 / pk) for v in x], sorted({pos[s] for s, _, _ in BREAK_HITS})
+def ima_states(data, positions):
+    """IMA ADPCM decoder state before sample p for each p, packed as eng_slice.c reads it:
+    (predictor & 0xFFFF) | index << 16 (segment 0)"""
+    st = ima_steps(data, max(positions, default=0))
+    return [(st[p][0] & 0xFFFF) | st[p][1] << 16 for p in positions]
+
+
+def slc_onsets(x):
+    """eng_slice.c slc_scan's AUTO slices of decoded samples x at TR, in the same integer steps (so the table
+    written here is what the firmware finds): per hop of SLC_HOP the peak of the first difference and the
+    plain peak; an onset is a hop where either rises 1.75x over its follower, above 1/12 (1/8) of its largest
+    value, at least 50 ms after the last one; the slice starts one hop before the hop that rose"""
+    gap = ((int(round(TR / 44100 * 65536)) >> 4) * 44100 >> 12) // 20
+    prev = pkd = pkr = 0
+    for v in x:
+        pkd, pkr, prev = max(pkd, abs(v - prev)), max(pkr, abs(v)), v
+    thd, thr = pkd // 12, pkr // 8
+    out, prev, envd, envr, last, h0 = [0], 0, 0, 0, 0, 0
+    for hs in range(0, len(x), SLC_HOP):
+        hd = hr = 0
+        for v in x[hs:hs + SLC_HOP]:
+            hd, hr, prev = max(hd, abs(v - prev)), max(hr, abs(v)), v
+        if hs and ((hd > thd and hd * 4 > envd * 7) or (hr > thr and hr * 4 > envr * 7)) and h0 >= last + gap \
+                and len(out) < SLC_AUTO:
+            out.append(h0)
+            last = h0
+        envd = hd if hd > envd else envd - envd // 16
+        envr = hr if hr > envr else envr - envr // 64
+        h0 = hs
+    return out
 
 
 class Builder:
@@ -246,17 +220,22 @@ class Builder:
         self.zones, self.sets, self.blob, self.kinds = [], [], bytearray(), {}
         self.alias = {}                         # set index -> the set index it aliases
         self.brk = None
+        self.fnk = None
         self.pno = None
 
-    def slice_break(self):
-        """SLICE's BREAK, after every set; its slice table: decoder states at k * len / SLC_GRID, the hits"""
-        x, hits = break_loop()
+    def slice_loop(self, name):
+        """a built-in SLICE loop (assets/breaks/NAME.wav), after every set; its slice table: decoder states at
+        k * len / SLC_GRID, the AUTO slices slc_scan finds (eng_slice.c, which scans a user slot at boot)"""
+        sr, x = read_any_wav(BREAKS / f"{name}.wav")
+        x = resample(x, sr, TR)
+        pk = peak(x)
+        x = [int(v * 30000 / pk) for v in x]
         off, _ = self.add(x, 0)
         n = len(x)
         data = self.blob[off:off + (n + 1) // 2]
         grid = ima_states(data, [k * n // SLC_GRID for k in range(SLC_GRID)])
-        hits = hits[:SLC_AUTO]
-        self.brk = dict(off=off, n=n, grid=grid, apos=hits, ast=ima_states(data, hits))
+        hits = slc_onsets([p for p, _ in ima_steps(data, n)[1:]])
+        return dict(off=off, n=n, grid=grid, apos=hits, ast=ima_states(data, hits))
 
     def slice_piano(self):
         """SLICE's PIANO: the PIANO set's SLC_PIANO_NOTE zone (its data, no copy); its slice table: decoder states
@@ -337,26 +316,37 @@ class Builder:
         L.append(f"#define SMP_NSETS {max(1, len(sets))}")
         named = sets or [("NONE", 0, 0)]
         perc = PERC_SLOT if len(named) > PERC_SLOT else len(named)
-        L.append(f"#define SMP_NPRESETS {perc}")
+        # (Skiff phase 9) the variations follow PERC's slot, only with the CC0 sets their SET values name (PERC's
+        # alias then is a preset among them, hidden as the other alias)
+        var = SET_VARIANTS if len(named) == PERC_SLOT + 1 else []
+        npre = len(named) + len(var) if var else perc
+        L.append(f"#define SMP_NPRESETS {npre}")
         if len(named) > PERC_SLOT:
             L.append(f"#define SMP_PERC_SLOT {PERC_SLOT}   /* once PERC (the GM kit): an alias, its sounds load as DRUM */")
-        L.append("/* the initializers from SMP_NPRESETS on (the retired PERC's alias) are outside factory browsing */")
+        L.append("/* a preset per set (an alias: its original's, hidden by its name; PERC's past SMP_NPRESETS unless")
+        L.append(" * variations follow, ui.c apply_preset_to loads it as DRUM), (Skiff phase 9) then the variations */")
         L.append("static const preset_t SMP_PRESET_TABLE[] = {")
         for i, (name, _, _) in enumerate(named):
             k = self.kinds.get(name, "wave")
             a, d, s_, r = ENV[k]
             loop = 0 if k == "kit" else 1
             si = self.alias.get(i, i)                   # an alias: the original's preset (hidden by its name)
-            L.append(f'    {{"{name}", {{{si}, 0, 0, {loop}, 127, 0, 0, 0}}, {{{a}, {d}, {s_}, {r}}}, 0, 0}},')
+            L.append(f'    {{"{name}", {{{si}, 0, 0, {loop}, 127, 0, 0, 0}}, {{{a}, {d}, {s_}, {r}}}, 0, 0, '
+                     f'TAG({SET_TAG.get(name, "PT_NONE")})}},')
+        for name, e, env, mono, fx, tag, *more in var:  # (more: [(id, value)], as the engines' MORE)
+            mo = ", ".join(f"{{{i}, {v}}}" for i, v in more[0]) if more else ""
+            L.append(f'    {{"{name}", {{{", ".join(map(str, e))}}}, {{{", ".join(map(str, env))}}}, 0, {mono}, '
+                     f'FX({", ".join(map(str, fx))}), ' + (f"MORE({mo}), " if mo else "") + f'TAG({tag})}},')
         L.append("};")
         orig = [self.alias.get(i, i) for i in range(len(named))]
         L.append("/* SET i plays SMP_SET_ORIG[i]: != i for a retired set kept as an alias (its preset i too) */")
         L.append("static const uint8_t SMP_SET_ORIG[] = {" + ", ".join(map(str, orig)) + "};")
-        L.append(f"#define SMP_NALIAS {sum(1 for i, o in enumerate(orig) if o != i and i < perc)}   /* among the presets */")
+        L.append(f"#define SMP_NALIAS {sum(1 for i, o in enumerate(orig) if o != i and i < npre)}   /* among the presets */")
         names = ", ".join(f'"{n}"' for n, _, _ in named)
         L.append("#define SMP_SET_NAMES_INIT " + names)
         L.append("static const char *const SMP_SET_NAMES[] = {" + names + "};")
         L += self.break_header()
+        L += self.funk_header()
         L += self.piano_header()
         return "\n".join(L) + "\n"
 
@@ -381,6 +371,13 @@ class Builder:
                 f"#define SLC_BREAK_BPM {BREAK_BPM}", f"#define SLC_BREAK_STEPS {BREAK_STEPS}"] + \
             self.slc_init("SLC_BREAK_INIT", b)
 
+    def funk_header(self):
+        """SLC_FUNK_INIT: SLICE's FUNK (Skiff phase 9; {0}: none)"""
+        b = self.fnk
+        if not b:
+            return ["#define SLC_FUNK_INIT {0}"]
+        return ["", f"/* SLICE's FUNK: two beats at 86.33 BPM, {len(b['apos'])} hits */"] + self.slc_init("SLC_FUNK_INIT", b)
+
     def piano_header(self):
         """SLC_PIANO_INIT: SLICE's PIANO, the PIANO zone of middle C ({0}: none, no CC0 library)"""
         b = self.pno
@@ -390,7 +387,7 @@ class Builder:
                 f"#define SLC_PIANO_NOTE {SLC_PIANO_NOTE}"] + self.slc_init("SLC_PIANO_INIT", b)
 
     def summary(self):
-        brk = f", SLICE BREAK {self.brk['n']} samples" if self.brk else ""
+        brk = f", SLICE BREAK {self.brk['n']} + FUNK {self.fnk['n']} samples" if self.brk else ""
         brk += f", SLICE PIANO (shared) {self.pno['n']} samples" if self.pno else ""
         return f"samples: {len(self.sets)} sets, {len(self.zones)} zones, {len(self.blob)} B ADPCM{brk}"
 
@@ -407,7 +404,7 @@ def input_key(have_cc0):
     for p in (here / "gen_samples.py", here / "sampleio.py"):
         h.update(p.read_bytes())
     h.update(repr((sys.version_info[:2], have_cc0, slice_on())).encode())   # sum() differs across versions
-    files = sorted(GENDIR.glob("*.wav"))
+    files = sorted(BREAKS.glob("*.wav"))
     if have_cc0:
         files += sorted(CC0.glob("*/*.wav"))
     for p in files:
@@ -417,7 +414,6 @@ def input_key(have_cc0):
 
 
 def main(out):
-    subprocess.run([sys.executable, str(Path(__file__).with_name("gen_waves.py")), str(GENDIR)], check=True)
     have_cc0 = CC0.exists() and any(CC0.glob("*/*.wav"))
     if not have_cc0:
         print("samples: CC0 library not fetched (tools/fetch_cc0.py) - no SAMPLE sets")
@@ -437,8 +433,9 @@ def main(out):
                 b.alias_set(name)
             else:
                 b.cc0_set(name, kind)
-    if slice_on():                                  # SLICE's BREAK: only when that engine is built
-        b.slice_break()                             # last: the sets' offsets stay as they were
+    if slice_on():                                  # SLICE's loops: only when that engine is built
+        b.brk = b.slice_loop("break")               # last: the sets' offsets stay as they were
+        b.fnk = b.slice_loop("funk")
         b.slice_piano()                             # (no data of its own: the PIANO set's)
     text = b.header()
     Path(out).write_text(text)

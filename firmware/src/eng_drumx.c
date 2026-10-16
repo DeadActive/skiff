@@ -146,10 +146,104 @@ static void drumx_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
 /* {MRPH, TUNE, TONE, DECY, NOIS, FM, FOLD, DRV} */
 #define DRUMX_E {64, 64, 70, 64, 64, 0, 0, 0}
 static const preset_t DRUMX_PRESETS[] = {
-    {"DRUM KIT", DRUMX_E, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 20)},   /* (the footer: DRUM-X DRUM KIT) */
+    {"OWN KIT", DRUMX_E, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 20), TAG(PT_DRUM)},   /* (the footer: DRUM-X OWN KIT:
+                                                                                         * it plays the project's own kit,
+                                                                                         * as FM6's SLOT OWN its patch;
+                                                                                         * DRUM KIT until phase 9, DRUM's
+                                                                                         * name too) */
     /* (Skiff) for the themes: CRYPT (dungeon synth), NEON (synthwave), QUARK (particles) */
-    {"HADRON KIT", {100, 72, 90, 40, 80, 70, 60, 25}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 30, 25)},
+    {"HADRON KIT", {100, 72, 90, 40, 80, 70, 60, 25}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 30, 25), TAG(PT_DRUM)},
+    /* (Skiff phase 9) more for every engine: basses, kits */
+    {"FACTORY KIT", {64, 64, 70, 64, 64, 0, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 20), TAG(PT_DRUM)},
+    {"DEEP KIT", {64, 60, 64, 62, 60, 0, 0, 10}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 30), TAG(PT_DRUM)},
+    {"CLICK KIT", {64, 64, 70, 64, 64, 0, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 20, 15), TAG(PT_DRUM)},
+    {"INDUSTRIAL", {64, 62, 70, 64, 70, 20, 30, 40}, {0, 100, 127, 100}, 0, 0, FX(10, 0, 10, 35), TAG(PT_DRUM)},
+    {"SOFT KIT", {64, 64, 56, 60, 56, 0, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 40), TAG(PT_DRUM)},
+    {"GLITCH KIT", {64, 64, 70, 60, 64, 30, 20, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 35, 20), TAG(PT_DRUM)},
+    {"TRIBAL KIT", {64, 64, 64, 64, 60, 0, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 35), TAG(PT_DRUM)},
+    {"LASER KIT", {64, 64, 70, 64, 64, 10, 0, 10}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 30, 25), TAG(PT_DRUM)},
 };
+
+/* (Skiff phase 9) the factory kits a preset loads as the project's kit (ui.c apply_preset_to), 8 lanes as dx_kit has
+ * them (drumx_voice.c): 0 the factory kit (DX_KIT_INIT, what INIT gives), then the kits of the presets FACTORY KIT on.
+ * DRUMX_PKIT[preset]: its kit + 1, 0 none: OWN KIT, the first, loads on every switch to DRUM-X (ui.c
+ * set_engine_of) and keeps the kit there is, as HADRON KIT (the kit's macros) */
+static const dx_lane_t DX_KITS[][8] = {
+    DX_KIT_INIT,
+    {   /* DEEP */
+        {DX_MODE(DXW_SINE, DXF_LP, 1) | DXM_LONG << 5, {6, 60, 84, 2, 10}, {10, 80, 92, 4, 30}},   /* KICK */
+        {DX_MODE(DXW_SINE, DXF_BP, 0), {36, 20, 60, 90, 60}, {40, 28, 70, 100, 70}},   /* SNARE */
+        {DX_MODE(DXW_SINE, DXF_BP, 0), {56, 0, 52, 127, 70}, {52, 0, 64, 127, 64}},   /* CLAP */
+        {DX_MODE(DXW_METAL, DXF_HP, 0), {92, 0, 18, 100, 104}, {96, 0, 24, 110, 110}},   /* HAT CL */
+        {DX_MODE(DXW_METAL, DXF_HP, 0), {92, 0, 70, 100, 100}, {96, 0, 84, 110, 106}},   /* HAT OP */
+        {DX_MODE(DXW_SINE, DXF_LP, 1) | DXM_LONG << 5, {22, 50, 80, 6, 20}, {28, 70, 92, 10, 40}},   /* TOM */
+        {DX_MODE(DXW_BELL, DXF_HP, 1), {58, 8, 16, 10, 40}, {62, 16, 22, 20, 50}},   /* RIM */
+        {DX_MODE(DXW_METAL, DXF_BP, 0), {64, 0, 80, 0, 36}, {70, 0, 92, 10, 48}},   /* BELL */
+    },
+    {   /* CLICK */
+        {DX_MODE(DXW_SINE, DXF_LP, 1), {16, 100, 60, 10, 40}, {20, 120, 68, 20, 70}},   /* KICK */
+        {DX_MODE(DXW_FM, DXF_HP, 0), {60, 10, 40, 70, 110}, {66, 0, 46, 90, 120}},   /* SNARE */
+        {DX_MODE(DXW_SINE, DXF_HP, 0), {70, 0, 30, 127, 100}, {66, 0, 40, 127, 96}},   /* CLAP */
+        {DX_MODE(DXW_METAL, DXF_HP, 0), {116, 0, 8, 60, 124}, {120, 0, 12, 80, 127}},   /* HAT CL */
+        {DX_MODE(DXW_METAL, DXF_HP, 0), {116, 0, 40, 60, 120}, {120, 0, 50, 80, 124}},   /* HAT OP */
+        {DX_MODE(DXW_FM, DXF_LP, 1), {40, 60, 36, 0, 50}, {46, 80, 44, 0, 70}},   /* TOM */
+        {DX_MODE(DXW_BELL, DXF_HP, 1), {80, 20, 8, 0, 60}, {86, 30, 10, 10, 80}},   /* RIM */
+        {DX_MODE(DXW_FM, DXF_BP, 0), {88, 0, 30, 0, 80}, {92, 0, 40, 0, 90}},   /* BELL */
+    },
+    {   /* INDUSTRIAL */
+        {DX_MODE(DXW_FM, DXF_LP, 1) | DX_DRIVE, {10, 90, 70, 20, 70}, {14, 110, 80, 30, 100}},   /* KICK */
+        {DX_MODE(DXW_METAL, DXF_BP, 0) | DX_DRIVE, {44, 30, 50, 100, 80}, {50, 40, 60, 110, 90}},   /* SNARE */
+        {DX_MODE(DXW_METAL, DXF_BP, 0), {64, 0, 46, 120, 90}, {60, 0, 56, 124, 84}},   /* CLAP */
+        {DX_MODE(DXW_METAL, DXF_HP, 0) | DX_DRIVE, {104, 0, 20, 110, 116}, {110, 0, 28, 120, 122}},   /* HAT CL */
+        {DX_MODE(DXW_METAL, DXF_HP, 0), {104, 0, 72, 110, 112}, {110, 0, 84, 120, 118}},   /* HAT OP */
+        {DX_MODE(DXW_METAL, DXF_LP, 1), {28, 50, 60, 20, 60}, {34, 70, 72, 30, 80}},   /* TOM */
+        {DX_MODE(DXW_BELL, DXF_BP, 1) | DX_DRIVE, {70, 20, 20, 30, 70}, {76, 30, 26, 40, 90}},   /* RIM */
+        {DX_MODE(DXW_BELL, DXF_BP, 0), {60, 10, 90, 10, 60}, {66, 20, 94, 20, 74}},   /* BELL */
+    },
+    {   /* SOFT */
+        {DX_MODE(DXW_SINE, DXF_LP, 1), {12, 40, 76, 0, 4}, {14, 54, 86, 2, 14}},   /* KICK */
+        {DX_MODE(DXW_SINE, DXF_LP, 0), {42, 10, 46, 60, 50}, {44, 16, 56, 70, 56}},   /* SNARE */
+        {DX_MODE(DXW_SINE, DXF_LP, 0), {60, 0, 40, 127, 60}, {58, 0, 50, 127, 56}},   /* CLAP */
+        {DX_MODE(DXW_METAL, DXF_BP, 0), {90, 0, 16, 100, 90}, {94, 0, 22, 110, 96}},   /* HAT CL */
+        {DX_MODE(DXW_METAL, DXF_BP, 0), {90, 0, 60, 100, 86}, {94, 0, 70, 110, 92}},   /* HAT OP */
+        {DX_MODE(DXW_SINE, DXF_LP, 1), {32, 20, 60, 4, 10}, {36, 30, 70, 8, 20}},   /* TOM */
+        {DX_MODE(DXW_SINE, DXF_BP, 1), {66, 4, 12, 20, 40}, {70, 8, 16, 30, 50}},   /* RIM */
+        {DX_MODE(DXW_SINE, DXF_BP, 0), {78, 0, 60, 0, 20}, {80, 0, 72, 4, 30}},   /* BELL */
+    },
+    {   /* GLITCH */
+        {DX_MODE(DXW_FM, DXF_LP, 1) | DXM_NOISE << 5, {12, 80, 56, 10, 60}, {18, 110, 64, 20, 90}},   /* KICK */
+        {DX_MODE(DXW_FM, DXF_BP, 0) | DXM_NOISE << 5, {50, 60, 40, 90, 100}, {58, 80, 48, 100, 110}},   /* SNARE */
+        {DX_MODE(DXW_METAL, DXF_HP, 0), {76, 20, 30, 110, 110}, {70, 30, 40, 120, 104}},   /* CLAP */
+        {DX_MODE(DXW_METAL, DXF_HP, 0) | DXM_NOISE << 5, {110, 30, 10, 80, 120}, {118, 50, 14, 90, 126}},   /* HAT CL */
+        {DX_MODE(DXW_BELL, DXF_HP, 0), {108, 20, 44, 80, 116}, {114, 30, 52, 90, 122}},   /* HAT OP */
+        {DX_MODE(DXW_FM, DXF_LP, 0) | DXM_NOISE << 5, {36, 90, 40, 10, 80}, {44, 110, 48, 20, 100}},   /* TOM */
+        {DX_MODE(DXW_BELL, DXF_HP, 1) | DXM_NOISE << 5, {84, 40, 10, 30, 80}, {90, 60, 14, 40, 100}},   /* RIM */
+        {DX_MODE(DXW_FM, DXF_BP, 0) | DXM_SINE << 5, {72, 50, 50, 0, 90}, {80, 70, 60, 10, 100}},   /* BELL */
+    },
+    {   /* TRIBAL */
+        {DX_MODE(DXW_SINE, DXF_LP, 1) | DXM_LONG << 5, {14, 50, 80, 0, 20}, {18, 64, 90, 4, 30}},   /* KICK */
+        {DX_MODE(DXW_SINE, DXF_BP, 1), {46, 40, 50, 40, 50}, {50, 50, 58, 50, 60}},   /* SNARE */
+        {DX_MODE(DXW_SINE, DXF_BP, 0), {58, 0, 40, 127, 72}, {54, 0, 48, 127, 66}},   /* CLAP */
+        {DX_MODE(DXW_METAL, DXF_BP, 0), {96, 0, 14, 110, 100}, {100, 0, 18, 120, 106}},   /* HAT CL */
+        {DX_MODE(DXW_METAL, DXF_BP, 0), {96, 0, 40, 110, 96}, {100, 0, 50, 120, 102}},   /* HAT OP */
+        {DX_MODE(DXW_SINE, DXF_LP, 1) | DXM_LONG << 5, {30, 60, 70, 4, 24}, {36, 80, 80, 8, 34}},   /* TOM */
+        {DX_MODE(DXW_BELL, DXF_BP, 1), {74, 10, 18, 4, 50}, {78, 16, 22, 10, 60}},   /* RIM */
+        {DX_MODE(DXW_BELL, DXF_BP, 0), {76, 0, 70, 0, 40}, {80, 0, 80, 4, 50}},   /* BELL */
+    },
+    {   /* LASER */
+        {DX_MODE(DXW_SINE, DXF_LP, 1), {10, 110, 70, 0, 30}, {14, 127, 80, 6, 50}},   /* KICK */
+        {DX_MODE(DXW_FM, DXF_BP, 0) | DXM_SINE << 5, {50, 70, 50, 80, 90}, {56, 90, 60, 90, 100}},   /* SNARE */
+        {DX_MODE(DXW_SINE, DXF_BP, 0), {62, 0, 44, 127, 86}, {58, 0, 54, 127, 80}},   /* CLAP */
+        {DX_MODE(DXW_METAL, DXF_HP, 0), {106, 0, 14, 90, 120}, {110, 0, 18, 100, 124}},   /* HAT CL */
+        {DX_MODE(DXW_METAL, DXF_HP, 0), {106, 0, 56, 90, 116}, {110, 0, 64, 100, 120}},   /* HAT OP */
+        {DX_MODE(DXW_SINE, DXF_LP, 1) | DXM_SINE << 5, {40, 100, 60, 0, 40}, {48, 120, 70, 0, 60}},   /* TOM */
+        {DX_MODE(DXW_FM, DXF_HP, 1) | DXM_SINE << 5, {90, 90, 20, 0, 80}, {96, 110, 26, 0, 100}},   /* RIM */
+        {DX_MODE(DXW_SINE, DXF_LP, 0) | DXM_SINE << 5, {70, 127, 50, 0, 40}, {80, 127, 60, 0, 60}},   /* BELL */
+    },
+};
+static const uint8_t DRUMX_PKIT[] = {0, 0, 1, 2, 3, 4, 5, 6, 7, 8};
+_Static_assert(sizeof DRUMX_PKIT == NELEM(DRUMX_PRESETS), "a kit (or none) per DRUM-X preset");
+_Static_assert(sizeof DX_KITS[0] == sizeof dx_kit, "a factory kit is a kit");
 
 static const engine_t ENG_DRUMX = {
     .name = "DRUM-X",

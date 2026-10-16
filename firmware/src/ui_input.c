@@ -766,10 +766,14 @@ static void edit_param(uint32_t slot, int32_t steps)
             select_engine(eng_step_for(song.sel, TSEL->eng_req, steps));   /* ((Skiff phase 6) what the track may play) */
         } else if (slot == 2u) {
             preset_mark(steps > 0);
-        } else if (slot == 3u && favorites.filter != (uint32_t)(steps > 0)) {
-            favorites.filter = steps > 0;
-            ui.force = 1;
-            settings_save();
+        } else if (slot == 3u) {                          /* LIST: ALL, FAV, (Skiff phase 9) then the types (ui.c) */
+            uint32_t v = (uint32_t)clamp((int32_t)list_mode() + steps, 0, PT_N);
+            if (v != list_mode()) {
+                favorites.filter = v == 1u;
+                ui_ptag = (uint8_t)(v > 1u ? v - 1u : 0u);
+                ui.force = 1;
+                settings_save();
+            }
         }
         return;
     }

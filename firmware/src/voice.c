@@ -250,6 +250,7 @@ static void voice_start(track_t *t, voice_t *v, uint32_t note, uint32_t vel, int
     v->gate = 1;
     v->active = 1;
     v->stage = 1;
+    v->stage2 = 1;                                      /* ((Skiff phase 9) ENV 2: its attack, from where it is) */
     v->age = ++vage;
     v->pitch16 = (int32_t)note * 16;
     v->mvel = t->m_vel;                                 /* mod.c: the note's VEL and RAND */
@@ -259,6 +260,7 @@ static void voice_start(track_t *t, voice_t *v, uint32_t note, uint32_t vel, int
     if (!sounding) {
         v->env = 0;
         v->env_out = 0;
+        v->env2 = 0;
     }                                                   /* sounding: the attack starts from the current level */
     e->note_on(t, v);
     if (sounding && !e->sampled) {                     /* retrigger / steal: keep phases and filter */
@@ -458,8 +460,8 @@ static void engine_block(track_t *t)
         for (i = 0; i < NVOICE; i++) {                  /* faded to 0: gone */
             voice_t *v = &t->v[i];
             v->active = v->gate = 0;
-            v->stage = 0;
-            v->env = v->env_out = 0;
+            v->stage = v->stage2 = 0;
+            v->env = v->env_out = v->env2 = 0;
         }
         t->engine = eng_idx(t->eng_req);
         memset(eng_part(t), 0, eng_size(t));          /* (Skiff) the part's shared engine area, the new engine's now: from
@@ -512,6 +514,38 @@ static int32_t env_tick(track_t *t, voice_t *v)
         break;
     }
     return v->env >> 9;
+}
+
+/* (Skiff phase 9) one control tick of ENV 2 (P_EG2_ATK .. REL): the amplitude envelope's twin, a MOD source only (mod.c
+ * MS_ENV2), ticked while a slot uses it; its release starts when the gate goes (where the amp envelope's is set), its end
+ * ends nothing */
+static __attribute__((noinline)) void env2_tick(track_t *t, voice_t *v)   /* (out of line: the ISR's loops stay as they were) */
+{
+    const int16_t *p = t->p;
+    if (!v->gate && v->stage2 && v->stage2 < 3u)
+        v->stage2 = 3;
+    switch (v->stage2) {
+    case 1:
+        v->env2 += (int32_t)ENV_LIN[p[P_EG2_ATK] & 127];
+        if (v->env2 >= (1 << 24)) {
+            v->env2 = 1 << 24;
+            v->stage2 = 2;
+        }
+        break;
+    case 2:
+        v->env2 += mulq16(((int32_t)p[P_EG2_SUS] << 17) - v->env2, ENV_EXP[p[P_EG2_DEC] & 127]);
+        break;
+    case 3:
+        v->env2 -= mulq16(v->env2, ENV_EXP[p[P_EG2_REL] & 127]);
+        if (v->env2 < (1 << 12)) {
+            v->env2 = 0;
+            v->stage2 = 0;
+        }
+        break;
+    default:
+        v->env2 = 0;
+        break;
+    }
 }
 
 /* render one block of a part into out (cleared here); returns the voices rendered */
@@ -598,8 +632,11 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
         if (v->vel > 110)                               /* accent opens the filter with the env */
             m.cutoff += (m.envq15 * 24) >> 7;
         m.shape = (64 << 8) + ((lfo * p[P_LD_SHP]) >> 7) + ((m.envq15 * p[P_ED_SHP]) >> 7);
-        if (mod.on)                                     /* the modulation matrix (mod.c) */
+        if (mod.on) {                                   /* the modulation matrix (mod.c) */
+            if (mod.env2)                               /* ((Skiff phase 9) a slot's ENV2) */
+                env2_tick(t, v);
             mod_voice(t, v, &m, v->fine + tune_fine + bend_fine);
+        }
         e->render(t, v, out, n, &m);
         nr++;
     }

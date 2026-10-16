@@ -88,6 +88,8 @@ EXTRA = {
     # OCT UP / OCT DN (the harmonizer): stand-ins until Fukiai has a pitch-shift glyph;
     # the first of each tuple the font has
     "x_oct_up": ("symbol_pitch_up", "control_arrow_up"), "x_oct_dn": ("symbol_pitch_down", "control_arrow_down"),
+    # (Skiff phase 9) GATE, DUB, FLANGE, VINYL: a pulse (the chop), echoes trailing off, a comb, a record
+    "x_chop": "waveform_pulse_half", "x_dub": "symbol_echo_oval", "x_flange": "function_filter_comb", "x_vinyl": "symbol_disc",
     # a missing sample (the header message, the SLICES page): SAMPLE NOT FOUND
     "x_nofile": "symbol_document_disabled",
     # the MENU's tabs (ui_menu.c, 1.0.5): DISPLAY (CONTROL x_knob, AUDIO x_speaker, SYSTEM x_cog)
@@ -114,7 +116,8 @@ NOT_DRAWN = ["tape"]
 # the 24 px set: the header battery (Fukiai's battery is a wide, short glyph: at 16 px its body was 12 x 6)
 # and the FX map's effect cells (ui_layer.c layer_fx: the icon alone, no name)
 HUGE_DEFAULT = ["x_bat0", "x_bat1", "x_bat3", "x_bat4", "x_bat_chg", "x_usb",   # (+ the USB-C plug: as flat)
-                "x_repeat", "x_reverse", "cutoff", "x_hpf", "x_tstop", "x_freeze", "x_oct_up", "x_oct_dn"]
+                "x_repeat", "x_reverse", "cutoff", "x_hpf", "x_tstop", "x_freeze", "x_oct_up", "x_oct_dn",
+                "x_chop", "x_dub", "x_flange", "x_vinyl"]
 
 # the 16 px set: header, footer, dialogs and menu rows (everything else only exists at 12 px)
 # (1.0.5: the MENU rows lost their icons, the tabs carry them)

@@ -256,8 +256,8 @@ static void drum_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     drum_lane_t *L = drum_lane_of(t, v);
     dv_param_t k;
     int32_t y[CTL], mb[CTL], acc = clamp(p[P_E5] * v->vel * 4, 0, 65536), drv = p[P_E7], g = 0, mk = 0;   /* acc Q16 */
-    int32_t lv = clamp(p[P_LN0 + ((uint32_t)v->s[0] & (DV_NLANE - 1u))], 0, 127);
-    uint32_t i, r;
+    uint32_t ln = (uint32_t)v->s[0] & (DV_NLANE - 1u), i, r;
+    int32_t lv = clamp(p[P_LN0 + ln], 0, 127);
     vmod_t ml;                                           /* (only its amplitude ramp is read: voice_amp) */
     if (!L)
         return;
@@ -272,11 +272,11 @@ static void drum_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
         n = CTL;
     r = L->role;
     dv_default(&k, r);                                   /* the knobs move every lane from its design (64) */
-    k.decay = (uint8_t)clamp(k.decay + p[P_E3] - 64, 0, 127);
-    k.tone = (uint8_t)clamp(k.tone + p[P_E2] - 64, 0, 127);
+    k.decay = (uint8_t)clamp(k.decay + p[P_E3] - 64 + p[P_LDECAY0 + ln], 0, 127);   /* ((Skiff phase 9) and the */
+    k.tone = (uint8_t)clamp(k.tone + p[P_E2] - 64, 0, 127);                              /* lane its own: LANES) */
     k.extra = (uint8_t)clamp(k.extra + p[P_E4] - 64, 0, 127);
     k.accent = (uint8_t)clamp(acc >> 9, 0, 127);         /* (Q16 -> 0..127) */
-    k.tune = (int16_t)(L->st * 16 + (p[P_E1] - 64) * 3);   /* +-12 semitones */
+    k.tune = (int16_t)(L->st * 16 + (p[P_E1] - 64) * 3 + (p[P_LTUNE0 + ln] - 64) * 3);   /* +-12 semitones, each */
     if (((const uint32_t *)&k)[0] != ((const uint32_t *)&L->key)[0] ||
         ((const uint32_t *)&k)[1] != ((const uint32_t *)&L->key)[1]) {
         dv_setup(&L->c, &k);                             /* (a parameter moved) */
@@ -308,10 +308,18 @@ static int32_t drum_keys(const track_t *t, uint32_t k)
 
 /* {KIT, TUNE, TONE, DECY, SNAP, ACC, KICK, DRV}; every kit suggests the BEAT pattern (GM notes) */
 static const preset_t DRUM_PRESETS[] = {
-    {"DRUM KIT", DRUM_KIT_E, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 20)},   /* (core.h: SAMPLE PERC's too) */
+    {"DRUM KIT", DRUM_KIT_E, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 20), TAG(PT_DRUM)},   /* (core.h: SAMPLE PERC's too) */
     /* (Skiff) for the themes: CRYPT (dungeon synth), NEON (synthwave), QUARK (particles) */
-    {"WAR DRUMS", {0, 40, 38, 108, 40, 110, 1, 24}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 75)},
-    {"NEON KIT", {4, 60, 80, 56, 90, 100, 0, 20}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 40)},
+    {"WAR DRUMS", {0, 40, 38, 108, 40, 110, 1, 24}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 75), TAG(PT_DRUM)},
+    {"NEON KIT", {4, 60, 80, 56, 90, 100, 0, 20}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 40), TAG(PT_DRUM)},
+    /* (Skiff phase 9) more for every engine: basses, kits */
+    {"BOOM KIT", {4, 58, 60, 100, 50, 100, 0, 10}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 25), TAG(PT_DRUM)},
+    {"CRISP KIT", {5, 64, 76, 60, 80, 100, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 20), TAG(PT_DRUM)},
+    {"RHYTHM BOX", {6, 66, 64, 56, 64, 100, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 20), TAG(PT_DRUM)},
+    {"ELECTRO KIT", {7, 64, 70, 60, 70, 100, 0, 15}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 20), TAG(PT_DRUM)},
+    {"STUDIO KIT", {8, 64, 64, 64, 64, 100, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 25), TAG(PT_DRUM)},
+    {"TIGHT KIT", {0, 70, 80, 30, 100, 110, 0, 10}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 12), TAG(PT_DRUM)},
+    {"LOFI KIT", {0, 56, 30, 70, 40, 100, 1, 50}, {0, 100, 127, 100}, 0, 0, FX(20, 0, 0, 30), TAG(PT_DRUM)},
 };
 
 static const engine_t ENG_DRUM = {

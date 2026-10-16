@@ -142,6 +142,23 @@ int main(void)
             printf("%s%d", i ? "," : "", DX_KIT_DEF[k].b[i]);
         printf("]]");
     }
+    printf("],\n\"DX_KITS\":[");                     /* (Skiff phase 9) the kits a DRUM-X preset loads (eng_drumx.c) */
+    for (e = 0; e < NELEM(DX_KITS); e++) {
+        printf("%s[", e ? "," : "");
+        for (k = 0; k < 8u; k++) {
+            printf("%s[%d,[", k ? "," : "", DX_KITS[e][k].mode);
+            for (i = 0; i < DXP_N; i++)
+                printf("%s%d", i ? "," : "", DX_KITS[e][k].a[i]);
+            printf("],[");
+            for (i = 0; i < DXP_N; i++)
+                printf("%s%d", i ? "," : "", DX_KITS[e][k].b[i]);
+            printf("]]");
+        }
+        printf("]");
+    }
+    printf("],\n\"DRUMX_PKIT\":[");
+    for (k = 0; k < NELEM(DRUMX_PKIT); k++)
+        printf("%s%d", k ? "," : "", DRUMX_PKIT[k]);
     printf("],\n\"FM4\":{\"presets\":[");             /* DIGITAL (retired): its presets and conversions (fm4_convert.c) */
     for (k = 0; k < FM4_NPRESETS; k++) {
         const preset_t *p = &DIGITAL_PRESETS[k];

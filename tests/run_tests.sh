@@ -242,6 +242,8 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "FX layer effects: on the 1/16, stereo, too-long REPEAT, SLICER, silent keys, idle bit-identical, clicks, OCT UP / DN, cost, demos" "$OUT/perform_test" build/perform_demo build/fx_demo
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/duck_test" tests/duck_test.c -lm
     run "ducking (Skiff): under the source's hits (a kit's KICK only), DEPTH, RELEASE, no click, OFF bit-identical" "$OUT/duck_test"
+    $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/drive_test" tests/drive_test.c -lm
+    run "DRIVE (Skiff phase 9): DIST's TYPE SOFT HARD FOLD BITS and TONE; SOFT at TONE 0 as before, bit for bit" "$OUT/drive_test"
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/reverb_test" tests/reverb_test.c -lm
     run "REVERB TYPE: ROOM bit-identical, SPRING decay / chirp / stability / level, model change, cost, demos" "$OUT/reverb_test" build/fx_demo
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/regress" tests/regress.c -lm
@@ -278,6 +280,7 @@ if [ -f build/gen/felucca_tables.h ]; then
     # SLICE is in the standard build (firmware/src/core.h): its test always runs (after #22 by andreahaku)
     if grep -q '^#define SLC_BREAK_BPM ' build/gen/felucca_samples.h; then
         mkdir -p build/slice_demo
+        python3 tools/gen_waves.py build/genwav >/dev/null      # (the loop's drums; the BREAK no longer uses them)
         python3 tests/slice_loop.py build/slice_demo/loop
         python3 tools/fm1_sample_upload.py build LOOP build/slice_demo/loop build/slice_demo/loop.wav:60 >/dev/null
         $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/slice_test" tests/slice_test.c -lm

@@ -337,6 +337,192 @@ static void test_switch(void)
     check("  and back to ROOM", fx.rtype == 0);
 }
 
+/* --------------------------------------------------------------- HALL --- */
+/* (Skiff phase 9) HALL (G_RTYPE 2), ROOM's network at half the rate: a longer tail than ROOM's at the same SIZE (RT60
+ * 1.6x at least), stable at the corners (full-scale noise, then silence: bounded, dies away), its level within 6 dB
+ * of ROOM's, a change to it and back while the bus rings without a click */
+static void model_run(uint32_t m, const int32_t *x, uint32_t len, uint32_t n)   /* model m's response into ir[] */
+{
+    static int32_t in[CTL];
+    uint32_t t, i;
+    for (t = 0; t < n; t += CTL) {
+        for (i = 0; i < CTL; i++) {
+            in[i] = t + i < len ? x[t + i] : 0;
+            ir[t + i] = 0;
+        }
+        rev_model(m, in, ir + t, CTL);
+    }
+}
+static void test_hall(void)
+{
+    static int32_t imp[1] = {200000}, burst[2u * FS];
+    static const int16_t SZ[2] = {64, 127};
+    double rr[2], rh[2], er = 0, eh = 0;
+    char what[200];
+    uint32_t k, i;
+    host_tracks_init();
+    for (k = 0; k < 2u; k++) {
+        song.g[G_RSIZE] = SZ[k];
+        song.g[G_RDAMP] = 60;
+        rev_clear();
+        model_run(0, imp, 1, IRN);
+        rr[k] = rt60(ir, IRN);
+        rev_clear();
+        model_run(2, imp, 1, IRN);
+        rh[k] = rt60(ir, IRN);
+    }
+    snprintf(what, sizeof what, "HALL (phase 9): a longer tail than ROOM's: RT60 %.2f s (ROOM %.2f) at SIZE 64, %.2f (%.2f) at 127",
+             rh[0], rr[0], rh[1], rr[1]);
+    check(what, rh[0] >= 1.6 * rr[0] && rh[1] >= 1.6 * rr[1] && rh[1] < 12.0);
+    for (k = 0; k < 2u; k++) {
+        int32_t pk = 0, tail = 0;
+        for (i = 0; i < 2u * FS; i++)
+            burst[i] = noise(1 << 19);
+        song.g[G_RSIZE] = 127;
+        song.g[G_RDAMP] = k ? 127 : 0;
+        rev_clear();
+        model_run(2, burst, 2u * FS, IRN);
+        for (i = 0; i < IRN; i++) {
+            int32_t v = abs(ir[i]);
+            pk = v > pk ? v : pk;
+            if (i >= IRN - FS)
+                tail = v > tail ? v : tail;
+        }
+        snprintf(what, sizeof what, "  at SIZE 127 DAMP %d: 2 s of full-scale noise: peak %d, the last second %d", k ? 127 : 0,
+                 pk, tail);
+        check(what, pk <= 6 * 32768 && tail * 100 < pk);
+    }
+    song.g[G_RSIZE] = 90;
+    song.g[G_RDAMP] = 60;
+    for (k = 0; k < 2u; k++) {                          /* the level against ROOM's: the same burst, defaults */
+        static int32_t in[CTL], o[CTL];
+        uint32_t t;
+        rev_clear();
+        xs = 99;
+        for (t = 0; t < 2u * FS; t += CTL) {
+            for (i = 0; i < CTL; i++) {
+                in[i] = t < FS / 4u ? noise(20000) : 0;
+                o[i] = 0;
+            }
+            rev_model(k ? 2u : 0u, in, o, CTL);
+            for (i = 0; i < CTL; i++)
+                *(k ? &eh : &er) += (double)o[i] * o[i];
+        }
+    }
+    snprintf(what, sizeof what, "  its tail %.1f dB from ROOM's (the same burst, SIZE 90 DAMP 60)", 10 * log10(eh / er));
+    check(what, fabs(10 * log10(eh / er)) <= 6.0);
+    {   /* ROOM -> HALL while the tail rings, and back */
+        static int32_t c[CTL], d[CTL], r[CTL], w[CTL];
+        uint32_t b;
+        int32_t prev = 0, step = 0, own = 0;
+        rev_clear();
+        memset(dly_buf, 0, sizeof dly_buf);
+        memset(cho_buf, 0, sizeof cho_buf);
+        fx.rtype = 0;
+        song.g[G_RTYPE] = 0;
+        for (b = 0; b < 3u * FS / CTL; b++) {
+            if (b == 2u * FS / CTL)
+                song.g[G_RTYPE] = 2;
+            for (i = 0; i < CTL; i++) {
+                c[i] = d[i] = 0;
+                r[i] = b < FS / CTL ? (int32_t)(30000 * sin(2 * M_PI * 220 * (b * CTL + i) / FS)) : 0;
+            }
+            fx_buses(c, d, r, w, CTL);
+            for (i = 0; i < CTL; i++) {
+                int32_t s = abs(w[i] - prev);
+                if (b >= 2u * FS / CTL - 4u && b <= 2u * FS / CTL + 4u)
+                    step = s > step ? s : step;
+                else if (b > FS / CTL + 100u && b < 2u * FS / CTL - 4u)
+                    own = s > own ? s : own;
+                prev = w[i];
+            }
+        }
+        k = fx.rtype;
+        song.g[G_RTYPE] = 0;
+        fx_buses(c, d, r, w, CTL);
+        snprintf(what, sizeof what, "  ROOM -> HALL while the tail rings: largest step %d (the tail's own %d); and back", step, own);
+        check(what, step <= 2 * own + 64 && k == 2u && fx.rtype == 0);
+    }
+    rev_clear();
+}
+
+/* ------------------------------------------------------- CHORUS's MODE --- */
+/* (Skiff phase 9) GLO > CHORUS MODE and FEEDBACK (fx.c cho_mode), the bus alone (the delay and the reverb silent):
+ * FLANGER at DEPTH 0 echoes an impulse 1 ms later (44 samples), with FEEDBACK again every 44, each echo the feedback's
+ * share of the one before; PHASER, four allpasses, keeps an impulse's energy (within 1 dB); every MODE at FEEDBACK 127
+ * under 2 s of full-scale noise: bounded, 34 dB down a second after */
+static void bus_run(const int32_t *x, uint32_t len, uint32_t n)
+{
+    static int32_t c[CTL], z[CTL];
+    uint32_t t, i;
+    for (t = 0; t < n; t += CTL) {
+        for (i = 0; i < CTL; i++) {
+            c[i] = t + i < len ? x[t + i] : 0;
+            z[i] = 0;
+        }
+        fx_buses(c, z, z, ir + t, CTL);
+    }
+}
+static void bus_fresh(int16_t mode, int16_t depth, int16_t fb)
+{
+    host_tracks_init();
+    rev_clear();
+    memset(dly_buf, 0, sizeof dly_buf);
+    memset(cho_buf, 0, sizeof cho_buf);
+    fx.cho_w = fx.cho_ph = 0;
+    fx.cho_y = 0;
+    memset(fx.ph_s, 0, sizeof fx.ph_s);
+    song.g[G_CMODE] = mode;
+    song.g[G_CDEPTH] = depth;
+    song.g[G_CFDBK] = fb;
+}
+static void test_chorus_modes(void)
+{
+    static int32_t imp[1] = {40000}, burst[2u * FS];
+    char what[200];
+    uint32_t i, at = 0, m;
+    int32_t pk = 0, e2 = 0;
+    double ei = 0, eo = 0;
+    bus_fresh(1, 0, 0);
+    bus_run(imp, 1, FS / 10u);
+    for (i = 0; i < FS / 10u; i++)
+        if (abs(ir[i]) > pk) {
+            pk = abs(ir[i]);
+            at = i;
+        }
+    bus_fresh(1, 0, 100);
+    bus_run(imp, 1, FS / 10u);
+    for (i = 80u; i < 100u; i++)
+        e2 = abs(ir[i]) > e2 ? abs(ir[i]) : e2;
+    snprintf(what, sizeof what, "FLANGER (phase 9) at DEPTH 0: an impulse echoed at %u samples (1 ms: 44); FEEDBACK 100: "
+             "the next %d (%.2f of the first)", at, e2, (double)e2 / (pk + 1e-9));
+    check(what, at >= 43u && at <= 46u && pk > 30000 && e2 > pk * 0.6 && e2 < pk * 0.85);
+    bus_fresh(2, 64, 0);
+    bus_run(imp, 1, FS / 2u);
+    for (i = 0; i < FS / 2u; i++)
+        eo += (double)ir[i] * ir[i];
+    ei = (double)imp[0] * imp[0];
+    snprintf(what, sizeof what, "PHASER: four allpasses keep an impulse's energy: %.2f dB", 10 * log10(eo / ei));
+    check(what, fabs(10 * log10(eo / ei)) < 1.0);
+    for (m = 0; m < 3u; m++) {
+        int32_t big = 0, tail = 0;
+        for (i = 0; i < 2u * FS; i++)
+            burst[i] = noise(1 << 17);
+        bus_fresh((int16_t)m, 127, 127);
+        bus_run(burst, 2u * FS, 4u * FS);
+        for (i = 0; i < 4u * FS; i++) {
+            int32_t v = abs(ir[i]);
+            big = v > big ? v : big;
+            if (i >= 3u * FS)
+                tail = v > tail ? v : tail;
+        }
+        snprintf(what, sizeof what, "  %s at FEEDBACK 127, DEPTH 127: 2 s of full-scale noise: peak %d, the last second %d",
+                 (const char *[]){"CHORUS", "FLANGER", "PHASER"}[m], big, tail);
+        check(what, big <= 4 * 65536 && tail * 50 < big);   /* (-34 dB a second on: dying away) */
+    }
+    bus_fresh(0, 60, 0);
+}
+
 /* ---------------------------------------------------------------- cost --- */
 static double cost_of(int what)              /* 0 rev_room, 1 rev_spring, 2 fx_buses ROOM, 3 fx_buses SPRING */
 {
@@ -432,6 +618,8 @@ int main(int argc, char **argv)
     test_spring();
     test_clear();
     test_switch();
+    test_hall();
+    test_chorus_modes();
     test_cost();
     if (argc > 1) {
         demo(argv[1], "spring_drums", 1, 0);

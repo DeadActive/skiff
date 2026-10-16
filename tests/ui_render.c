@@ -716,6 +716,8 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_LFO_DEST, S_VOICE2, S_VOICE2_UNI, S_ARP_ON, S_ARP2, S_EDIT_FLT, S_GLOBAL_SWING, S_VOICE_GLIDE,   /* (Skiff U5) */
        S_SHIFT_ENV, S_SHIFT_STEP, S_SHIFT_HOME, S_LFO_RUN, S_LFO_DEST_RUN, S_HOME_SCOPE,
        S_FM_TONE, S_FM_ENV, S_FM_KEYS, S_FM_ALGO, S_FM_PITCH, S_FM_LFO, S_FM_INIT,   /* (FM6 LAB) */
+       S_DRIVE_SOFT, S_DRIVE_HARD, S_DRIVE_FOLD, S_DRIVE_BITS, S_ENV2, S_LANES_TUNE, S_REVERB_HALL, S_CHORUS_FB,
+       S_CHORUS_FLANGER, S_CHORUS_PHASER, S_PRESETS_BASS,                                     /* (Skiff phase 9) */
        S_MOCK_HOME, S_MOCK_PRESETS, S_MOCK_SEQ, S_MOCK_DRUM, S_MOCK_MIXER, S_MOCK_DIALOG, S_MOCK_MENU, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "project", "lanes", "step", "pattern", "chance", "motion", "drum",
@@ -743,6 +745,8 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "lfo_dest", "voice_2", "voice_2_uni", "arp_on", "arp_2", "edit_flt", "global_swing", "voice_glide",
     "shift_env", "shift_step", "shift_home", "lfo_run", "lfo_dest_run", "home_scope",
     "fm_op_tone", "fm_op_env", "fm_op_keys", "fm_all_algo", "fm_all_pitch", "fm_all_lfo", "fm_init",
+    "drive_soft", "drive_hard", "drive_fold", "drive_bits", "env_2", "lanes_tune", "reverb_hall", "chorus_feedback",
+    "chorus_flanger", "chorus_phaser", "presets_bass",
     "mock_home", "mock_presets", "mock_seq", "mock_drum", "mock_mixer", "mock_dialog", "mock_menu"};
 
 /* the scenes of the UI design screens: the state the UI-redesign
@@ -909,6 +913,19 @@ static void setup(int s)
     case S_USER: song.playing = 0; up_store(3, "MY LONG BASS NAME"); up_store(4, "PAD"); ui.uslot = 3; go_page(GR_USER); break;
     case S_PROJECT: song.playing = 0; project_save(1); song.g[G_SLOT] = 2; go_page(GR_SLOTS); ui.act = 4; break;
     case S_LANES: drum(0); go_title("LANES"); ui.lane = 1; ui.hot_col = 1; ui.hot_t = 30; break;   /* ((U3, R6) the one page) */
+    case S_DRIVE_SOFT: case S_DRIVE_HARD: case S_DRIVE_FOLD: case S_DRIVE_BITS:   /* (Skiff phase 9) each TYPE at 96 */
+        TSEL->p[P_DIST] = 96; TSEL->p[P_DTYPE] = (int16_t)(s - S_DRIVE_SOFT); TSEL->p[P_DTONE] = -20;
+        go_title("DRIVE"); ui.hot_col = 1; ui.hot_t = 30; break;
+    case S_ENV2: TSEL->p[P_EG2_ATK] = 30; TSEL->p[P_EG2_DEC] = 70; TSEL->p[P_EG2_SUS] = 40; TSEL->p[P_EG2_REL] = 60;
+        go_title("ENV 2"); break;
+    case S_LANES_TUNE: drum(0); go_title("LANES"); ui.lane = 1; TSEL->p[P_LTUNE0 + 1] = 80; TSEL->p[P_LDECAY0 + 1] = -24;
+        ui.hot_col = 2; ui.hot_t = 30; break;
+    case S_REVERB_HALL: go_title("REVERB"); song.g[G_RTYPE] = 2; ui.hot_col = 0; ui.hot_t = 30; break;
+    case S_CHORUS_FB: go_title("CHORUS"); song.g[G_CFDBK] = 70; ui.hot_col = 3; ui.hot_t = 30; break;
+    case S_CHORUS_FLANGER: case S_CHORUS_PHASER:
+        go_title("CHORUS"); song.g[G_CMODE] = (int16_t)(s == S_CHORUS_FLANGER ? 1 : 2); song.g[G_CFDBK] = 60;
+        ui.hot_col = 2; ui.hot_t = 30; break;
+    case S_PRESETS_BASS: ui_ptag = PT_BASS; go_page(GR_BROWSE); break;
     case S_STEP: song.rec = 1; go_page(GR_ROLL); ui.cursor = 6; break;
     case S_PATTERN: my_steps(TSEL); go_title("PATTERN"); ui.cursor = 3; break;   /* ((Skiff S1) with notes) */
     case S_CHANCE: go_page(GR_CHANCE); step_set_chance(&TSEL->step[0], 65); break;

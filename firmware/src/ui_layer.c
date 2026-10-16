@@ -735,17 +735,21 @@ static uint32_t layer_leds(uint32_t *br)
  * REPEATs' division in the other corner); the footer the keycaps. A cell: RAISE
  * (can be pressed), the selection's fill (the value now, SET), the accent (held, HOLD), DIM (cannot now: pressing
  * it says why), KEY (a muted track, as the MUTE badge); HOLD cells in a SET layer: a corner triangle */
-static const char *const PF_DIV[3] = {"1/8", "1/16", "1/32"};   /* the REPEATs (the other effects: their icon alone) */
+static const char *const PF_DIV[3] = {"8", "16", "32"};   /* the REPEATs' 1/8 1/16 1/32 ((Skiff phase 9) 30 px cells: the
+                                                           * "1/" off); the other effects: their icon alone */
 static const uint8_t PF_ICON[PF_M1] = {ICON_X_REPEAT, ICON_X_REPEAT, ICON_X_REPEAT, ICON_X_REVERSE, ICON_CUTOFF,
-    ICON_X_HPF, ICON_X_TSTOP, ICON_X_FREEZE, ICON_X_OCT_UP, ICON_X_OCT_DN};
+    ICON_X_HPF, ICON_X_TSTOP, ICON_X_FREEZE, ICON_X_OCT_UP, ICON_X_OCT_DN, ICON_X_CHOP, ICON_X_DUB, ICON_X_FLANGE,
+    ICON_X_VINYL};
 static const char W_NOTE[16] = {'F', 'G', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'A', 'B', 'C', 'D', 'E', 'F', 'G'};
 static const char B_NOTE[] = {'F', 'G', 'A', 'C', 'D', 'F'};   /* black keys 1..6: F# G# A# C# D# F# (the MUTEs) */
 _Static_assert(sizeof B_NOTE >= NTRK, "a black key's name for every track");
 #define LC_X(c) (6 + 58 * (int32_t)(c))                 /* cell column c: 54 px wide, 4 px apart */
 #define LC_W 54
 #define LC_H 42                                          /* the big cells: rows at y 4 and 50 */
-#define LF_X(c) (7 + 46 * (int32_t)(c))                 /* FX: the 10 effects, 5 a row (F3 .. C4, D4 .. A4), 42 px: x 7 .. 233 */
-#define LF_W 42
+#define LF_X(c) (6 + 33 * (int32_t)(c))                 /* FX: the 14 effects, 7 a row (an octave each: F3 .. E4, F4 ..
+                                                         * E5), 30 px: x 6 .. 234 ((Skiff phase 9) were 10, 5 a row) */
+#define LF_W 30
+#define LF_ROW 7u
 #define LM_Y 96                                          /* the black keys' row (22 px) */
 #define LM_H 22
 enum { LS_OFF, LS_SEL, LS_HELD, LS_WAIT, LS_DIM, LS_MUTE };
@@ -787,14 +791,16 @@ static uint16_t lc_box(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t fill
 static void lcell(int32_t x, int32_t y, int32_t h, const char *note, uint32_t icon, const char *name, uint32_t st)
 {
     uint16_t ink, fill = lc_fill(st, &ink), idle = fill == T_RAISE;
+    int32_t in = lc_w < 40 ? 3 : 5;                        /* ((Skiff phase 9) FX's 30 px cells: the note and a REPEAT's
+                                                            * division 3 px in, apart) */
     fill = lc_box(x, y, lc_w, h, fill);
     if (note)                                              /* (a 28 px cell, SEQ TOOLS: y + 1, Barlow's 10 px capitals */
-        cv_text_on(x + 5, y + (h > 24 && h <= 30 ? 1 : 3), &AF_S, note, idle ? T_MID : ink, fill);   /* clear its name) */
+        cv_text_on(x + in, y + (h > 24 && h <= 30 ? 1 : 3), &AF_S, note, idle ? T_MID : ink, fill);   /* clear its name) */
     if (h > 30) {
         GFX_HOOK_ALIGN(x, 0, x + lc_w, 0, AL_H, "FX cell icon centred across");
         cv_icon_on(x + (lc_w - 24) / 2, y + h - 25, 24, icon, ink, fill);   /* (its ink: rows 3 .. 20 of 24) */
         if (name)
-            cv_text_r(x + lc_w - 5, y + 3, &AF_S, name, ink, fill);
+            cv_text_r(x + lc_w - in, y + 3, &AF_S, name, ink, fill);
     } else if (h > 24) {                                   /* SEQ TOOLS: the icon (12 px) over the name, 2 px between, */
         int32_t b[4], t;                                   /* centred by ink (the icon at a side) */
         icon_ink(12, icon, b);
@@ -877,12 +883,12 @@ static void layer_fx(void)
     uint32_t held = perf_kill ? 0u : perf_held | perf_latched, act = perf_act, ok = perf_avail(), e;
     char n[3] = {0, 0, 0};
     lc_w = LF_W;
-    for (e = 0; e < PF_M1; e++) {                       /* the effects of the white keys F3 .. A4, 5 a row */
-        if (e % 5u == 0u)
-            GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H | AL_CELLS | AL_N(5), "FX cells' row centred");
+    for (e = 0; e < PF_M1; e++) {                       /* the effects of the white keys F3 .. E5, an octave a row */
+        if (e % LF_ROW == 0u)
+            GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H | AL_CELLS | AL_N(LF_ROW), "FX cells' row centred");
         uint32_t st = !((ok >> e) & 1u) ? LS_DIM : !((held >> e) & 1u) ? LS_OFF : (act >> e) & 1u ? LS_HELD : LS_WAIT;
         n[0] = W_NOTE[e];
-        lcell(LF_X(e % 5u), e < 5u ? 4 : 50, LC_H, n, PF_ICON[e], e < 3u ? PF_DIV[e] : 0, st);
+        lcell(LF_X(e % LF_ROW), e < LF_ROW ? 4 : 50, LC_H, n, PF_ICON[e], e < 3u ? PF_DIV[e] : 0, st);
     }
     lc_w = LC_W;
     for (e = 0; e < NTRK; e++)                          /* the cuts of the black keys 1..6, while held ((Skiff U2, */
