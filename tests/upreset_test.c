@@ -40,7 +40,7 @@ static uint32_t put_frame(uint8_t *a, uint32_t slot, uint32_t eng, const char *n
         a[n++] = (uint8_t)name[i];
     a[n++] = 0;
     for (i = 0; i < P_COUNT; i++) {
-        uint32_t u = (uint32_t)(base + (int32_t)i + 8192);
+        uint32_t u = (uint32_t)(base + (int32_t)(i % 100u) + 8192);   /* ((1.3) P_COUNT past 127: values in range) */
         a[n++] = u & 127u;
         a[n++] = (u >> 7) & 127u;
     }
@@ -66,7 +66,7 @@ int main(void)
                                       up_valid(&r) && !memcmp(r.name, "Bass One", 8) && !r.name[8]);
     ok = 1;
     for (i = 0; i < P_COUNT; i++)
-        ok &= up_value(&r, i) == (int16_t)(-40 + (int32_t)i);
+        ok &= up_value(&r, i) == (int16_t)(-40 + (int32_t)(i % 100u));
     bad += check("UP_PUT values (negative v14 too)", ok);
     bad += check("pattern: rest drops flags, tie has no note",
                  r.note[0] == 0 && r.flags[0] == 0 && r.note[1] == 41 && r.flags[1] == 1 && r.note[3] == 0 &&
@@ -91,7 +91,7 @@ int main(void)
                                                         r.engine == ENGI_DIGITAL && up_valid(&r));
     up_migrate(&r);
     bad += check("  a bank read keeps it engine 1 (its values DIGITAL's)", r.engine == ENGI_DIGITAL && up_value(&r, P_E4) ==
-                                                                       (int16_t)P_E4);
+                                                                       (int16_t)(P_E4 % 100u));
     n = put_frame(a, 0, 0, "", 0);
     bad += check("UP_PUT empty name -> args", up_parse(a, n, &r, &slot) == 1);
     n = put_frame(a, 0, 0, "THIRTEEN CHRS", 0);
@@ -264,13 +264,13 @@ int main(void)
         def[i] = (int16_t)(1000 + i);
     r.np = P_COUNT - 2u;
     for (i = 0; i < P_COUNT; i++)
-        up_set_value(&r, i, (int16_t)i);
+        up_set_value(&r, i, (int16_t)(i % 100u));
     up_params(&r, v, def);
     ok = 1;
     for (i = 0; i < P_E0; i++)
-        ok &= v[i] == (i < P_E0 - 2u ? (int16_t)i : def[i]);
+        ok &= v[i] == (i < P_E0 - 2u ? (int16_t)(i % 100u) : def[i]);
     for (i = 0; i < 8u; i++)
-        ok &= v[P_E0 + i] == (int16_t)(P_E0 - 2u + i);
+        ok &= v[P_E0 + i] == (int16_t)((P_E0 - 2u + i) % 100u);
     bad += check("np < P_COUNT: mapped by count", ok);
     /* a record saved before the SLICER (P_COUNT 53, P_E0 45): the four SLICER parameters (just
      * before P_E0) take their defaults, everything else keeps its id */
@@ -280,8 +280,9 @@ int main(void)
         r.p[i] = (int16_t)(2000 + i);
     up_params(&r, v, def);
     ok = P_SLCR == 45 && P_SLDEPTH + 1 == P_M1SRC && P_M4AMT + 1 == P_FM1_ATK && P_FM4_LEVEL + 1 == P_CHRD &&
-         P_VOIC + 1 == P_LN0 && P_LN7 + 1 == P_DIR && P_DKREL + 1 == P_DTYPE && P_LDECAY7 + 1 == P_E0 &&
-         P_E0 == 117 && P_COUNT == 125;               /* ((Skiff) DIR, the ducking; phase 9: DRIVE, ENV 2, the lanes) */
+         P_VOIC + 1 == P_LN0 && P_LN7 + 1 == P_DIR && P_DKREL + 1 == P_DTYPE && P_LDECAY7 + 1 == P_LSYNC &&
+         P_ESYNC + 1 == P_E0 && P_E0 == 127 && P_COUNT == 135;   /* ((Skiff) DIR, the ducking; phase 9: DRIVE, ENV 2, the
+                                                                  * lanes; 1.3: LFO SYNC TRIG POL, SPREAD, INSERT, ENV SYNC) */
     for (i = 0; i < 45u; i++)
         ok &= v[i] == (int16_t)(2000 + i);
     for (i = P_SLCR; i < P_E0; i++)

@@ -187,6 +187,65 @@ static void head_group(int32_t r)
     GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
     cv_text(x + 4, HEAD_MY, &AF_M, b, T_THEME);
 }
+/* (Skiff 1.3, from Felucca 1.6.1 #251) MENU > LARGE: a tall card sets its value in one face over everything its knob
+ * can show (L where every value fits L, else M, else S: tall_face), so turning it never changes the value's size.
+ * BLOCKS' tiles keep a face per value (the user's pick: most of their knobs would lose the big V face). card_span (what the knob shows: fn's text and unit of each value lo..hi)
+ * is set just before a draw_column (card_span_of / card_span_by) and taken by it; none: the value's own face. The face
+ * is worked out when what the card is of changes (span_face's key), not every frame */
+typedef struct card_span {
+    void (*fn)(const struct card_span *sp, int32_t v, char *val, const char **unit);   /* value v as the card shows it */
+    const void *p;                                      /* fn's: a param_desc_t, a name list, a track */
+    int32_t lo, hi;
+} card_span_t;
+static card_span_t card_span;
+static void span_param(const card_span_t *sp, int32_t v, char *val, const char **unit)
+{
+    uint8_t named = fmt_named;                          /* (param_format sets it: the card's own, kept) */
+    param_format((const param_desc_t *)sp->p, v, val, unit);
+    fmt_named = named;
+}
+static void span_names(const card_span_t *sp, int32_t v, char *val, const char **unit)
+{
+    str_cpy(val, ((const char *const *)sp->p)[v], 12);
+    *unit = "";
+}
+static void span_mod_dst(const card_span_t *sp, int32_t v, char *val, const char **unit)   /* MOD's DEST: the track's */
+{
+    str_cpy(val, mod_dst_name((const track_t *)sp->p, v), 12);
+    *unit = "";
+}
+static void card_span_by(void (*fn)(const card_span_t *, int32_t, char *, const char **), const void *p, int32_t lo,
+                         int32_t hi)
+{
+    card_span.fn = fn;
+    card_span.p = p;
+    card_span.lo = lo;
+    card_span.hi = hi;
+}
+static void card_span_of(const param_desc_t *d) { card_span_by(span_param, d, d->min, d->max); }   /* its whole range */
+/* the face card c's renderer (face: 0 its big face, 1 M, 2 S) needs for the widest value sp shows */
+static uint32_t span_face(uint32_t c, const card_span_t *sp, uint32_t (*face)(const char *val, const char *unit))
+{
+    static uint32_t key[4], got[4] = {3u, 3u, 3u, 3u};   /* (3: none yet) */
+    uint32_t k = (uint32_t)(uintptr_t)sp->fn * 31u + (uint32_t)(uintptr_t)sp->p * 7u + (uint32_t)sp->lo * 131u +
+                 (uint32_t)sp->hi * 8191u + (uint32_t)(uintptr_t)face * 524287u + (uint32_t)(uintptr_t)uf.f * 3u +
+                 song.sel * 977u + TSEL->eng_req * 4u + ux.neon;   /* (MOD DEST: the track's engine; the theme's faces) */
+    int32_t v;
+    char t[16];
+    const char *u;
+    c &= 3u;
+    if (k == key[c] && got[c] <= 2u)
+        return got[c];
+    key[c] = k;
+    got[c] = 0;
+    for (v = sp->lo; v <= sp->hi && got[c] < 2u; v++) {   /* (at most a few hundred values, once) */
+        uint32_t f;
+        sp->fn(sp, v, t, &u);
+        if ((f = face(t, u)) > got[c])
+            got[c] = f;
+    }
+    return got[c];
+}
 #include "ui_blocks.c"                                 /* Skiff: STYLE BLOCKS' header and card (draw_head_blocks, draw_column_blocks) */
 
 static void draw_head(void) { draw_head_blocks(); }   /* (U2: BLOCKS, the only look: ui_blocks.c) */
@@ -229,8 +288,17 @@ static void card_mot_of(const int16_t *vp)
 #define LG_VB 49                                        /* the value's band: L capitals rows 49..69 */
 #define LG_UY 73                                        /* the unit's line (S capitals rows 76..84) */
 #define LG_GY 92                                        /* the gauge, 3 px */
+/* a tall card's value s in L where the sparse L face has its glyphs and it fits with 3 px either side, else M, else S
+ * (0, 1, 2; its unit is on a line of its own) */
+static uint32_t tall_face(const char *s, const char *unit)
+{
+    (void)unit;
+    if (large_face_has(s) && ink_w(&AF_L, s) + (ux.neon ? cv_fx_w(&AF_L) : 0) <= COL_W - 6)   /* ((Skiff N2) NEON: */
+        return 0u;                                                                             /* slanted, the wider) */
+    return ink_w(&AF_M, s) + (ux.neon ? cv_fx_w(&AF_M) : 0) <= COL_W - 6 ? 1u : 2u;
+}
 static void draw_column_tall(uint32_t c, const char *label, const char *val, const char *unit, uint16_t vc, int32_t ratio,
-                             uint32_t icon, int hot, int mot, int32_t kid)
+                             uint32_t icon, int hot, int mot, int32_t kid, const card_span_t *sp)
 {
     uint16_t lc = hot ? T_ACCENT : mot ? T_THEME : T_MID;
     const aafont_t *lf = &AF_M, *vf = &AF_L;
@@ -276,11 +344,12 @@ static void draw_column_tall(uint32_t c, const char *label, const char *val, con
         cv_keycap(HALF_UP(COL_W - kc_w((uint32_t)kid)), LG_VB + HALF_UP(AF_L_CAP_H - KC_H), (uint32_t)kid,
                   vc == T_ACCENT || vc == T_DIM ? vc : T_KEY, T_INK, T_SURF);
     } else if (val[0]) {
-        int why = !large_face_has(val) ? 1 : ink_w(vf, val) + (ux.neon ? cv_fx_w(vf) : 0) > COL_W - 6 ? 2 : 0;
-        if (why)                                        /* ((Skiff N2) NEON: slanted, the wider) */
-            vf = &AF_M;
-        if (vf == &AF_M && ink_w(vf, val) + (ux.neon ? cv_fx_w(vf) : 0) > COL_W - 6)
-            vf = &AF_S, why = 3;
+        uint32_t f = tall_face(val, unit), fs = sp->fn ? span_face(c, sp, tall_face) : 0u;
+        int why;
+        if (fs > f)
+            f = fs;                                     /* (the value's own where it needs a smaller one) */
+        vf = f == 0u ? &AF_L : f == 1u ? &AF_M : &AF_S;
+        why = f == 2u ? 3 : f == 1u ? (!large_face_has(val) ? 1 : 2) : 0;
         LARGE_HOOK(val, why);
         vy = vf == &AF_L ? LG_VB - AF_L_CAP_Y : vf == &AF_M ? LG_VB + HALF_UP(AF_L_CAP_H - AF_M_CAP_H) - AF_M_CAP_Y
                                                           : LG_VB + HALF_UP(AF_L_CAP_H - AF_S_CAP_H) - AF_S_CAP_Y;
@@ -338,6 +407,8 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
     const aafont_t *vf = &AF_M;
     uint32_t n, kn;
     int32_t kid = kc_tag(val, &kn);
+    card_span_t sp = card_span;                         /* (Felucca #251: what the knob shows, this card only) */
+    card_span.fn = 0;
     fmt_named = 0;                                      /* (params.c: a name, for this card only) */
     card_mot_next = 0;                                  /* (the same: MOTION, this card only) */
     card_mot = (uint8_t)((card_mot & ~(1u << c)) | (uint32_t)mot << c);
@@ -390,7 +461,7 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
             ui.roll[c].from[0] = 0;
         str_cpy(ui.col[c], key, sizeof ui.col[c]);
         if (kind == LK_TALL) {
-            draw_column_tall(c, label, val, unit, vc, ratio, icon, hot, mot, kid);
+            draw_column_tall(c, label, val, unit, vc, ratio, icon, hot, mot, kid, &sp);
             return;
         }
         if (blocks) {
@@ -466,7 +537,11 @@ static int card_dead(const page_t *pg, uint32_t c)
     const track_t *t = TSEL;
     uint32_t id = pg->id[c & 3u];
     if (ENGINES[t->eng_req % NENGINES]->oneshot &&
-        (id == P_LD_PIT || id == P_LD_FLT || id == P_LD_SHP || id == P_LPHASE || id == P_LFADE))
+        (id == P_LD_PIT || id == P_LD_FLT || id == P_LD_SHP || id == P_LPHASE || id == P_LFADE || id == P_LTRIG))
+        return 1;                                       /* ((#16) TRIG too: the hits' LFO runs free) */
+    if (id == P_LRATE && t->p[P_LSYNC])                 /* (#16) LFO 2 SYNC on: RATE does nothing */
+        return 1;
+    if (id == P_SPRD && trk_vmode(t) != V_POLY && trk_vmode(t) != V_UNISON)   /* ((1.3) SPREAD: POLY / UNISON only) */
         return 1;
     return pg->scope == SC_ENGINE && t->eng_req % NENGINES == ENGI_DRUM && id == P_E6 &&
            drum_kit_plays(t->p[P_E0]) != DK_STD;
@@ -545,6 +620,11 @@ static void draw_foot(void)
         sig += 0x51EDu + (uint32_t)black_held(GK_ACC) * 977u;
     if (tiles)                                         /* (Skiff U1) the REC hint comes and goes with the arming */
         sig += ((song.rec >> song.sel) & 1u) * 4421u;
+    if (ui.ml.on) {                                    /* ((1.3) MIDI LEARN's line) */
+        char ln[24];
+        ml_line(ln);
+        sig += str_hash(0x4C45u, ln);
+    }
     if (!ui.force && sig == ui.foot_sig)
         return;
     ui.foot_sig = sig;
@@ -553,6 +633,16 @@ static void draw_foot(void)
         ne_rule(0, 1);
     if (ux.quark)                                      /* (Skiff Q2) QUARK: a dotted rule */
         qk_rule(0);
+    if (ui.ml.on && !act_cols()) {                    /* ((1.3) MIDI LEARN: what is picked and its CC, OCT+ DONE at the
+                                                       * right, for the whole line (midi_learn.c ml_line) */
+        char ln[24];
+        int32_t w = kh_w(KC_OCTUP, "DONE");
+        ml_line(ln);
+        cv_free_text(8, ly, &AF_S, ln, T_ACCENT, T_BG, 232 - w - 10 - 8);
+        cv_key_hint(232 - w, ly - KC_TY, KC_OCTUP, "DONE", 1, T_BG);
+        cv_blit(0, foot_y());
+        return;
+    }
     if (act_cols() && pg->graph == GR_SONG) {         /* (Skiff phase 5) SONG: what OCT+ does, then EDIT CLEAR (not with
                                                        * a pick), side by side (the mockup's), the title right */
         khint_t kh[1] = {{KC_OCTUP, song_act_name()}};   /* ((Skiff U2) CLEAR: KNOB 2's, no EDIT) */
@@ -659,6 +749,7 @@ static void draw_columns(void)
             const param_desc_t *d = home_param(c, &vp);
             param_format(d, *vp, val, &unit);
             card_mot_of(vp);
+            card_span_of(d);
             draw_column(c, d->label, val, unit, VAL(c), RATIO(d, enum_rank(d, *vp)), param_icon(d, *vp));
         }
         return;
@@ -691,6 +782,7 @@ static void draw_columns(void)
         fmt_int(val + (val[0] != 0), cs->nudge);
         draw_column(1, "NUDGE", val, cs->nudge ? "/64" : "", cs->nudge && step_on(cs) ? VAL(1u) : T_DIM, -1, ICON_TIME);
         param_format(d, v, val, &unit);
+        card_span_of(d);
         draw_column(2, d->label, val, unit, VAL(2u), RATIO(d, enum_rank(d, v)), param_icon(d, v));
         d = track_desc(TSEL, P_SGATE);
         if (!motion_lock_get(TSEL, ui.cursor, P_SGATE, &v)) {
@@ -698,6 +790,7 @@ static void draw_columns(void)
             cs = 0;                                    /* (the track's: dim) */
         }
         param_format(d, v, val, &unit);
+        card_span_of(d);
         draw_column(3, d->label, val, unit, cs && step_on(cs) ? VAL(3u) : T_DIM, RATIO(d, v), param_icon(d, v));
         return;
     }
@@ -750,7 +843,8 @@ static void draw_columns(void)
             draw_column(3, "DELETE", "[OCT+]", "", T_ACCENT, -1, ICON_AUTO);
             return;
         }
-        draw_column(3, r == n ? "VALUE" : (motion.event[idx[r]].param & MOTION_LOCK) ? "LOCK" : "AUTO", val, unit,
+        card_span_of(d);
+        draw_column(3, r == n ? "VALUE" : motion.event[idx[r]].lock ? "LOCK" : "AUTO", val, unit,
                     r < n ? VAL(3u) : T_DIM, RATIO(d, enum_rank(d, v)), param_icon(d, v));
         return;
     }
@@ -761,12 +855,15 @@ static void draw_columns(void)
         uint32_t lvl = trk_level(song.sel);
         param_format(&TP[P_LEVEL], (int32_t)lvl, val, &unit);   /* (0: OFF) */
         card_mot_of(&TSEL->p[P_LEVEL]);
+        card_span_of(&TP[P_LEVEL]);
         draw_column(0, "LEVEL", val, unit, lvl && !t->p[P_MUTE] ? VAL(0u) : T_DIM, (int32_t)lvl * 1000 / 127, ICON_AUTO);
         param_format(&TP[P_PAN], t->p[P_PAN], val, &unit);
         card_mot_of(&TSEL->p[P_PAN]);
+        card_span_of(&TP[P_PAN]);
         draw_column(1, "PAN", val, unit, VAL(1u), RATIO(&TP[P_PAN], t->p[P_PAN]), param_icon(&TP[P_PAN], t->p[P_PAN]));
         param_format(&TP[P_REV], t->p[P_REV], val, &unit);
         card_mot_of(&TSEL->p[P_REV]);
+        card_span_of(&TP[P_REV]);
         draw_column(2, "REVERB", val, unit, VAL(2u), RATIO(&TP[P_REV], t->p[P_REV]), ICON_AUTO);
         draw_column(3, "MUTE", t->p[P_MUTE] ? "ON" : "OFF", "", t->p[P_MUTE] ? T_ACCENT : VAL(3u), -1, ICON_AUTO);
         return;
@@ -862,9 +959,12 @@ static void draw_columns(void)
         int32_t s = t->p[id], d = t->p[id + 1u], a = t->p[id + 2u];
         fmt_int(val, (int32_t)mod_ui_slot + 1);
         draw_column(0, "SLOT", val, "/4", VAL(0u), (int32_t)mod_ui_slot * 1000 / 3, mod_src_icon(MS_OFF));   /* (the mod icon) */
+        card_span_by(span_names, N_MSRC, 0, MS_N - 1);
         draw_column(1, "SOURCE", N_MSRC[clamp(s, 0, MS_N - 1)], "", s ? VAL(1u) : T_DIM, -1, mod_src_icon(s));
+        card_span_by(span_mod_dst, t, 0, MD_N - 1);
         draw_column(2, "DEST", mod_dst_name(t, d), "", d ? VAL(2u) : T_DIM, -1, mod_dst_icon(t, d));
         param_format(&TP[id + 2u], a, val, &unit);
+        card_span_of(&TP[id + 2u]);
         draw_column(3, "AMOUNT", val, unit, a ? VAL(3u) : T_DIM, RATIO(&TP[id + 2u], a), mod_src_icon(MS_OFF));
         return;
     }
@@ -887,6 +987,7 @@ static void draw_columns(void)
             if (!on)
                 v = motion_base_value(TSEL, id);      /* not locked: the sound's own, DIM */
             param_format(d, v, val, &unit);
+            card_span_of(d);
             draw_column(c, d->label, val, unit, on ? VAL(c) : T_DIM, RATIO(d, enum_rank(d, v)), param_icon(d, v));
         }
         return;
@@ -972,6 +1073,7 @@ static void draw_columns(void)
         }
         param_format(d, *vp, val, &unit);
         card_mot_of(vp);                                /* (a global: never) */
+        card_span_of(d);
         draw_column(c, cur_page()->graph == GR_LANES && c == 1u ? "LEVEL" : d->label, val, unit,   /* ((phase 9) TUNE DECAY) */
                     card_dead(cur_page(), c) ? T_DIM : VAL(c),
                     d->fmt == F_ENUM && d->max < 2 ? -1 : RATIO(d, enum_rank(d, *vp)), param_icon(d, *vp));

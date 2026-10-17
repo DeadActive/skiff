@@ -237,7 +237,9 @@ static uint64_t lg_n[4];
 static char lg_miss[96], lg_wide[16][12], lg_small[16][12];
 static uint32_t lg_nwide, lg_nsmall;
 static void lg_hook(const char *s, int why);
-#define LARGE_HOOK(s, why) lg_hook(s, why)
+static int8_t sp_face[4] = {-1, -1, -1, -1};     /* (1.3, Felucca #251) the face tall card c's value got in its last
+                                                  * draw (0 L, 1 M, 2 S) */
+#define LARGE_HOOK(s, why) (sp_face[c & 3u] = (int8_t)((why) == 0 ? 0 : (why) == 3 ? 2 : 1), lg_hook(s, why))
 #define UI_TEST_NO_MAIN 1
 #include "ui_test.c"
 
@@ -716,7 +718,8 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_LFO_DEST, S_VOICE2, S_VOICE2_UNI, S_ARP_ON, S_ARP2, S_EDIT_FLT, S_GLOBAL_SWING, S_VOICE_GLIDE,   /* (Skiff U5) */
        S_SHIFT_ENV, S_SHIFT_STEP, S_SHIFT_HOME, S_LFO_RUN, S_LFO_DEST_RUN, S_HOME_SCOPE,
        S_FM_TONE, S_FM_ENV, S_FM_KEYS, S_FM_ALGO, S_FM_PITCH, S_FM_LFO, S_FM_INIT,   /* (FM6 LAB) */
-       S_DRIVE_SOFT, S_DRIVE_HARD, S_DRIVE_FOLD, S_DRIVE_BITS, S_ENV2, S_LANES_TUNE, S_REVERB_HALL, S_CHORUS_FB,
+       S_DRIVE_SOFT, S_DRIVE_HARD, S_DRIVE_FOLD, S_DRIVE_BITS, S_INS_FUZZ, S_INS_CRUSH, S_INS_FLANG,
+       S_MENU_MIDI, S_MENU_MIDI_SCROLL, S_LEARN, S_LEARN_CC, S_LFO2, S_ENV2, S_LANES_TUNE, S_REVERB_HALL, S_CHORUS_FB,
        S_CHORUS_FLANGER, S_CHORUS_PHASER, S_PRESETS_BASS,                                     /* (Skiff phase 9) */
        S_MOCK_HOME, S_MOCK_PRESETS, S_MOCK_SEQ, S_MOCK_DRUM, S_MOCK_MIXER, S_MOCK_DIALOG, S_MOCK_MENU, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
@@ -745,7 +748,8 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "lfo_dest", "voice_2", "voice_2_uni", "arp_on", "arp_2", "edit_flt", "global_swing", "voice_glide",
     "shift_env", "shift_step", "shift_home", "lfo_run", "lfo_dest_run", "home_scope",
     "fm_op_tone", "fm_op_env", "fm_op_keys", "fm_all_algo", "fm_all_pitch", "fm_all_lfo", "fm_init",
-    "drive_soft", "drive_hard", "drive_fold", "drive_bits", "env_2", "lanes_tune", "reverb_hall", "chorus_feedback",
+    "drive_soft", "drive_hard", "drive_fold", "drive_bits", "insert_fuzz", "insert_crush", "insert_flanger",
+    "menu_midi", "menu_midi_scroll", "learn", "learn_cc", "lfo_2", "env_2", "lanes_tune", "reverb_hall", "chorus_feedback",
     "chorus_flanger", "chorus_phaser", "presets_bass",
     "mock_home", "mock_presets", "mock_seq", "mock_drum", "mock_mixer", "mock_dialog", "mock_menu"};
 
@@ -916,6 +920,29 @@ static void setup(int s)
     case S_DRIVE_SOFT: case S_DRIVE_HARD: case S_DRIVE_FOLD: case S_DRIVE_BITS:   /* (Skiff phase 9) each TYPE at 96 */
         TSEL->p[P_DIST] = 96; TSEL->p[P_DTYPE] = (int16_t)(s - S_DRIVE_SOFT); TSEL->p[P_DTONE] = -20;
         go_title("DRIVE"); ui.hot_col = 1; ui.hot_t = 30; break;
+    case S_INS_FUZZ: case S_INS_CRUSH: case S_INS_FLANG:   /* (1.3) the INSERT: FUZZ driven, CRUSH 4 bits, FLANG swept */
+        TSEL->p[P_ITYPE] = (int16_t)(s == S_INS_FUZZ ? IT_FUZZ : s == S_INS_CRUSH ? IT_CRUSH : IT_FLANGER);
+        TSEL->p[P_IA] = s == S_INS_CRUSH ? 24 : 90; TSEL->p[P_IB] = s == S_INS_CRUSH ? 40 : 100; TSEL->p[P_IC] = 96;
+        TSEL->p[P_IMIX] = 110;
+        go_title("INSERT"); ui.hot_col = 1; ui.hot_t = 30; break;
+    case S_MENU_MIDI: case S_MENU_MIDI_SCROLL:         /* (1.3) MIDI: LEARN CLEAR's count; scrolled to T6, T2 on 10 */
+        memset(favorites.factory[ENGI_DIGITAL], 0, sizeof favorites.factory[ENGI_DIGITAL]);
+        memset(&favorites.factory[15][6], 0, 6);
+        (void)ml_learn(74, 0, P_E0); (void)ml_learn(71, 0, P_E0 + 1u); (void)ml_learn(7, 1, P_LEVEL);
+        favorites.factory[15][7] = 8;
+        ui.menu = 1; ui.menu_sel = s == S_MENU_MIDI ? MI_LCLEAR : MI_TCH6; break;
+    case S_LFO2:                                       /* (1.3) LFO 2: SYNC 1/4, UNI (the README's picture) */
+        TSEL->p[P_LSYNC] = 5; TSEL->p[P_LPOL] = 1; TSEL->p[P_LWAVE] = 1;
+        go_title("LFO 2"); ui.hot_col = 0; ui.hot_t = 30; break;
+    case S_LEARN: case S_LEARN_CC:                     /* (1.3) MIDI LEARN: nothing picked; T1's CUTOFF on CC74 */
+        memset(favorites.factory[ENGI_DIGITAL], 0, sizeof favorites.factory[ENGI_DIGITAL]);
+        ui.ml.on = 1;
+        if (s == S_LEARN_CC) {                         /* (the engine's CC74 parameter: ANALOG's CUTOFF) */
+            uint32_t id = P_E0 + (MIDI_CC_ENG[eng_idx(trk[0].eng_req)] >> 4) - 1u;
+            (void)ml_learn(74, 0, id);
+            ui.ml.pick = 1; ui.ml.trk = 0; ui.ml.id = (uint8_t)id;
+        }
+        break;
     case S_ENV2: TSEL->p[P_EG2_ATK] = 30; TSEL->p[P_EG2_DEC] = 70; TSEL->p[P_EG2_SUS] = 40; TSEL->p[P_EG2_REL] = 60;
         go_title("ENV 2"); break;
     case S_LANES_TUNE: drum(0); go_title("LANES"); ui.lane = 1; TSEL->p[P_LTUNE0 + 1] = 80; TSEL->p[P_LDECAY0 + 1] = -24;
@@ -1518,6 +1545,9 @@ static void sweep_motion(void)
     lint();
     memset(&motion, 0, sizeof motion);
 }
+/* (1.3, Felucca #251) MENU > LARGE: a knob's values keep one face (L, M or S) over its whole range: a knob whose values
+ * take two is a finding (BLOCKS' tiles keep a face per value: not counted) */
+static uint32_t sp_nknob, sp_njump;
 static void sweep_columns(void)
 {
     uint32_t e, i, c;
@@ -1538,18 +1568,37 @@ static void sweep_columns(void)
                 const param_desc_t *d = PAGES[i].scope == SC_GLOBAL || PAGES[i].scope == SC_TRACK || PAGES[i].scope == SC_ENGINE
                                         ? page_desc(cur_page(), c, &vp) : 0;
                 int32_t v, v0;
+                uint32_t mask = 0;
+                char ex[3][16] = {"", "", ""};
                 if (!d || !d->label || d->label[0] == '-' || PAGES[i].graph == GR_MOD) continue;
                 v0 = *vp;
                 for (v = d->min; v <= d->max; v++) {
                     *vp = (int16_t)v;
                     nscr = npend = 0;
                     ui.force = 1;
+                    sp_face[c] = -1;
                     draw_columns();
                     lint();
                     nsweep++;
+                    if (sp_face[c] >= 0) {
+                        if (!ex[sp_face[c]][0]) {
+                            char vv[12];
+                            const char *u;
+                            param_format(d, v, vv, &u);
+                            snprintf(ex[sp_face[c]], 16, "%s", vv);
+                        }
+                        mask |= 1u << sp_face[c];
+                    }
                     if (v - d->min > 300) v = d->max - 1;      /* wide ranges: the ends */
                 }
                 *vp = (int16_t)v0;
+                sp_nknob += mask != 0u;
+                if (mask & (mask - 1u)) {
+                    sp_njump++;
+                    nfind++;
+                    fprintf(rep, "FIND %-26s K%u %s: its values change size (big '%s' M '%s' S '%s')\n", cur_name, c + 1u,
+                            d->label, ex[0], ex[1], ex[2]);
+                }
             }
             draw(-1);                                    /* the whole page */
             lint();
@@ -2077,6 +2126,10 @@ int main(int argc, char **argv)
     fprintf(rep, "\n%u lint findings, %u inks on their own colour, %u ellipsised free texts; %u column values swept; %u FM6 "
             "charts linted; %u cards linted with MOTION's icon\n", nfind, nink, nfree, nsweep, fmp_charts, nmotion);
     if (!nmotion) { fprintf(stderr, "ui_render: the MOTION sweep marked no card\n"); nfind++; }
+    fprintf(rep, "one face per knob (Felucca #251): %u knobs swept tall, %u whose values change size\n",
+            sp_nknob, sp_njump);
+    printf("ui_render: one face per knob: %u knobs swept, %u whose values change size\n", sp_nknob, sp_njump);
+    if (sp_nknob < 200u) { fprintf(stderr, "ui_render: the face sweep saw %u knobs only\n", sp_nknob); nfind++; }
     fclose(rep);
     printf("ui_render: %u screens x %u palettes + the page/value sweep; %u lint findings, %u ellipsised free texts (%u distinct), "
            "%u inks on their own colour; report %s\n",

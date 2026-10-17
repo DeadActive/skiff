@@ -2,7 +2,7 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Felucca 1.1.5: SEQ > AUTO LIST, the selected track's parameter locks and automation events as a list ((Skiff U3, R5)
  * SEQ > AUTOMATION since, the one page; included by ui.c). A row: its kind (LOCK / AUTO), its step, its parameter, its
- * value; in the order of the steps, then of the parameters; the last row is + ADD LOCK. (U3) The first row is the
+ * value; in the order of the steps, then as they were added (Skiff 1.3: KNOB 3 keeps the row in place); the last row is + ADD LOCK. (U3) The first row is the
  * page's own (ui.ev_top), above the records: PLAY ON / OFF on KNOB 2 (the track's automation plays, motion.c), CLEAR on
  * KNOB 4 (OCT+: its dialog; the AUTOMATION page's of before)
  *   KNOB 1 (or the PRESETS knob) the row
@@ -38,7 +38,8 @@ static int ev_id_ok(const track_t *t, uint32_t id)
 static void ev_name(const track_t *t, uint32_t id, char *b)
 {
     const char *pre = id >= P_ATK && id <= P_ED_SHP ? "ENV " : id >= P_LRATE && id <= P_LD_AMP ? "LFO " :
-                      id >= P_EG2_ATK && id <= P_EG2_REL ? "ENV2 " : id == P_DTYPE || id == P_DTONE ? "DRIVE " : "";
+                      id >= P_EG2_ATK && id <= P_EG2_REL ? "ENV2 " : id == P_DTYPE || id == P_DTONE ? "DRIVE " :
+                      id >= P_ITYPE && id <= P_IMIX ? "INS " : "";   /* ((1.3) the INSERT's: INS TYPE, INS DEPTH) */
     if (id >= P_LTUNE0 && id <= P_LDECAY7) {
         str_cpy(b, drum_lane_name(t, (id - P_LTUNE0) % NLANE), 12);
         str_cpy(b + str_len(b), id < P_LDECAY0 ? " TUNE" : " DCAY", 12 - str_len(b));
@@ -104,7 +105,7 @@ static const char *ev_act_name(void)
         return "ADD";
     if (ui.ev_del)
         return "DELETE";
-    return (motion.event[idx[r]].param & MOTION_LOCK) ? "AUTO" : "LOCK";   /* what OCT+ turns it into */
+    return motion.event[idx[r]].lock ? "AUTO" : "LOCK";   /* what OCT+ turns it into */
 }
 static int ev_act_ready(void)
 {
@@ -236,7 +237,7 @@ static void ev_oct(void)
     }
     {
         const motion_event_t e = motion.event[idx[r]];
-        uint32_t lock = !(e.param & MOTION_LOCK);
+        uint32_t lock = !e.lock;
         motion_undo_take(t, 0);
         (void)motion_put(t, e.place & 63u, MOTION_ID(&e), e.value, lock ? MOTION_LOCK : 0u);
         motion_undo_done(t);

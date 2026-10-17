@@ -85,6 +85,21 @@ static void fm1_guard_enable(uint32_t which)
     fm1__dbg_lock();
 }
 
+/* the PC limits apply to the second core too, and it starts in the chip's ROM (found by Melodee's dual-core work;
+ * Jangada, X0X; as Felucca 1.6.1): open them while it starts (main.c), then fm1_guard_enable(FM1_GUARD_PC) again.
+ * (Skiff: its waiting loop, .c1_text, is inside .ram_text, app.ld: the PC limits' RAM window covers it) */
+#if FM1_CPU1_USED
+static void fm1_guard_pc_open(void)
+{
+    fm1__dbg_unlock();
+    FM1_PC_LIMIT0_L = 0u;
+    FM1_PC_LIMIT0_H = 0xFFFFFFFFu;
+    FM1_PC_LIMIT1_L = 0u;
+    FM1_PC_LIMIT1_H = 0xFFFFFFFFu;
+    fm1__dbg_lock();
+}
+#endif
+
 /* write-protect 0x01C7FD50..0x01C7FFFF (boot info, mailbox, vectors):
  * call after the last fm1_irq_attach */
 static void fm1_guard_lock_top(void)

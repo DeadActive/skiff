@@ -32,11 +32,19 @@
 #define FELUCCA_ID "FM-1_700"    /* package identity (build.py: the .fwsc marker string) */
 #endif
 #ifndef FELUCCA_VERSION
-#define FELUCCA_VERSION "v1.2.1"     /* Skiff's; shown in the menu, the console and the editor; build.py --release X.Y */
+#define FELUCCA_VERSION "v1.3"       /* Skiff's; shown in the menu, the console and the editor; build.py --release X.Y */
 #endif
 #if FELUCCA_OTA && !FELUCCA_FLASH
 #error "FELUCCA_OTA needs FELUCCA_FLASH"
 #endif
+#ifndef FELUCCA_CPU2
+#define FELUCCA_CPU2 1           /* (Skiff 1.3, as Felucca 1.6.1) 1: the second core is built in and renders some tracks when
+                                  * MENU > SYSTEM > CPU is 2 CORES (BETA; 1 CORE by default: as 1.2; hal/fm1_cpu1.h, fx.c
+                                  * mix_block). 0 (FELUCCA_CPU2=0 build.py): none of it (no core 1 stack, waiting loop or
+                                  * buffers). (The same default: core.h) */
+#endif
+#define FM1_CPU1_USED FELUCCA_CPU2   /* hal/fm1_sys.h: the second core is built in; every reset holds it first (its
+                                      * waiting loop is in RAM the ROM and the SPL use at boot) */
 /* (Skiff) audio code run from RAM (.ram_hot, app.ld), out of the XIP cache: the FX layer's (perform.c). From XIP it
  * shared the cache with the engines: on the unit, REPEAT 1/32 held cost +6 % CPU alone but +15 % under six busy
  * tracks (late halves, voices shed); 2 % by instruction count (the emulator). Never runs with the flash busy (the
@@ -55,6 +63,12 @@ static inline __attribute__((always_inline)) void *audio_far(void *p) { void *vo
 #include "fm1_sys.h"
 #include "fm1_irq.h"
 #include "fm1_guard.h"
+#if FELUCCA_CPU2
+#include "fm1_cpu1.h"
+#define C1_ON() fm1_c1_on                    /* fx.c mix_block: a second core is answering */
+#define C1_RUN(fn, arg) fm1_cpu1_run(fn, arg)
+#define C1_WAIT() fm1_cpu1_wait()
+#endif
 #include "fm1_input.h"
 #include "fm1_timer.h"
 #include "fm1_audio.h"

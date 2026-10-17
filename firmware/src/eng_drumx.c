@@ -131,6 +131,8 @@ static void drumx_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
         n = CTL;
     dx_run(&dx_kit[lane], &L->x, p[P_E0], L->st * 16 + (p[P_E1] - 64) * 3, p[P_E3] - 64, p[P_E2] - 64, p[P_E4] - 64,
            p[P_E6], p[P_E5], y, n);
+    if ((drum_mute[(uint32_t)(t - trk) % NTRK] >> lane) & 1u)
+        return;                                          /* ((1.3) a muted lane rings on unheard, as DRUM's) */
     if (drv > 0) {                                       /* DRV: x1..x4 into the soft clip, the level kept (Q12) */
         g = 4096 + drv * 3 * 4096 / 127;
         mk = (int32_t)((19661u << 15) / (uint32_t)softclip((19661 * g) >> 12));

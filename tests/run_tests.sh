@@ -149,6 +149,17 @@ EOF
         tests/usb_desc_test.c
     run "USB descriptors: CDC $t_cdc (presented $t_on), UAC $t_uac (48 kHz $t_48), layout $t_lay" "$OUT/usb_desc_test"
 done
+# FELUCCA_UAC_AS_FIRST=0 (Felucca #67): the AC collection of Skiff 1.0 .. 1.2 (MIDI first), 1.0's bytes; the parser
+# model of the kernel AppleUSBAudio (macOS <= 15) stops before the audio streaming interface there
+for v in 1.1.0.1.1 1.1.0.0.1 1.1.0.1.0 1.1.0.0.0 0.1.0.1.1; do
+    IFS=. read -r t_cdc t_uac t_lay t_on t_48 <<EOF
+$v
+EOF
+    $CC -DT_CDC="$t_cdc" -DT_UAC="$t_uac" -DT_LAYOUT="$t_lay" -DT_ON="$t_on" -DT_48K="$t_48" -DT_ASF=0 \
+        -o "$OUT/usb_desc_test" tests/usb_desc_test.c
+    run "USB descriptors (AC collection MIDI first): CDC $t_cdc (presented $t_on), UAC $t_uac (48 kHz $t_48)" \
+        "$OUT/usb_desc_test"
+done
 
 [ -f build/felucca.fwsc ] || { echo "run ./build.sh first"; exit 1; }
 
@@ -175,6 +186,12 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "project formats (FUN1..FUN5 -> FUN6, the grid and song chain; DIGITAL tracks -> FM6, SAMPLE PERC -> DRUM)" "$OUT/project_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/motion_test" tests/motion_test.c -lm
     run "motion, whole-step chance, FUN7 migration, song restore, ARP repeat and the 1.2 ARP modes" "$OUT/motion_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/fixes13_test" tests/fixes13_test.c -lm
+    run "1.3: Felucca's fixes (PAN +100, AUTOMATION KNOB 3 keeps its row)" "$OUT/fixes13_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/feat13_test" tests/feat13_test.c -lm
+    run "1.3: Felucca's features (LFO 2, SEQ TOOLS, FOLLOW, MOMENTARY, LANE MUTES, STEP PREVIEW, PROGRAM CHANGE)" "$OUT/feat13_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/insert_test" tests/insert_test.c -lm
+    run "1.3: the INSERT (bit for bit off, every type bounded with no DC, MIX's glide, automation, stored)" "$OUT/insert_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/ratchet_test" tests/ratchet_test.c -lm
     run "RATCH: x1..x4 in a step (notes, chords, drum hits), gates, chance, swing, projects, user presets, CHANCE page; FLAM" "$OUT/ratchet_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/midi_control_test" tests/midi_control_test.c -lm
@@ -248,6 +265,29 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "REVERB TYPE: ROOM bit-identical, SPRING decay / chirp / stability / level, model change, cost, demos" "$OUT/reverb_test" build/fx_demo
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/regress" tests/regress.c -lm
     run "regression: golden renders, health, voices, CPU budget" "$OUT/regress" tests/golden.txt tests/cpu_baseline.txt
+    # (Skiff 1.3) the second core (MENU > CPU 2 CORES: fx.c mix_block, tests/c1_host.h): a thread renders the tracks
+    # handed to it, bit for bit; a FELUCCA_CPU2=0 build (none of it) gives the same golden renders
+    $CC -O2 -w -Ibuild/gen -Ifirmware/src -DC1_HOST -DVOICES_2CORE=8 -pthread -o "$OUT/regress_c1" tests/regress.c -lm
+    run "second core: the golden renders with a thread taking every split of the tracks in turn" \
+        "$OUT/regress_c1" tests/golden.txt tests/cpu_baseline.txt
+    $CC -O2 -w -DFELUCCA_CPU2=0 -Ibuild/gen -Ifirmware/src -o "$OUT/regress_cpu2_0" tests/regress.c -lm
+    run "regression, a FELUCCA_CPU2=0 build (none of the second core): the same golden renders" \
+        "$OUT/regress_cpu2_0" tests/golden.txt tests/cpu_baseline.txt
+    $CC -O2 -w -Ibuild/gen -Ifirmware/src -DVOICES_2CORE=8 -pthread -o "$OUT/dualcore_test" tests/dualcore_test.c -lm
+    run "second core: six tracks of every preset, mixes: bit for bit on one core and on two, every split" \
+        "$OUT/dualcore_test"
+    $CC -O2 -w -Ibuild/gen -Ifirmware/src -pthread -o "$OUT/dualcore_budget" tests/dualcore_test.c -lm
+    run "second core: the voice budget, 8 on one core, VOICES_2CORE with two" env BUDGET=1 "$OUT/dualcore_budget"
+    if $CC -fsanitize=thread -pthread -x c -o /dev/null - <<EOF 2>/dev/null
+int main(void) { return 0; }
+EOF
+    then                                        # (Skiff 1.3) the same under ThreadSanitizer: shared state
+        $CC -O1 -g -w -Ibuild/gen -Ifirmware/src -DVOICES_2CORE=8 -fsanitize=thread -pthread -o "$OUT/dualcore_tsan" tests/dualcore_test.c -lm
+        run "second core under ThreadSanitizer: the mixes of engines" \
+            env TSAN_OPTIONS=halt_on_error=1 SCENE="mix:" "$OUT/dualcore_tsan"
+    else
+        echo "== skip the second core under ThreadSanitizer (no -fsanitize=thread here)"
+    fi
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/descdump" tests/descdump.c -lm
     echo "== parameter and engine tables as JSON (for the editor mock test)"
     "$OUT/descdump" > "$OUT/desc.json" || fail=1

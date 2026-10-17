@@ -82,8 +82,9 @@ SET_VARIANTS = [   # (Skiff phase 9) SAMPLE's presets after PERC's slot: (name, 
     ("KOTO", [0, 12, 0, 0, 120, 0, 22, 0], [0, 72, 0, 50], 0, [0, 0, 25, 30], "PT_PLUCK", [("P_ED_PIT", 2)]),
 ]
 
-# PIANO's notes cut to 0.75 s (saves flash), faded out over the last SET_FADE s
-SET_KEEP = {"PIANO": 0.75}
+# PIANO's notes cut to 0.75 s (saves flash), faded out over the last SET_FADE s; (Skiff 1.3) FLUTE's and SAX's to 0.68 s:
+# their sustain loops (from 0.40 s) half as long, 0.28 s (18 KB of flash for 1.3's features)
+SET_KEEP = {"PIANO": 0.75, "FLUTE": 0.68, "SAX": 0.68}
 SET_FADE = {"PIANO": 0.15}
 
 _wavs = {}

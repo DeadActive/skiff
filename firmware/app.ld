@@ -5,7 +5,8 @@
  * 0x01C00000..0x01C06000 holds .ram_text (code that must run while the flash
  * is busy: the flash driver; then, from _rt_hot, Skiff's .ram_hot: audio code kept out of the XIP cache, which may
  * call XIP code, since the audio ISR never runs with the flash busy (felucca.c AUDIO_RAM); both inside the PC
- * guard's RAM window, fm1_guard.h); .ramx follows it there (Skiff: zero-initialised data,
+ * guard's RAM window, fm1_guard.h); (Skiff 1.3) then .c1_text, the second core's waiting loop (hal/fm1_cpu1.h: an
+ * idle core 1 never fetches from the flash; the PC window covers it, it calls only its job); .ramx follows it there (Skiff: zero-initialised data,
  * the take log and the undo copy: the region's rest was unused); 0x01C06000..0x01C08000
  * stays for RAM-run debug.
  * RAM  : .data/.bss (96 KiB)
@@ -25,7 +26,8 @@ MEMORY
 SECTIONS
 {
     .text : { KEEP(*(.text.crt0)) *(.text*) *(.rodata*) . = ALIGN(4); _etext = .; } > XIP
-    .ram_text : { _rt_start = .; KEEP(*(.ram_text*)) . = ALIGN(4); _rt_hot = .; KEEP(*(.ram_hot*)) . = ALIGN(4); _rt_end = .; } > RAMTEXT AT > XIP
+    .ram_text : { _rt_start = .; KEEP(*(.ram_text*)) . = ALIGN(4); _rt_hot = .; KEEP(*(.ram_hot*)) . = ALIGN(4);
+                  KEEP(*(.c1_text*)) . = ALIGN(4); _rt_end = .; } > RAMTEXT AT > XIP
     _rt_load = LOADADDR(.ram_text);
     .ramx (NOLOAD) : { . = ALIGN(4); _ramx_start = .; *(.ramx*) . = ALIGN(4); _ramx_end = .; } > RAMTEXT
     .data : { . = ALIGN(4); _data_start = .; *(.data*) *(.sdata*) . = ALIGN(4); _data_end = .; } > RAM AT > XIP

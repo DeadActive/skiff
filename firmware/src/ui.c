@@ -91,12 +91,22 @@ static uint32_t up_gen;                      /* bumped on every user bank change
  * SHIFT, the step pages' PRESETS: STEP and KEYS: STEPS, a layer's first-tap HOLD [X]: SHORTCUTS, (U5) SHIFT's map)
  * goes; an action page's OCT+ / OCT- line stays (what they do now). A byte no engine uses, 0 = ON */
 #define ui_hints_off (favorites.factory[15][22])
+/* (Skiff 1.3) MENU > SYSTEM > CPU 2 CORES (BETA): the second core from the next power-on (main.c, hal/fm1_cpu1.h), bit 0
+ * of a settings byte bank.c freed ([15][5]: zero on every unit since phase 5, SCENE_FREED); clear: one core, as 1.2. It
+ * clears itself when core 1 misreads or stops answering (main.c) */
+#define CPU2_BYTE (favorites.factory[15][5])
+#define CPU2_SET (favorites.factory[15][24] == 0xA5u && (CPU2_BYTE & 1u))
+#define PREVIEW_SET (favorites.factory[15][24] == 0xA5u && (CPU2_BYTE & 2u))   /* ((1.3) MENU > STEP PREVIEW ON) */
 /* (Skiff U3, R8) the unit's CLOCK, MIDI IN and TUNE (MENU > CONTROL, AUDIO; GLOBAL's and SYSTEM's before, saved in every
  * project, so a project load could switch the clock or the routing without a word): settings bytes no engine uses
  * ([15][18..20], free since phase 5; 0 = INT, CH1-6, 0 ct, the defaults, in every older setting). song.g[] holds them
  * as before (its readers unchanged); a project still stores them (older firmware reads them) and a load leaves them
  * (project.c project_apply). The first boot with them (ui_set_rev 1) takes the session's own as the unit's */
 #define ui_unit_g(i) (favorites.factory[15][18 + (i)])
+/* (Skiff 1.3) MENU > MIDI > T1..T6 CHANNEL: each track's MIDI channel as its distance up from the track's own
+ * (seq.c trk_midi_ch), settings bytes bank.c freed ([15][6..11]: 0 on every unit since phase 5 = channels 1..6) */
+#define ui_mch(i) (favorites.factory[15][6 + (i)])
+static const uint8_t *const mch_io = &ui_mch(0);
 static const uint8_t UNIT_G[3] = {G_CLOCK, G_ROUTE, G_TUNE};
 static uint8_t unit_g_adopt __attribute__((section(".pool")));   /* the first boot: a load takes them (main.c) */
 static uint32_t unit_g_t __attribute__((section(".pool")));      /* fm1_ms | 1 of a change not saved yet */
@@ -191,7 +201,9 @@ static struct {
     uint8_t hot_col, hot_t;      /* column whose knob was just turned (drawn white) */
     uint8_t menu;                /* 0 off, 1 list, 2 about + credits (HOME held) */
     uint8_t menu_sel;            /* MENU: the row (menu_items.c MI_*; its tab MI_TAB), kept while the device runs */
-    uint8_t menu_row[4];         /* MENU: the row last picked in each tab, from its first (ALGORITHM comes back to it) */
+    uint8_t menu_row[5];         /* MENU: the row last picked in each tab, from its first (ALGORITHM comes back to it) */
+    volatile uint8_t mpc[NTRK];  /* ((1.3) MIDI Program Change per track, 0x80 | program, 0 none: midi_control.c mpc_io
+                                  * notes it, midi_pc_poll loads it) */
     uint16_t menu_scroll;        /* continuous ABOUT + CREDITS position, pixels */
     uint32_t menu_sig, home_t0;  /* HOME press time (btn_hold) */
     uint8_t force;               /* full redraw pending */
@@ -232,6 +244,12 @@ static struct {
         uint8_t sig;             /* a card: what its value is of (label, unit, track, engine, palette) */
     } roll[5];
     int16_t roll_bpm;            /* the BPM last drawn */
+    struct {                     /* (1.3) MIDI LEARN (midi_learn.c; here, not loose globals: the audio ISR's data keeps
+                                  * its layout and its cost, tests/target_budget.py) */
+        uint8_t on;              /* MIDI LEARN is on */
+        uint8_t pick, trk, id;   /* a parameter picked (1): its track and P_* id */
+        volatile uint8_t io[2];  /* midi_control.c ml_arm, ml_heard */
+    } ml;
 } ui;
 
 enum { CF_NONE, CF_CLEAR_SEQ, CF_OVR_PROJ, CF_OVR_USER,
@@ -741,13 +759,61 @@ static void grid_acc(track_t *t, uint32_t i, uint32_t l, uint32_t on)
     s->acc = (uint8_t)(on ? s->acc | b : s->acc & ~b);
 }
 
-/* SEQ cursor: wraps inside the pattern length, the bank follows, a step entry ends */
+/* (Skiff 1.3, from Felucca 1.6 #242) SEQ's step pages (STEP, ROLL, CHANCE, PLAY) follow the play position: a melodic
+ * pattern longer than the 16 steps on the screen shows the bank the playhead is in while the transport plays (ui.bank
+ * only: the cursor, the pattern and the saved project are untouched; DRUM's grid keeps its bank, its keys edit what the
+ * grid shows). The bank is left alone ("held") from the moment the cursor moves or a knob edits the cursor's step, or
+ * step entry has the keys: it goes back to the cursor's, so what is being edited stays on the screen. Following starts
+ * again after FOLLOW_MS without that, or once the playhead has gone one pass round the pattern, whichever is first. The
+ * transport stopped, another track, or the page left: nothing held any more */
+#define FOLLOW_MS 3000u
+static struct {
+    uint32_t t;                                        /* fm1_ms of the last touch of the cursor's step */
+    uint16_t prev, steps;                              /* the playhead at the last poll, the steps it has gone since */
+    uint8_t hold;
+} follow;
+static void follow_hold(void)
+{
+    follow.hold = 1;
+    follow.t = fm1_ms;
+    follow.prev = TSEL->seq_idx;
+    follow.steps = 0;
+    ui.bank = (uint8_t)(ui.cursor / 16u);
+}
+static void follow_poll(void)                          /* ui_input, every pass */
+{
+    uint32_t len = (uint32_t)TSEL->p[P_SLEN], want, g = cur_page()->graph;
+    if (!song.playing || ui.home || ui.menu || ui.confirm || drum_track(TSEL) ||
+        !(step_page(g) || g == GR_CHANCE || g == GR_PLAY)) {
+        follow.hold = 0;
+        return;
+    }
+    if (len <= 16u)
+        return;
+    if (ui.entry_open)                                 /* step entry has the keys: stay at the cursor */
+        follow_hold();
+    if (follow.hold) {
+        uint32_t idx = TSEL->seq_idx;
+        follow.steps = (uint16_t)(follow.steps + (idx + len - follow.prev) % len);
+        follow.prev = (uint16_t)idx;
+        if (fm1_ms - follow.t < FOLLOW_MS && follow.steps < len)
+            return;
+        follow.hold = 0;
+    }
+    want = TSEL->seq_idx / 16u;
+    if (want * 16u < len && want != ui.bank)
+        ui.bank = (uint8_t)want;
+}
+
+/* SEQ cursor: wraps inside the pattern length, the bank follows, a step entry ends ((1.3) the bank stays there a while,
+ * follow_hold) */
 static void cursor_set(int32_t c)
 {
     int32_t len = TSEL->p[P_SLEN] > 0 ? TSEL->p[P_SLEN] : 1;
     ui.cursor = (uint8_t)((c % len + len) % len);
     ui.bank = (uint8_t)(ui.cursor / 16u);
     ui.entry_open = 0;
+    follow_hold();
 }
 
 static void cursor_fix(void)                           /* LEN got shorter: onto the last step */
@@ -1009,9 +1075,40 @@ static void load_motion_hold(track_t *t, uint32_t what)
     motion_set_enabled(t, 0);
 }
 
+/* (Skiff 1.3, from Felucca 1.2) MOMENTARY (ui_input.c mom_turn: LFO held, the knobs' changes go back when it is let go):
+ * the values turned, where they are (a track's p[], song.g[]) and what they were. In the main loop's pool (no .bss) */
+#define MOM_N 8u
+static struct {
+    uint8_t n;                                    /* values held, 0 = none */
+    int16_t *vp[MOM_N];
+    int16_t v[MOM_N];
+} mom __attribute__((section(".pool")));
+static void mom_restore(void)                     /* LFO let go: every value back */
+{
+    while (mom.n) {
+        mom.n--;
+        *mom.vp[mom.n] = mom.v[mom.n];
+    }
+}
+static void mom_back(const track_t *t)            /* a sound load into t (0: a project): its values back first */
+{
+    uint32_t i, k = 0;
+    for (i = 0; i < mom.n; i++)
+        if (!t || (mom.vp[i] >= t->p && mom.vp[i] < t->p + P_COUNT) || (mom.vp[i] >= song.g && mom.vp[i] < song.g + G_COUNT)) {
+            *mom.vp[i] = mom.v[i];                /* (a global: back too, before the load's undo copy) */
+        } else {
+            mom.vp[k] = mom.vp[i];
+            mom.v[k++] = mom.v[i];
+        }
+    mom.n = (uint8_t)k;
+}
 static void load_begin(track_t *t, uint32_t what)
 {
     uint32_t i = trk_index(t);
+    if (what & UNDO_SOUND) {
+        mom_back(t);                              /* ((1.3) MOMENTARY: the sound as it was, then the load) */
+        drum_mute[i] = 0;                         /* ((1.3) the lanes' mutes go with the sound) */
+    }
     if (undo_depth++)
         return;
     motion_restore(t);
@@ -1261,6 +1358,36 @@ static uint32_t preset_rank(const engine_t *e, uint32_t k)
 }
 
 #define preset_shown(e) (ENGINES[e]->npresets - (ENGINES[e]->presets == SMP_PRESET_TABLE ? SMP_NALIAS : 0u))
+
+/* (Skiff 1.3, from Felucca 1.5.1, its #179 by renebohne) MIDI Program Change: program n on track t, as the PRESETS list
+ * numbers the engine's sounds from 0: its n-th preset, the aliases skipped (preset_orig), loaded as from there (one
+ * undo for a run of them). A program past the last is ignored, not wrapped: a number is always the same sound */
+static void apply_preset_to(track_t *t, uint32_t pi);
+static volatile uint8_t *const mpc_io = ui.mpc;
+static void midi_pc_load(track_t *t, uint32_t n)
+{
+    uint32_t e = t->eng_req % NENGINES, k;
+    if (n >= preset_shown(e))
+        return;
+    for (k = 0; preset_orig(ENGINES[e], k) != k || n--; k++)   /* the n-th shown preset */
+        ;
+    apply_preset_to(t, k);
+}
+static void midi_pc_poll(void)                       /* main loop (ui_input) */
+{
+    uint32_t k, v;
+    for (k = 0; k < NTRK; k++) {
+        if (!ui.mpc[k])
+            continue;
+        fm1_irq_off();                               /* (the ISR may note another meanwhile) */
+        v = ui.mpc[k];
+        ui.mpc[k] = 0;
+        fm1_irq_on();
+        midi_pc_load(&trk[k], v & 127u);
+        ui.force = 1;
+    }
+}
+#include "midi_learn.c"                           /* (1.3) MIDI LEARN: MENU > MIDI, a knob, a CC */
 #define preset_listed(e) (eng_allowed(song.sel, e) ? preset_shown(e) : 0u)   /* ((Skiff phase 6) the PRESETS list: what
                                                                          * the selected track may play) */
 
@@ -1506,12 +1633,34 @@ static int preset_favorite(void)
     return favorite_has(k < UP_SLOTS ? NENGINES : TSEL->eng_req,
                                         k < UP_SLOTS ? k : TSEL->preset);
 }
+/* (Felucca #197) a settings change made by a knob (PRESETS > LIST, the FAV mark on PRESETS and in the EDIT layer) is
+ * written later, as MENU's are when it closes: a write erases a flash sector with the interrupts off (~40 ms), which
+ * stops the LED scan (a flash of the whole panel) and the audio. Written once the view it was made in is left
+ * (another page, HOME, a layer shown or let go, the MENU) or after SET_LATER_MS without panel input (scrn.idle),
+ * never on every detent; settings_poll still waits for the transport */
+#define SET_LATER_MS 10000u
+static struct { uint8_t on, page, home, layer; } set_later __attribute__((section(".pool")));
+static void settings_later(void)
+{
+    set_later.on = 1;
+    set_later.page = ui.page;
+    set_later.home = ui.home;
+    set_later.layer = ui.layer;
+}
+static void settings_later_poll(void)                  /* ui_input, every pass */
+{
+    if (set_later.on && (set_later.page != ui.page || set_later.home != ui.home || set_later.layer != ui.layer ||
+                         ui.menu || fm1_ms - scrn.idle >= SET_LATER_MS)) {
+        set_later.on = 0;
+        settings_save();
+    }
+}
 static void preset_mark(int on)
 {
     uint32_t k = user_of(TSEL);
     if (favorite_set(k < UP_SLOTS ? NENGINES : TSEL->eng_req, k < UP_SLOTS ? k : TSEL->preset, on)) {
         ui.force = 1;
-        settings_save();
+        settings_later();
     }
 }
 
@@ -1605,6 +1754,7 @@ static void track_select(uint32_t i)
     ui.hot_t = 0;
     ui.cursor = 0;
     ui.bank = 0;
+    follow.hold = 0;                                   /* ((1.3) the roll follows the new track's playhead) */
     sync_reload = 1;
     ui.force = 1;
 }

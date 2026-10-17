@@ -57,7 +57,7 @@
  * refuses it (a newer format).
  *
  * Parameter locks (1.1, core.h MOTION_LOCK) are motion records with bit 7 of their id byte set (P_COUNT 99 < 128:
- * the bit is free): no byte moved for them, and every project before 1.1 has none. FUN9 holds them. A FUN8 / FUN7
+ * the bit is free; (Skiff 1.3) P_COUNT passed 127, but a store's ids are PROJ_NP's, proj_motion_np): no byte moved for them, and every project before 1.1 has none. FUN9 holds them. A FUN8 / FUN7
  * record of a 1.1 development build may hold some: on load their ids move to today's positions as the others do,
  * the lock bit kept (proj_motion_ids). Firmware before 1.1 refuses a project that holds a lock (an id out of its
  * range), as with RATCH below; FUN9 it refuses anyway (a newer format).
@@ -734,7 +734,7 @@ static void proj_mot_put(uint8_t *b, const motion_store_t *m)
         if (out && (i >= m->count || (e->place >> 6) >= PROJ_NT))
             continue;
         b[4u + 4u * n] = (uint8_t)e->place;
-        b[5u + 4u * n] = e->param;
+        b[5u + 4u * n] = (uint8_t)(MOTION_ID(e) | (e->lock ? MOTION_LOCK : 0u));   /* (< 128: proj_motion_np) */
         b[6u + 4u * n] = (uint8_t)v;
         b[7u + 4u * n++] = (uint8_t)(v >> 8);
     }
@@ -749,7 +749,8 @@ static int proj_mot_get(motion_store_t *m, const uint8_t *b)
         motion_event_t *e = &m->event[i];
         int32_t v = (int16_t)(b[6u + 4u * i] | (uint16_t)b[7u + 4u * i] << 8);
         e->place = b[4u + 4u * i];
-        e->param = b[5u + 4u * i];
+        e->id = b[5u + 4u * i] & 127u;
+        e->lock = b[5u + 4u * i] >> 7;
         e->value = (int8_t)v;
         if (i < m->count && (v < -64 || v > 127))
             return 0;
@@ -776,7 +777,7 @@ static int proj_motion_np(motion_store_t *m)
     for (i = 0; i < m->count && i < MOTION_MAX; i++) {
         uint32_t id = MOTION_ID(&m->event[i]);
         if (id >= P_E0)
-            m->event[i].param = (uint8_t)((m->event[i].param & MOTION_LOCK) | (id - PROJ_NX));
+            m->event[i].id = (uint8_t)(id - PROJ_NX);
         else if (id >= PROJ_NP - 8u)
             return 0;
     }
@@ -793,7 +794,7 @@ static int proj_pack(project_store_t *out, const project_t *q)
     for (t = 0; t < PROJ_NT; t++)
         for (i = 0; i < FM6_PACKED; i++)
             if (q->fm6[t][i] > 127u) return 0;
-    if (!chain_valid(&q->chain) || !motion_valid(&q->motion) || P_COUNT > 127u || !proj_motion_np(&mo)) return 0;
+    if (!chain_valid(&q->chain) || !motion_valid(&q->motion) || !proj_motion_np(&mo)) return 0;
     memset(out, 0, sizeof *out); memcpy(b, &magic, 4); memcpy(b + 4, &size, 4);
     memcpy(b + 8, q->g, sizeof q->g); b[62] = q->sel; b[63] = q->parts; b[64] = q->phys; b[66] = PROJ_NP;
     for (t = 0; t < PROJ_NT; t++) {
@@ -820,7 +821,7 @@ static int proj_pack(project_store_t *out, const project_t *q)
 /* the motion of a FUN7 / FUN8 written with np parameters (np < P_COUNT: a FUN7 of 89 before the chord keys, every
  * FUN8 of 91 before the DRUM lane levels) -> today's ids: an event names a parameter id, and the ids from that
  * store's P_E0 (np - 8) on moved up with P_E0, as its values did (params_by_count); the ones below kept theirs. A
- * lock's bit 7 (MOTION_LOCK) stays: the id moves under it (a FUN8 / FUN7 of a 1.1 development build may hold
+ * lock stays a lock: the id moves (a FUN8 / FUN7 of a 1.1 development build may hold
  * locks). 0: an id that store could not have named (np or more) */
 static int proj_motion_ids(motion_store_t *m, uint32_t np)
 {
@@ -829,7 +830,7 @@ static int proj_motion_ids(motion_store_t *m, uint32_t np)
         uint32_t id = MOTION_ID(&m->event[i]);
         if (id >= np) return 0;
         if (np < P_COUNT && id >= np - 8u)
-            m->event[i].param = (uint8_t)((m->event[i].param & MOTION_LOCK) | (id + P_COUNT - np));
+            m->event[i].id = (uint8_t)(id + P_COUNT - np);
     }
     return 1;
 }
@@ -918,7 +919,7 @@ static int proj_pack2(project_store_t *out, const project_t *q, const proj_fmt_t
     for (t = 0; t < f->nt; t++)
         for (i = 0; i < FM6_PACKED; i++)
             if (q->fm6[t][i] > 127u) return 0;
-    if (!proj_ent_ok(q) || P_COUNT > 127u) return 0;
+    if (!proj_ent_ok(q)) return 0;
     memset(out, 0, sizeof *out); memcpy(b, &f->magic, 4); memcpy(b + 4, &f->size, 4);
     memcpy(b + 8, q->g, sizeof q->g); b[62] = q->sel; b[63] = q->parts; b[64] = q->phys; b[65] = q->song;
     b[66] = PROJ_NP;
@@ -1340,6 +1341,8 @@ static int project_restore_runtime(const project_t *input)
 }
 static void project_load(uint32_t slot)
 {
+    mom_back(0);                                  /* ((1.3) MOMENTARY: the values as they were, then the load) */
+    memset(drum_mute, 0, sizeof drum_mute);       /* ((1.3) the DRUM lanes' mutes, performance state) */
 #if FELUCCA_FLASH
     if (flash_ok && !proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t))) proj_fetch(slot);
 #endif
@@ -1603,6 +1606,8 @@ static int project_erase(uint32_t slot)
 static void project_new(void)
 {
     uint32_t i, k;
+    mom_back(0);                                  /* ((1.3) MOMENTARY: as project_load) */
+    memset(drum_mute, 0, sizeof drum_mute);
     transport_stop_now();
     (void)stage_cancel();
     if (keep_all() == 1) {

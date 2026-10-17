@@ -51,8 +51,24 @@ async function editorMock() {
   const rq = async (r, o) => link.request(r, o);
   const info = E.parse[E.CMD.INFO](await rq(E.req.info()));
   ok(info.nengines === 15 && info.engines[1] === "-" && info.engines[12] === "FM6" && info.engines[13] === "SLICE" && info.engines[14] === "DRUM-X"
- && info.engines[5] === "VOICE" && info.engines[6] === "TRIO" && info.engines[7] === "WHEEL" && info.engines[8] === "GRAIN" && info.engines[9] === "PHYS" && info.engines[10] === "DRUM" && info.engines[11] === "NOISE" && info.pcount === 125 && info.pe0 === 117 && info.engines[4] === "SAMPLE",
-    "editor: INFO");
+ && info.engines[5] === "VOICE" && info.engines[6] === "TRIO" && info.engines[7] === "WHEEL" && info.engines[8] === "GRAIN" && info.engines[9] === "PHYS" && info.engines[10] === "DRUM" && info.engines[11] === "NOISE" && info.pcount === 135 && info.pe0 === 127 && info.engines[4] === "SAMPLE",
+    "editor: INFO (Skiff 1.3: P_COUNT 135, P_E0 127 from its wide-ids tag)");
+  {
+    /* (Skiff 1.3) wide ids: a track id from 128 on (E1..E7 since P_E0 127) goes as scope 2 and comes back whole (GET, SET,
+       DESC), in TRACK_PARAM's track byte (bit 6) and in a MOTION record's step byte (bit 6); 127 (E0) is still scope 0 */
+    const v0 = E.parse[E.CMD.GET](await rq(E.req.get(0, 130))).value;
+    const a = E.req.set(0, 130, 10), s = E.parse[E.CMD.SET](await rq(a)), g = E.parse[E.CMD.GET](await rq(E.req.get(0, 130)));
+    const d = E.parse[E.CMD.DESC](await rq(E.req.desc(0, 134)));
+    const tp = E.parse[E.CMD.TRACK_PARAM](await rq(E.req.trackParam(3, 129)));
+    const e0 = E.req.get(0, 127);
+    const mo = E.parse[E.CMD.MOTION](await rq(E.req.motion(0, 3, { step: 5, param: 131, value: 9 }, info.ntrk)));
+    ok(a[1][0] === 2 && a[1][1] === 2 && s.scope === 0 && s.id === 130 && s.value === 10 && g.id === 130 && g.value === 10 &&
+       d.scope === 0 && d.id === 134 && d.label === "KEYTRK" && tp.track === 3 && tp.id === 129 && e0[1][0] === 0 && e0[1][1] === 127 &&
+       mo.events.some((e) => e.step === 5 && e.param === 131 && e.value === 9),
+       "editor: wide ids: SET / GET 130 and DESC 134 as scope 2, TRACK_PARAM 129 (bit 6), a motion record of 131; E0 127 scope 0");
+    await rq(E.req.motion(0, 2, {}, info.ntrk));
+    await rq(E.req.set(0, 130, v0));
+  }
   let descs = 0;
   for (let i = 0; i < info.pcount; i++) if (E.parse[E.CMD.DESC](await rq(E.req.desc(0, i))).label) descs++;
   ok(descs === info.pcount, "editor: DESC for every parameter");
@@ -77,9 +93,9 @@ async function editorMock() {
     const md = [];
     for (let i = 49; i < 61; i++) md.push(E.parse[E.CMD.DESC](await rq(E.req.desc(0, i))));
     ok(md.map((d) => d.label).join() === "SRC1,DEST1,AMT1,SRC2,DEST2,AMT2,SRC3,DEST3,AMT3,SRC4,DEST4,AMT4"
-      && md[0].names.join() === "OFF,LFO,ENV,VEL,KEY,RAND,MODW,AT,EXPR,ENV2" && md[1].names.length === 20
-      && md[1].names[11] === "VIB" && md[1].names[19] === "E8" && md[2].min === -64 && md[2].max === 63 && md.every((d) => d.def === 0),
-      "editor: matrix parameters 49..60 over DESC (20 DST names)");
+      && md[0].names.join() === "OFF,LFO,ENV,VEL,KEY,RAND,MODW,AT,EXPR,ENV2,S&H,SLEW" && md[1].names.length === 23
+      && md[1].names[11] === "VIB" && md[1].names[19] === "E8" && md[1].names[22] === "TIME" && md[2].min === -64 && md[2].max === 63 && md.every((d) => d.def === 0),
+      "editor: matrix parameters 49..60 over DESC (23 DST names: (1.3) DEPTH VEL TIME)");
     await rq(E.req.set(0, 52, 1));
     await rq(E.req.set(0, 53, 12));
     await rq(E.req.set(0, 54, -30));
@@ -290,9 +306,9 @@ async function editorSamplePresets() {
   const kitD = E.parse[C.DESC](await rq(E.req.desc(0, info.pe0)));
   const kitSet = [];
   for (const v of [1, 2, 3]) kitSet.push(E.parse[C.SET](await rq(E.req.set(0, info.pe0, v))).value);
-  ok(eq(kitD.names, ["STD", "66", "10", "77", "80", "10", "66", "55", "77"]) &&
-     eq([0, 1, 2, 3, 4, 5, 6, 7, 8].map((v) => E.aliasOf(kitD.names, v)), [0, 6, 5, 8, 4, 5, 6, 7, 8]) &&
-     eq(E.enumShown(kitD).filter((v) => E.aliasOf(kitD.names, v) === v).map((v) => kitD.names[v]), ["STD", "80", "10", "66", "55", "77"]) &&
+  ok(eq(kitD.names, ["STD", "66", "10", "77", "80", "10", "66", "55", "77", "DEEP", "TIGHT", "PERC"]) &&
+     eq([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((v) => E.aliasOf(kitD.names, v)), [0, 6, 5, 8, 4, 5, 6, 7, 8, 9, 10, 11]) &&
+     eq(E.enumShown(kitD).filter((v) => E.aliasOf(kitD.names, v) === v).map((v) => kitD.names[v]), ["STD", "80", "10", "66", "55", "77", "DEEP", "TIGHT", "PERC"]) &&
      eq(kitSet, [6, 5, 8]),
     "DRUM: KIT 1..3 (once HAND CYM H+CYM) named 66 10 77, aliases of 6 5 8: hidden, a SET lands there");
   const removed = E.parse[C.PRESET](await rq(E.req.preset(4, 4)));
@@ -328,8 +344,8 @@ function mockTables() {
        ph.presets.length === 11 && !ph.presets.some((p) => p.name === "RAIN" || p.name === "DRUM KIT"),
        "editor: PHYS models MODAL STRNG MEMB SYMP (no DUST, no DRUM), 11 presets");
     ok(dr.name === "DRUM" && dr.edit.map((d) => d.label).join() === "KIT,PITCH,TONE,DECAY,SNAP,ACCENT,KICK,DRIVE" &&
-       dr.presets.length === 10 && dr.presets[0].name === "DRUM KIT",
-       "editor: DRUM engine 10 (KIT PITCH TONE DECAY SNAP ACCENT KICK DRIVE), DRUM KIT first of 10");
+       dr.presets.length === 13 && dr.presets[0].name === "DRUM KIT",
+       "editor: DRUM engine 10 (KIT PITCH TONE DECAY SNAP ACCENT KICK DRIVE), DRUM KIT first of 13");
   }
   const dj = DESC;
   if (!existsSync(dj)) { console.log("editor: mock tables == firmware (no build/host/desc.json)        skip"); return; }
@@ -983,7 +999,7 @@ async function editorLive() {
   const dump = E.parse[C.DUMP](await pend, info);
   const ch = ev.pushes.find((f) => f.cmd === C.CHANGED);
   const cv = ch && E.parse[C.CHANGED](ch.a);
-  ok(dump.p.length === 125 && ch && ch.pending === C.DUMP && cv.scope === 0 && cv.id === 9 && cv.value === kn.value && !ev.unknown.length,
+  ok(dump.p.length === 135 && ch && ch.pending === C.DUMP && cv.scope === 0 && cv.id === 9 && cv.value === kn.value && !ev.unknown.length,
     "live: CHANGED while DUMP waits -> push handler, reply still matched");
   const rl = m.sim.reload();
   m.sim.step(3);

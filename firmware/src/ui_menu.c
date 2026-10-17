@@ -196,14 +196,16 @@ static void menu_head(void)
  *                   CLOSE is in the header: the four would not fit in S (cv_key_row drops words, from the last)
  * Drawn in two bands (the canvas holds 124 rows) split in a gap between two rows; while the tabs slide only their
  * strip (24..58) is drawn again */
-static const uint16_t MTAB_ICON[MTAB_COUNT] = {ICON_X_EYE, ICON_X_KNOB, ICON_X_SPEAKER, ICON_X_COG};
+static const uint16_t MTAB_ICON[MTAB_COUNT] = {ICON_X_EYE, ICON_X_KNOB, ICON_X_SPEAKER, ICON_X_COG, ICON_MIDI};
 #define MT_Y 29                                        /* the tab bar */
 #define MT_H 24
-#define MT_IW 32                                       /* a cushion with its icon alone (the icon centred in it) */
-#define MT_NX 28                                       /* the name's pen in the one shown; 10 px after it */
+#define MT_IW 28                                       /* a cushion with its icon alone (the icon centred in it; (1.3) 28,
+                                                        * was 32: five tabs) */
+#define MT_NX 26                                       /* the name's pen in the one shown; 10 px after it */
 #define MT_X0 6
 #define MT_X1 234
-#define MT_GAP 8                                       /* between two tabs, always (the bar centred in MT_X0..MT_X1) */
+#define MT_GAP 5                                       /* between two tabs, always (the bar centred in MT_X0..MT_X1; (1.3) 5,
+                                                        * was 8: five tabs) */
 #define MT_ONE 64                                      /* mt.pos per tab */
 #define MP_Y 59                                        /* the rows' panel */
 #define MP_PAD 3
@@ -215,9 +217,16 @@ static const uint16_t MTAB_ICON[MTAB_COUNT] = {ICON_X_EYE, ICON_X_KNOB, ICON_X_S
 static int menu_large(void) { return (ui_prefs & PREF_LARGE) != 0u; }
 static uint32_t menu_tab(void) { return MI_TAB[ui.menu_sel % MI_COUNT]; }
 /* the shown tab's rows: 24 px (LARGE 28, a tab of up to 5 rows), 2 px apart (a tab of 6: 1 px, its panel then ends
- * 6 px above the key hints as the others do; the rule between two rows is that gap row) */
-static int32_t mr_h(void) { return menu_large() && mtab_rows(menu_tab()) <= 5u ? 28 : 24; }
-static int32_t mr_gap(void) { return mtab_rows(menu_tab()) <= 5u ? 2 : 1; }
+ * 6 px above the key hints as the others do; the rule between two rows is that gap row). (1.3) A tab of more shows
+ * MTAB_ROWS of them from mr_top, so the cursor's row is the last shown once past them (MIDI's ten) */
+static uint32_t mr_n(void) { return mtab_rows(menu_tab()) < MTAB_ROWS ? mtab_rows(menu_tab()) : MTAB_ROWS; }
+static uint32_t mr_top(void)
+{
+    uint32_t k = ui.menu_sel - mtab_first(menu_tab());
+    return k < MTAB_ROWS ? 0u : k + 1u - MTAB_ROWS;
+}
+static int32_t mr_h(void) { return menu_large() && mr_n() <= 5u ? 28 : 24; }
+static int32_t mr_gap(void) { return mr_n() <= 5u ? 2 : 1; }
 static int32_t mr_y(uint32_t k) { return MP_Y + MP_PAD + (int32_t)k * (mr_h() + mr_gap()); }
 
 /* the tab bar's place: the tab shown at pos tab * MT_ONE; with ANIM ON it follows in halving steps, a frame each
@@ -301,7 +310,7 @@ static void menu_row(uint32_t k, uint32_t row)
     uint16_t fg = sel && !ux.quark ? T_INK : T_TEXT, val = sel ? (ux.quark ? T_ACCENT : T_INK) : ux.neon ? T_ACCENT : T_THEME;
     uint16_t sk = sel && !ux.quark ? T_INK : T_MID;    /* (the chevron, a unit) */
     int lead = ux.crypt || ux.neon ? !sel : ux.quark;  /* (the dotted leaders: QUARK's every row) */
-    const char *v = row < MI_VALUES ? menu_vname(row, menu_get(row)) : "";
+    const char *v = row < MI_VALUES ? menu_vname(row, menu_get(row)) : "";   /* ((1.3) LEARN CLEAR: its count) */
     int32_t nx, ly = y + h / 2 + 3;                    /* (Skiff) CRYPT: the leader's row, by the capitals' foot */
     if (sel && ux.neon) {                              /* (Skiff N3) NEON: a sunset bar */
         uint16_t st[3] = {T_THEME, NE_VIOLET, ux_mix(NE_VIOLET, T_ACCENT, 50)};
@@ -325,11 +334,17 @@ static void menu_row(uint32_t k, uint32_t row)
     GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "menu row name centred up/down");
     nx = cv_text_on(MR_LX, ny, large ? &AF_M : &AF_S, MI_NAME[row], fg, bg) + 4;
     }
-    if (row >= MI_VALUES) {                            /* CALIBRATION, ABOUT: OCT+ opens them */
+    if (menu_act(row)) {                               /* CALIBRATION, ABOUT: OCT+ opens them ((1.3) MIDI LEARN, LEARN
+                                                        * CLEAR: does them, its value before the chevron) */
+        x0 = MR_VR - 16;
         GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "menu row chevron centred up/down");
         cv_icon_in(MR_VR - 12, y, 0, h, 12, ICON_X_RIGHT, sk, bg);
+        if (*v) {
+            GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "menu row value centred up/down");
+            x0 = cv_text_r(x0 - 4, vy, &AF_M, v, str_eq(v, "NONE") && !sel ? T_DIM : val, bg) - 4;
+        }
         if (lead)
-            cr_leader(nx, MR_VR - 16, ly);
+            cr_leader(nx, x0, ly);
         return;
     }
     if (row == MI_HOLD) {                              /* "0.4" and its unit */
@@ -392,9 +407,13 @@ static void draw_menu(void)
           ui_rec_prefs * 92821u +
           (ui.menu == 2 ? ui.menu_scroll * 48611u : 0u) +
           /* (1.2.1) the rows' values that live elsewhere: TUNE, CLOCK, MIDI IN, HINTS, and the load SYSTEM > CPU shows, so
-           * a step or a change of the load redraws them (they stayed as drawn until the cursor moved) */
+           * a step or a change of the load redraws them (they stayed as drawn until the cursor moved); ((Skiff 1.3) the
+           * CPU row's cores too) */
           (uint32_t)song.g[G_TUNE] * 24593u + (uint32_t)song.g[G_CLOCK] * 769u + (uint32_t)song.g[G_ROUTE] * 1543u +
-          ui_hints_off * 3079u + song.cpu_q8 * 100u / 256u * 12289u;
+          ui_hints_off * 3079u + menu_get(MI_CPU) * 18451u + song.cpu_q8 * 100u / 256u * 12289u +
+          ml_count() * 2741u + ui.ml.on * 3463u + (uint32_t)(ui_mch(0) + ui_mch(1) * 3u + ui_mch(2) * 7u + ui_mch(3) * 11u +
+          ui_mch(4) * 13u + ui_mch(5) * 17u) * 5101u +   /* ((1.3) LEARN's count, the tracks' channels) */
+          (uint32_t)transport_busy() * 40503u;          /* ((Skiff 1.3) CPU's STOP / RESTART) */
     if (!ui.force && sig == ui.menu_sig) {
         if (ui.menu == 1 && mt.pos != pos0) {          /* only the tabs slid: their strip */
             cv_begin(240, MP_Y - H_HEAD, T_BG);
@@ -427,8 +446,8 @@ static void draw_menu(void)
         cv_blit(0, H_HEAD + MENU_DOC_H);
         return;
     }
-    first = mtab_first(menu_tab());
-    n = mtab_rows(menu_tab());
+    first = mtab_first(menu_tab()) + mr_top();
+    n = mr_n();
     split = menu_split(n);
     for (pass = 0; pass < 2u; pass++) {
         int32_t top_y = pass ? (int32_t)split : H_HEAD;
@@ -444,8 +463,18 @@ static void draw_menu(void)
         for (k = 0; k < n; k++)
             if (mr_y(k) + mr_h() > top_y && mr_y(k) - 1 < top_y + (int32_t)cv_h)
                 menu_row(k, first + k);
-        if (pass)
-            cv_key_row(8, 232, MK_Y, KEYS[ui.menu_sel >= MI_VALUES], 3, 7u, T_BG);
+        if (mtab_rows(menu_tab()) > n) {              /* ((1.3) more rows than shown: where they are, at the right) */
+            int32_t y0 = mr_y(0), hh = mr_y(n) - mr_gap() - y0, all = (int32_t)mtab_rows(menu_tab());
+            cv_rect(233, y0, 2, hh, T_LINE);
+            cv_rect(233, y0 + hh * (int32_t)mr_top() / all, 2, hh * (int32_t)n / all, T_MID);
+        }
+        if (pass) {                                   /* ((1.3) MIDI LEARN: START / STOP, LEARN CLEAR: CLEAR) */
+            khint_t kh[3];
+            memcpy(kh, KEYS[menu_act(ui.menu_sel)], sizeof kh);
+            if (ui.menu_sel == MI_LEARN || ui.menu_sel == MI_LCLEAR)
+                kh[2].act = ui.menu_sel == MI_LCLEAR ? "CLEAR" : ui.ml.on ? "STOP" : "START";
+            cv_key_row(8, 232, MK_Y, kh, 3, 7u, T_BG);
+        }
         cv_oy = 0;
         cv_blit(0, (uint32_t)top_y);
     }
@@ -503,7 +532,7 @@ static void menu_input(uint32_t oct)                  /* oct: ui_input.c oct_tap
         menu_tab_go(s);
     for (s = 0, k = 0; k < 4u; k++)                    /* KNOB 1..4, any of them */
         s += panel_enc(EN_K1 + k);
-    if (ui.menu_sel < MI_VALUES) {
+    if (!menu_act(ui.menu_sel)) {
         /* a step (OCT+ the next value, OCT- the previous); COLOR previews the palette, STYLE is drawn so from the next
          * frame (FX LATCH: the latched effects are off while the menu is up) */
         s += (int32_t)up - (int32_t)dn;
@@ -517,6 +546,15 @@ static void menu_input(uint32_t oct)                  /* oct: ui_input.c oct_tap
         } else if (ui.menu_sel == MI_RESET) {          /* ((Skiff U4, A3) its dialog, on the page under the MENU) */
             menu_close();
             confirm_open(CF_RESET_SET, 0);
+        } else if (ui.menu_sel == MI_LEARN) {          /* ((1.3) MIDI LEARN on, on the page under the MENU; on: done) */
+            menu_close();
+            if (ui.ml.on) {
+                ml_off();
+                ui_message("LEARN DONE");
+            } else
+                ml_start();
+        } else if (ui.menu_sel == MI_LCLEAR) {         /* ((1.3) every learned CC) */
+            ui_message(ml_clear_all() ? "LEARN CLEARED" : "NOTHING LEARNED");
         } else {                                       /* MI_ABOUT */
             ui.menu = 2;
             ui.menu_scroll = 0;

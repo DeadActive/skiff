@@ -34,7 +34,7 @@
  * likewise (core.h SF_FLAM, 32). A drum grid
  * has no room for it (its flags are the accents): it loads x1.
  * (Skiff) A version 4 or 5 record keeps its pattern's NUDGE (both kinds) in the last 12 bytes of its parameter area,
- * UP_NUDGE_OFF (no P_COUNT reaches them: core.h keeps it below 128): 6 bits a step, two's complement (core.h
+ * packed[132..143]: 6 bits a step, two's complement (core.h
  * nudge_pack). Firmware before wrote 0s there (on the grid) and never reads them: the same version both ways. A
  * loaded user pattern brings its DIR too, with its LEN, DIV, SWING and GATE (a record without one: FWD).
  * A record of engine 1 (DIGITAL, retired in 1.0) stays as it is (UP_PUT takes it too): its values are DIGITAL's,
@@ -62,9 +62,9 @@ typedef struct {
     up_rec_t r[UP_PER_BANK];
 } up_bank_t;
 _Static_assert(sizeof(up_rec_t) == 192, "user preset record layout");
-_Static_assert(P_COUNT <= UP_PMAX * 2u && P_COUNT < 128, "user preset record: P_COUNT");
-#define UP_NUDGE_OFF (UP_PMAX * 2u - 12u)        /* (Skiff) packed[132..143]: the pattern's NUDGE (see the top) */
-_Static_assert(P_COUNT <= UP_NUDGE_OFF, "user preset record: the NUDGE plane after the parameters");
+_Static_assert(P_COUNT <= UP_PMAX * 2u, "user preset record: P_COUNT");
+/* (Skiff) packed[132..143] held the pattern's NUDGE (see the top); (phase 5) a user preset holds no pattern and nothing
+ * reads one, so (1.3) the parameters may pass 132 into it: firmware before maps them by count, as any np */
 static up_bank_t up_bank[UP_SLOTS / UP_PER_BANK];
 
 static up_rec_t *up_rec(uint32_t k) { return &up_bank[k / UP_PER_BANK].r[k % UP_PER_BANK]; }

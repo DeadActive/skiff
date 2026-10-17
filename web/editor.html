@@ -624,7 +624,11 @@ const parse = {
       }
       if (trailer[r] === 0x43 && trailer[r + 1] === 1) { o.stepx = trailer[r + 2]; r += 3; }   /* (Skiff W1) FLAM COND NUDGE */
       if (trailer[r] === 0x4B && trailer[r + 1] === 1) { o.kitLanes = trailer[r + 2]; r += 3; }   /* (Skiff W3) the DRUM-X kit */
-      if (trailer[r] === 0x57 && trailer[r + 1] === 1) o.skiff = trailer[r + 2] & 31;    /* (Skiff W3) TRANSPORT .. PERFORM */
+      if (trailer[r] === 0x57 && trailer[r + 1] === 1) { o.skiff = trailer[r + 2] & 31; r += 3; }   /* (Skiff W3) TRANSPORT .. PERFORM */
+      if (trailer[r] === 0x49 && trailer[r + 1] === 1) {                                  /* (Skiff 1.3) wide ids: */
+        o.pcount = trailer[r + 2] | trailer[r + 3] << 7;                                 /* P_COUNT and P_E0 whole */
+        o.pe0 = trailer[r + 4] | trailer[r + 5] << 7;
+      }
     }
     o.light = o.light || { tracks: 0, engines: 0 };   /* the tracks that may not play some engines, and those engines */
     return o;
@@ -645,7 +649,7 @@ const parse = {
     const r = new Reader(a), rc = r.b();
     return rc === 0 || rc === 3 || rc === 4 ? { rc, engine: r.b(), preset: r.v(), on: !!r.b() } : { rc };
   },
-  [CMD.GET](a) { const r = new Reader(a); return { scope: r.b(), id: r.b(), value: r.v() }; },
+  [CMD.GET](a) { const r = new Reader(a); return { ...widIn(r.b(), r.b()), value: r.v() }; },
   [CMD.SET](a) { return parse[CMD.GET](a); },
   /* needs the counts from INFO */
   [CMD.DUMP](a, info) {
@@ -657,7 +661,7 @@ const parse = {
   },
   [CMD.DESC](a) {
     const r = new Reader(a);
-    const o = { scope: r.b(), id: r.b(), fmt: r.b(), min: r.v(), max: r.v(), def: r.v(), label: r.s(), unit: r.s(), names: [] };
+    const o = { ...widIn(r.b(), r.b()), fmt: r.b(), min: r.v(), max: r.v(), def: r.v(), label: r.s(), unit: r.s(), names: [] };
     if (o.fmt === F.ENUM) for (let i = 0; i <= o.max - o.min && i < 24; i++) o.names.push(r.s());
     return o;
   },
@@ -741,7 +745,8 @@ const parse = {
     const kinds = o.count > 0 && a.length === 5 + o.count * 5;   /* (1.1: after ops 5..7, a kind per record: 0 automation, 1 lock;
                                                                  * none to say with none) */
     if (o.count > o.max || o.max !== 64 || (a.length !== 5 + o.count * 4 && !kinds)) throw new Error("Invalid motion reply");
-    for (let i = 0; i < o.count; i++) o.events.push({ step: r.b(), param: r.b(), value: r.v() });
+    for (let i = 0; i < o.count; i++) { const s = r.b(); o.events.push({ step: s & 63, param: r.b() | (s >> 6 & 1) << 7, value: r.v() }); }   /* ((1.3) bit 6:
+                                                                 the id's bit 7) */
     o.kinds = kinds;
     if (kinds) o.events.forEach((e) => { e.lock = r.b() === 1; });
     return o;
@@ -812,7 +817,8 @@ const parse = {
     return readHits(r, { track: r.b(), index: r.b(), n: r.b(), notes: [r.b(), r.b(), r.b(), r.b()], time: r.b(), flags: r.b(), vel: r.b() });
   },
   /* v4: a parameter of any track (the selection stays), and its push for a track that is not selected */
-  [CMD.TRACK_PARAM](a) { const r = new Reader(a); return { track: r.b(), id: r.b(), value: r.v() }; },
+  [CMD.TRACK_PARAM](a) { const r = new Reader(a), t = r.b(); return { track: t & 63, id: r.b() | (t >> 6 & 1) << 7, value: r.v() }; },   /* ((1.3)
+                                                    bit 6 of the track byte: the id's bit 7) */
   [CMD.TRACK_CHANGED](a) { return parse[CMD.TRACK_PARAM](a); },
   /* FM6 patches: target 0 a track, 1 the bank (retired in 1.0.3: rc 3), 2 a factory patch, 3 a user preset's patch
      (INFO fm6.caps bit 1); packed: the 128-byte record */
@@ -831,6 +837,10 @@ const parse = {
 function cleanProjName(s) { return String(s ?? "").toUpperCase().replace(/[^\x20-\x7E]/g, "").trim().slice(0, 12); }
 function upName(s) { return String(s ?? "").replace(/[^\x20-\x7E]/g, "").trim().slice(0, UP.NAME_MAX) || "PATCH"; }
 
+/* (Skiff 1.3, EDITOR_PROTOCOL.md "Wide ids") a track parameter from 128 on goes out as scope 2, id - 128, and comes back
+   so: the editor keeps scope 0 and the whole id */
+const widOut = (scope, id) => (scope === 0 && id >= 128 ? [2, id - 128] : [scope, id]);
+const widIn = (scope, id) => (scope === 2 ? { scope: 0, id: id + 128 } : { scope, id });
 const req = {
   uiState: () => [CMD.UI_STATE, []],
   uiSet: (id, value) => [CMD.UI_SET, [id, value]],
@@ -838,10 +848,10 @@ const req = {
   favGet: (engine, start, count) => [CMD.FAV_GET, [engine, ...v14enc(start), count]],
   favSet: (engine, preset, on) => [CMD.FAV_SET, [engine, ...v14enc(preset), on ? 1 : 0]],
   info: () => [CMD.INFO, []],
-  get: (scope, id) => [CMD.GET, [scope, id]],
-  set: (scope, id, v) => [CMD.SET, [scope, id, ...v14enc(v)]],
+  get: (scope, id) => [CMD.GET, widOut(scope, id)],
+  set: (scope, id, v) => [CMD.SET, [...widOut(scope, id), ...v14enc(v)]],
   dump: () => [CMD.DUMP, []],
-  desc: (scope, id) => [CMD.DESC, [scope, id]],
+  desc: (scope, id) => [CMD.DESC, widOut(scope, id)],
   stepGet: (i) => [CMD.STEP_GET, [i]],
   stepSet: (i, st) => {
     const n = Math.max(0, Math.min(4, st.n | 0));
@@ -863,7 +873,7 @@ const req = {
     if (!Number.isInteger(track) || track < 0 || track >= ntrk || ![0, 1, 2, 3, 4, 5, 6, 7].includes(op)) throw new Error("Invalid motion request");
     return [CMD.MOTION, [track, ...(op === 0 ? [] : op === 1 ? [op, arg.on ? 1 : 0] : op === 2 || op === 7 ? [op] :
       op === 6 ? [op, arg.step === 127 ? 127 : arg.step & 63] :   /* (1.1: 5 a lock, 6 a step's locks, 7 the query with the kinds) */
-      [op, arg.step & 63, arg.param & 127, ...(op === 3 || op === 5 ? v14enc(arg.value) : [])])]];
+      [op, (arg.step & 63) | (arg.param >> 7 & 1) << 6, arg.param & 127, ...(op === 3 || op === 5 ? v14enc(arg.value) : [])])]];
   },
   names: (e) => [CMD.NAMES, [e & 0x7F]],
   smpBegin: (s) => [CMD.SMP_BEGIN, [s & 0x7F]],
@@ -891,7 +901,7 @@ const req = {
   trackDump: (tr) => [CMD.TRACK_DUMP, [tr & 0x7F]],
   trackStep: (tr, i, st) => [CMD.TRACK_STEP, st ? [tr & 0x7F, ...req.stepSet(i, st)[1]] : [tr & 0x7F, i & 0x7F]],
   /* v4: get (v == null) or set parameter id (P_*) of track tr, clamped as SET */
-  trackParam: (tr, id, v) => [CMD.TRACK_PARAM, v == null ? [tr & 0x7F, id & 0x7F] : [tr & 0x7F, id & 0x7F, ...v14enc(v)]],
+  trackParam: (tr, id, v) => [CMD.TRACK_PARAM, [(tr & 63) | (id >> 7 & 1) << 6, id & 0x7F, ...(v == null ? [] : v14enc(v))]],
   /* FM6 patches (firmware with info.fm6) */
   fm6Get: (target, i) => [CMD.FM6_GET, [target & 0x7F, i & 0x7F]],
   fm6Put: (target, i, packed) => [CMD.FM6_PUT, [target & 0x7F, i & 0x7F, ...packed.map((x) => x & 0x7F)]],
@@ -1052,7 +1062,7 @@ function fmtValue(d, v) {
   const sign = (x) => (x > 0 ? "+" + x : String(x));
   switch (d.fmt) {
     case F.PCT: return [String(d.max === 100 ? v : Math.trunc((v * 100 + 63) / 127)), "%"];   /* 0..100 (SWG): the value */
-    case F.BIPCT: return [sign(Math.trunc(v * 100 / 64)), "%"];
+    case F.BIPCT: return [sign(Math.trunc(v * 100 / (v > 0 ? 63 : 64))), "%"];   /* (Skiff 1.3: +100 at the top, as the device) */
     case F.TIME: {
       const ms10 = Math.round(10 * Math.pow(10000, (v & 127) / 127));
       if (ms10 < 100) return [(ms10 / 10).toFixed(1), "ms"];
@@ -1537,6 +1547,9 @@ const P_DUCK = [92, 93, 94];                       /* (Skiff) core.h P_DKSRC P_D
    P_LDECAY0..7 (the DRUM lanes' TUNE and DECAY): sound parameters, as the engine's */
 const P_DRIVE = [95, 96], P_ENV2 = [97, 98, 99, 100];
 const P_LTUNE = Array.from({ length: 8 }, (_, i) => 101 + i), P_LDECAY = Array.from({ length: 8 }, (_, i) => 109 + i);
+/* (Skiff 1.3, P_COUNT 135, P_E0 127: wide ids) core.h P_LSYNC P_LTRIG P_LPOL (LFO 2), P_SPRD (SPREAD), P_ITYPE P_IA P_IB P_IC
+   P_IMIX (FX > INSERT), P_ESYNC (ENV SYNC): sound parameters, as the engine's */
+const P_LFO2 = [117, 118, 119], P_SPRD = 120, P_INSERT = [121, 122, 123, 124], P_IMIX = 125, P_ESYNC = 126;
 const trackOwn = (i, pe0) => TRACK_OWN.has(i) || (pe0 >= 83 && P_CHORD.includes(i)) || (pe0 >= 92 && i === P_DIR) ||
   (pe0 >= 95 && P_DUCK.includes(i));
 /* play a patch without writing flash, as UP_LOAD would load it: the sound only. SET the engine (G_ENGSEL:
@@ -1960,8 +1973,10 @@ function makeMockDevice(opt = {}) {
   const NONOFF = ["OFF", "ON"], NDIV = ["1/4", "1/8", "1/16", "1/32", "8T", "16T", "1/2", "1/1", "2BAR", "4BAR"], NGO = ["--", "GO"], NDASH = ["--"];
   const D = (label, fmt, min, max, def, names = null, unit = "") => ({ label, fmt, min, max, def, names, unit });
   const E = (label, names, def) => D(label, F.ENUM, 0, names.length - 1, def, names);
-  const MSRC = ["OFF", "LFO", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR", "ENV2"];   /* ((Skiff phase 9) ENV2) */
-  const MDST = ["OFF", "PITCH", "CUT", "SHP", "AMP", "PAN", "DIST", "CHO", "DLY", "REV", "RATE", "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8"];
+  const MSRC = ["OFF", "LFO", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR", "ENV2", "S&H", "SLEW"];   /* ((Skiff phase 9) ENV2;
+                                                       (1.3) S&H SLEW) */
+  const MDST = ["OFF", "PITCH", "CUT", "SHP", "AMP", "PAN", "DIST", "CHO", "DLY", "REV", "RATE", "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8",
+    "DEPTH", "VEL", "TIME"];                       /* ((1.3) the LFO's depth; at a note: VEL, TIME) */
   const TP = [
     D("LEVEL", F.DB, 0, 127, 104),
     D("ATTACK", F.TIME, 0, 127, 10), D("DECAY", F.TIME, 0, 127, 70), D("SUSTAIN", F.PCT, 0, 127, 90), D("RELEASE", F.TIME, 0, 127, 60),
@@ -1970,7 +1985,7 @@ function makeMockDevice(opt = {}) {
     D("PITCH", F.BIPCT, -64, 63, 0), D("CUTOFF", F.BIPCT, -64, 63, 0), D("SHAPE", F.BIPCT, -64, 63, 0), D("AMP", F.PCT, 0, 127, 0),
     E("MODE", ["OFF", "UP", "DN", "UPDN", "RND", "ORD", "REPEAT", "DNUP", "UP+8", "CONV", "DIVG", "PINKY", "THUMB", "WALK", "CHORD"], 0), E("RATE", NDIV, 2), D("OCTAVE", F.INT, 1, 4, 1), D("GATE", F.PCT, 1, 127, 64),
     D("SWING", F.PCT, 0, 100, 0), D("CHANCE", F.PCT, 0, 127, 127), E("HOLD", NONOFF, 0), E("ORDER", ["NOTE", "PLAYED"], 0),
-    D("ROOT", F.NOTE, 0, 11, 0), E("SCALE", ["CHR", "MAJ", "MIN", "DOR", "MIX", "PEN", "MPEN", "HARM", "PHRY", "LYD", "LOC", "MEL", "BLUES", "WHOLE", "DIMHW", "DIMWH"], 0), E("QUANTIZE", ["OFF", "SNAP", "WHITE", "SEQ"], 0), D("TRANSP", F.SEMI, -24, 24, 0),
+    D("ROOT", F.NOTE, 0, 11, 0), E("SCALE", ["CHR", "MAJ", "MIN", "DOR", "MIX", "PEN", "MPEN", "HARM", "PHRY", "LYD", "LOC", "MEL", "BLUES", "WHOLE", "DIMHW", "DIMWH"], 0), E("QUANTIZE", ["OFF", "SNAP", "WHITE", "SEQ", "SEQ+T"], 0), D("TRANSP", F.SEMI, -24, 24, 0),
     D("LENGTH", F.STEPS, 1, 64, 16), E("DIV", NDIV, 2), D("SWING", F.PCT, 0, 100, 0), D("GATE", F.PCT, 1, 127, 64),
     D("DIST", F.PCT, 0, 127, 0), D("CHORUS", F.PCT, 0, 127, 0), D("DELAY", F.PCT, 0, 127, 0), D("REVERB", F.PCT, 0, 127, 0),
     E("VOICE", ["POLY", "MONO", "LEG", "UNI"], 0), D("GLIDE", F.TIME, 0, 127, 0), D("PAN", F.BIPCT, -64, 63, 0), E("MUTE", NONOFF, 0),
@@ -1980,7 +1995,7 @@ function makeMockDevice(opt = {}) {
   ];
   const GP = [
     D("BPM", F.BPM, 40, 240, 120), D("SWING+", F.PCT, 0, 100, 0), E("CLOCK", ["INT", "USB", "TRS"], 0), D("TUNE", F.INT, -50, 50, 0),
-    E("TIME", NDIV, 1), D("FEEDBACK", F.PCT, 0, 120, 60), D("COLOR", F.PCT, 0, 127, 70), D("MIX", F.PCT, 0, 127, 90),
+    E("TIME", [...NDIV, "1/8D", "1/16D", "1/4D"], 1), D("FEEDBACK", F.PCT, 0, 120, 60),   /* ((1.3) the dotted ones) */ D("COLOR", F.PCT, 0, 127, 70), D("MIX", F.PCT, 0, 127, 90),
     D("SIZE", F.PCT, 0, 127, 90), D("DAMP", F.PCT, 0, 127, 60), D("RATE", F.LFOHZ, 0, 127, 40), D("DEPTH", F.PCT, 0, 127, 60),
     E("MIDI", ["USB", "TRS"], 0), E("SYNC", NDASH, 0), E("ROUTE", ["CH1-6", "SEL"], 0), D("CPU", F.INT, 0, 0, 0),
     D("SLOT", F.INT, 1, 4, 1), E("NAME", NDASH, 0), E("LOAD", NGO, 0), E("SAVE", NGO, 0),
@@ -1995,7 +2010,7 @@ function makeMockDevice(opt = {}) {
   const RATIO = [".5", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "14", "16"];
   const P = (name, e, env = [10, 70, 90, 60], mono = 0, pat = 0, more = []) => ({ name, e, env, mono, pat, more });
   const ENG = [
-    { name: "ANALOG", titles: ["OSC", "FLT"], edit: [E("WAVE", ["SAW", "SQR", "TRI", "SIN", "PWM"], 0), D("DETUNE", F.INT, 0, 127, 10, null, "ct"), D("MIX", F.PCT, 0, 127, 64),
+    { name: "ANALOG", titles: ["OSC", "FLT"], edit: [E("WAVE", ["SAW", "SQR", "TRI", "SIN", "PWM", "SYNC", "SUB"], 0), D("DETUNE", F.INT, 0, 127, 10, null, "ct"), D("MIX", F.PCT, 0, 127, 64),
         D("NOISE", F.PCT, 0, 127, 0), D("CUTOFF", F.CUTOFF, 0, 127, 90), D("RES", F.PCT, 0, 127, 30), D("DRIVE", F.PCT, 0, 127, 0), D("KEYTRK", F.PCT, 0, 127, 64)],
       presets: [P("SAW LEAD", [0, 12, 64, 0, 90, 30, 10, 64], [4, 70, 100, 50], 1, 4), P("SOFT PAD", [0, 20, 64, 4, 60, 10, 0, 32], [80, 90, 110, 95], 0, 5),
         P("SQR BASS", [1, 0, 0, 0, 50, 70, 40, 64], [0, 60, 40, 30], 1, 2), P("PWM STR", [4, 8, 40, 0, 75, 20, 0, 48], [60, 80, 110, 85], 0, 5),
@@ -2015,14 +2030,17 @@ function makeMockDevice(opt = {}) {
         P("QUANTA", [3, 0, 0, 0, 127, 0, 0, 0], [0, 64, 127, 50], 1, 0, [[10, 4], [9, 96], [13, 40]]),
         /* (Skiff phase 9) more for every engine (src/eng_*.c) */
         P("REESE", [0, 40, 64, 0, 52, 15, 30, 32], [0, 64, 127, 30], 1, 0, [[9, 30], [14, 8]]),
-        P("DRIVE BASS", [0, 14, 64, 0, 62, 20, 10, 64], [0, 64, 64, 25], 1, 0, [[95, 1], [96, -32]])] },
+        P("DRIVE BASS", [0, 14, 64, 0, 62, 20, 10, 64], [0, 64, 64, 25], 1, 0, [[95, 1], [96, -32]]),
+        /* (1.3, from Felucca) WAVE SYNC and SUB */
+        P("HARD SYNC", [5, 36, 96, 0, 88, 24, 12, 64], [2, 70, 96, 40], 1, 0, [[7, 44], [38, 20]]),
+        P("SUB SAW", [6, 0, 80, 0, 70, 22, 6, 64], [0, 60, 110, 22], 1)] },
     /* 1: reserved (DIGITAL, retired: src/fm4_convert.c ENG_FM4_GONE; its sounds load as FM6, FM4 above) */
     { name: "-", titles: ["-", "-"], edit: [D("-", F.INT, 0, 7, 0), D("-", F.INT, 0, 14, 1), D("-", F.INT, 0, 14, 1),
         D("-", F.INT, 0, 14, 1), D("-", F.PCT, 0, 127, 60), D("-", F.INT, 0, 127, 60), D("-", F.PCT, 0, 127, 0), NONE],
       presets: [] },
     { name: "PHASE", titles: ["PHASE", "LINE"], edit: [E("WAVE", ["SAW", "SQR", "PLS", "DSIN", "SPLS", "RSAW", "RTRI", "RTRP"], 0),
         E("WAVE2", ["-", "SAW", "SQR", "PLS", "DSIN", "SPLS", "RSAW", "RTRI", "RTRP"], 0), D("DCW", F.PCT, 0, 127, 60), D("ENV", F.PCT, 0, 127, 64),
-        D("DETUNE", F.INT, 0, 127, 0, null, "ct"), E("LINE", ["MIX", "RING"], 0), D("SUB", F.PCT, 0, 127, 0), NONE],
+        D("DETUNE", F.INT, 0, 127, 0, null, "ct"), E("LINE", ["MIX", "RING"], 0), D("SUB", F.PCT, 0, 127, 0), D("FOLD", F.PCT, 0, 127, 0)],   /* ((1.3) FOLD) */
       presets: [P("PD BRASS", [0, 0, 30, 90, 0, 0, 0, 0], [8, 70, 90, 40], 0, 6), P("PD ORGAN", [3, 0, 40, 0, 0, 0, 0, 0], [0, 127, 127, 30], 0, 6),
         P("PD STRINGS", [0, 4, 50, 40, 12, 0, 0, 0], [40, 90, 100, 70], 0, 5), P("RESO", [5, 0, 60, 60, 0, 0, 0, 0], [0, 70, 30, 60], 0, 1),
         P("PD BELL", [6, 0, 80, 50, 0, 0, 0, 0], [0, 95, 0, 90], 0, 7), P("WIRE", [4, 7, 70, 40, 7, 0, 0, 0], [10, 80, 80, 60], 0, 4),
@@ -2108,7 +2126,7 @@ function makeMockDevice(opt = {}) {
         P("HARPSICHORD", [1, 44, 112, 76, 10, 127, 0, 24], [0, 100, 127, 50]),
         /* (Skiff phase 9) more for every engine (src/eng_*.c) */
         P("UPRIGHT", [1, 60, 60, 90, 20, 127, 0, 60], [0, 100, 127, 40], 1)] },
-    { name: "DRUM", titles: ["KIT", "HIT"], edit: [E("KIT", ["STD", "66", "10", "77", "80", "10", "66", "55", "77"], 0), D("PITCH", F.ST16, 0, 127, 64),
+    { name: "DRUM", titles: ["KIT", "HIT"], edit: [E("KIT", ["STD", "66", "10", "77", "80", "10", "66", "55", "77", "DEEP", "TIGHT", "PERC"], 0), D("PITCH", F.ST16, 0, 127, 64),
         D("TONE", F.PCT, 0, 127, 64), D("DECAY", F.PCT, 0, 127, 64), D("SNAP", F.PCT, 0, 127, 64), D("ACCENT", F.PCT, 0, 127, 100),
         E("KICK", ["PUNCH", "ROUND"], 0), D("DRIVE", F.PCT, 0, 127, 0)],
       presets: [P("DRUM KIT", [0, 64, 70, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12),
@@ -2122,7 +2140,11 @@ function makeMockDevice(opt = {}) {
         P("ELECTRO KIT", [7, 64, 70, 60, 70, 100, 0, 15], [0, 100, 127, 100]),
         P("STUDIO KIT", [8, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100]),
         P("TIGHT KIT", [0, 70, 80, 30, 100, 110, 0, 10], [0, 100, 127, 100]),
-        P("LOFI KIT", [0, 56, 30, 70, 40, 100, 1, 50], [0, 100, 127, 100])] },
+        P("LOFI KIT", [0, 56, 30, 70, 40, 100, 1, 50], [0, 100, 127, 100]),
+        /* (1.3, from Felucca) its kits DEEP, TIGHT, PERC */
+        P("DEEP DRUMS", [9, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100]),
+        P("SNAP KIT", [10, 64, 64, 56, 64, 100, 0, 16], [0, 100, 127, 100]),
+        P("PERC KIT", [11, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100])] },
     { name: "NOISE", titles: ["SOURCE", "MOVE"], edit: [E("MODE", ["ANLG", "DUST", "LFSR", "META"], 0), D("COLOR", F.PCT, 0, 127, 64),
         D("CUTOFF", F.CUTOFF, 0, 127, 80), D("RES", F.PCT, 0, 127, 30), D("KEYTRK", F.PCT, 0, 127, 64), D("DENSITY", F.PCT, 0, 127, 0),
         D("DRIFT", F.PCT, 0, 127, 0), D("CRUSH", F.PCT, 0, 127, 0)],
@@ -2209,7 +2231,13 @@ function makeMockDevice(opt = {}) {
     D("RELEASE", F.TIME, 0, 127, 40));               /* 97..100: (Skiff phase 9) ENV 2 */
   for (let k = 0; k < 8; k++) TP.push(D("TUNE", F.ST16, 0, 127, 64));   /* 101..108: (phase 9) the DRUM lanes' TUNE, */
   for (let k = 0; k < 8; k++) TP.push(D("DECAY", F.BIPCT, -64, 63, 0));   /* 109..116: .. DECAY (0: as designed) */
-  const P_COUNT = 125, G_COUNT = 27, NSTEP = 64, P_E0 = 117, G_ENGSEL = 20, P_SLCR = 45;
+  TP.push(E("SYNC", ["OFF", "4BAR", "2BAR", "1/1", "1/2", "1/4", "1/8", "8T", "1/16", "16T", "1/32"], 0),   /* 117..119: (1.3) LFO 2 */
+    E("TRIG", ["NOTE", "FREE"], 0), E("POLARITY", ["BI", "UNI"], 0));
+  TP.push(D("SPREAD", F.PCT, 0, 127, 0));         /* 120: (1.3) SPREAD */
+  TP.push(E("TYPE", ["OFF", "SOFT", "HARD", "FOLD", "FUZZ", "CRUSH", "PHASR", "FLANG", "CHOR"], 0),   /* 121..125: (1.3) the INSERT */
+    D("A", F.PCT, 0, 127, 64), D("B", F.PCT, 0, 127, 96), D("C", F.PCT, 0, 127, 96), D("MIX", F.PCT, 0, 127, 127));
+  TP.push(E("SYNC", NONOFF, 0));                  /* 126: (1.3) ENV SYNC */
+  const P_COUNT = 135, G_COUNT = 27, NSTEP = 64, P_E0 = 127, G_ENGSEL = 20, P_SLCR = 45;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const enumOrig = (d, v) => d.fmt === F.ENUM && d.names ? aliasOf(d.names, v - d.min) + d.min : v;   /* params.c enum_orig */
   /* six tracks (firmware v3; Skiff phase 6), a synth part each; engine / preset / p / step below are the selected track's */
@@ -2385,7 +2413,9 @@ function makeMockDevice(opt = {}) {
       if (stepxOn()) [0x43, 1, TC_NAMES.length].forEach(b);   /* (Skiff W1) */
       if (kitOn()) [0x4B, 1, 8].forEach(b);                    /* (Skiff W3) */
       if (projOn()) [0x57, 1, songOn() ? 31 : 3].forEach(b);
+      if (projOn()) [0x49, 1, P_COUNT & 127, P_COUNT >> 7, P_E0 & 127, P_E0 >> 7].forEach(b);   /* ((Skiff 1.3) wide ids) */
     };
+    const wid = (s, i) => (s === 2 ? [0, i + 128] : [s, i]);   /* ((1.3) scope 2: a track id from 128 on) */
     if (opt.legacy && cmd >= CMD.UP_LIST) return null;
     if (opt.v3 && cmd >= CMD.TRACK_PARAM) return null;
     if (opt.v5 && cmd >= CMD.SONG) return null;
@@ -2628,18 +2658,19 @@ function makeMockDevice(opt = {}) {
         else if (a[1] === 2) m.events = [];
         else if (a[1] === 6 && locksOn()) m.events = m.events.filter(e => !e.lock || (a[2] !== 127 && e.step !== a[2]));
         else if (a[1] === 3 || a[1] === 4 || (a[1] === 5 && locksOn())) {   /* (1.1: 5 a lock, as 3 an event) */
-          const at = m.events.findIndex(e => e.step === a[2] && e.param === a[3]);
+          const step = a[2] & 63, param = a[3] | (a[2] >> 6 & 1) << 7;   /* ((1.3) bit 6: the id's bit 7) */
+          const at = m.events.findIndex(e => e.step === step && e.param === param);
           if (a[1] === 4) { if (at >= 0) m.events.splice(at, 1); }
           else if (at < 0 && st.tracks.reduce((n,t) => n + t.motion.events.length, 0) >= 64) rc = 2;
-          else { const e = {step:a[2],param:a[3],value:v14dec(a[4],a[5]),lock:a[1] === 5}; if (at >= 0) m.events[at] = e; else m.events.push(e); }
+          else { const e = {step,param,value:v14dec(a[4],a[5]),lock:a[1] === 5}; if (at >= 0) m.events[at] = e; else m.events.push(e); }
         } else if (a.length > 1 && !(a[1] === 7 && locksOn())) rc = 1;
         [a[0],rc,+m.on,m.events.length,64].forEach(b);
-        m.events.forEach(e => {b(e.step);b(e.param);v(e.value);});
+        m.events.forEach(e => {b(e.step | (e.param >> 7) << 6);b(e.param & 127);v(e.value);});
         if (a.length > 1 && a[1] >= 5 && locksOn()) m.events.forEach(e => b(e.lock ? 1 : 0));   /* (the kinds) */
         break;
       }
       case CMD.INFO:
-        s(opt.legacy ? "FELUCCA 0.4 BETA (MOCK)" : "SKIFF (MOCK)"); b(ENG.length); b(P_COUNT); b(G_COUNT); b(NSTEP); b(P_E0);
+        s(opt.legacy ? "FELUCCA 0.4 BETA (MOCK)" : "SKIFF (MOCK)"); b(ENG.length); b(Math.min(P_COUNT, 127)); b(G_COUNT); b(NSTEP); b(Math.min(P_E0, 127));
         ENG.forEach((e) => s(e.name));
         if (!opt.legacy) b(NTRK);
         if (!opt.legacy && !opt.v3 && !opt.v5) {
@@ -2650,15 +2681,15 @@ function makeMockDevice(opt = {}) {
         break;
       case CMD.GET: case CMD.SET: {
         if (a.length < 2) return null;
-        const d = desc(a[0], a[1]);
+        const [sc, id] = wid(a[0], a[1]), d = desc(sc, id);
         if (!d) return null;
-        const arr = a[0] ? st.g : st.p;
+        const arr = sc ? st.g : st.p;
         if (cmd === CMD.SET && a.length >= 4) {
-          if (a[0] === 1 && a[1] === G_ENGSEL) setEngine(clamp(v14dec(a[2], a[3]), 0, ENG.length - 1));
-          else if (d.max > d.min) arr[a[1]] = enumOrig(d, clamp(v14dec(a[2], a[3]), d.min, d.max));
-          if (!a[0] && a[1] === P_E0 + 7 && st.engine === FM6_E) fm6Slot(st.tracks[st.sel], arr[a[1]]);   /* PTCH (fm6_poll) */
+          if (sc === 1 && id === G_ENGSEL) setEngine(clamp(v14dec(a[2], a[3]), 0, ENG.length - 1));
+          else if (d.max > d.min) arr[id] = enumOrig(d, clamp(v14dec(a[2], a[3]), d.min, d.max));
+          if (!sc && id === P_E0 + 7 && st.engine === FM6_E) fm6Slot(st.tracks[st.sel], arr[id]);   /* PTCH (fm6_poll) */
         }
-        b(a[0]); b(a[1]); v(arr[a[1]]);
+        b(a[0]); b(a[1]); v(arr[id]);
         break;
       }
       case CMD.DUMP:
@@ -2686,10 +2717,11 @@ function makeMockDevice(opt = {}) {
         break;
       }
       case CMD.TRACK_PARAM: {
-        if (a.length < 2 || a[0] >= NTRK || a[1] >= P_COUNT) return null;
-        const t = st.tracks[a[0]], d = a[1] >= P_E0 ? ENG[t.engine].edit[a[1] - P_E0] : TP[a[1]];
-        if (a.length >= 4 && d.max > d.min) t.p[a[1]] = enumOrig(d, clamp(v14dec(a[2], a[3]), d.min, d.max));
-        b(a[0]); b(a[1]); v(t.p[a[1]]);
+        const tr = a[0] & 63, id = a[1] | (a[0] >> 6 & 1) << 7;   /* ((1.3) bit 6: the id's bit 7) */
+        if (a.length < 2 || tr >= NTRK || id >= P_COUNT) return null;
+        const t = st.tracks[tr], d = id >= P_E0 ? ENG[t.engine].edit[id - P_E0] : TP[id];
+        if (a.length >= 4 && d.max > d.min) t.p[id] = enumOrig(d, clamp(v14dec(a[2], a[3]), d.min, d.max));
+        b(a[0]); b(a[1]); v(t.p[id]);
         break;
       }
       case CMD.TRACK_STEP: {
@@ -2701,7 +2733,7 @@ function makeMockDevice(opt = {}) {
       }
       case CMD.DESC: {
         if (a.length < 2) return null;
-        const d = desc(a[0], a[1]);
+        const d = desc(...wid(a[0], a[1]));
         if (!d) return null;
         b(a[0]); b(a[1]); b(d.fmt); v(d.min); v(d.max); v(d.def); s(d.label); s(d.unit || "");
         if (d.fmt === F.ENUM && d.names) for (let i = 0; i <= d.max - d.min && i < 24; i++) s(d.names[i]);
@@ -2894,7 +2926,7 @@ function makeMockDevice(opt = {}) {
     knob(id = [9, 33, 35, P_E0 + 4][Math.floor(Math.random() * 4)], dv = Math.random() < 0.5 ? -4 : 4) {
       const d = desc(0, id);
       st.p[id] = clamp(st.p[id] + dv, d.min, d.max);
-      push(CMD.CHANGED, [0, id, ...v14enc(st.p[id])]);
+      push(CMD.CHANGED, [...widOut(0, id), ...v14enc(st.p[id])]);
       return { id, value: st.p[id] };
     },
     reload(pi = st.preset + 1) {
@@ -2918,8 +2950,8 @@ function makeMockDevice(opt = {}) {
     param(i, id, val) {
       const t = st.tracks[i], d = id >= P_E0 ? ENG[t.engine].edit[id - P_E0] : TP[id];
       t.p[id] = clamp(val, d.min, d.max);
-      if (i === st.sel) push(CMD.CHANGED, [0, id, ...v14enc(t.p[id])]);
-      else if (st.v4) push(CMD.TRACK_CHANGED, [i, id, ...v14enc(t.p[id])]);
+      if (i === st.sel) push(CMD.CHANGED, [...widOut(0, id), ...v14enc(t.p[id])]);
+      else if (st.v4) push(CMD.TRACK_CHANGED, [i | (id >> 7 & 1) << 6, id & 127, ...v14enc(t.p[id])]);
       return t.p[id];
     },
     /* REC on TRACKS: arm / disarm live recording of a track (no push: the editor reads TRACK) */
@@ -2984,6 +3016,8 @@ function aliasOf(names, i) {
 /* #48: note divisions (1/4, 8T, 2BAR, ...) are listed by length, longest first, as the device's knobs step them
    (src/params.c enum_order); the values stay. Any other list: in value order. -> d's values in the order shown */
 function divLength(n) {
+  const d = /^(\d+)\/(\d+)D$/.exec(n);           /* ((1.3) DELAY TIME's dotted ones: half again) */
+  if (d) return 1.5 * +d[1] / +d[2];
   const m = /^(\d+)\/(\d+)$/.exec(n) || /^(\d+)(T|BAR)$/.exec(n);
   return !m ? null : m[2] === "BAR" ? +m[1] : m[2] === "T" ? 2 / 3 / +m[1] : +m[1] / +m[2];
 }
@@ -3599,12 +3633,13 @@ const EXPECT = { pcount: 91, gcount: 27, pe0: 83 };
 /* the same layout without the chord keys (P_COUNT 89, P_E0 81), the FM operator ENVs too (69, 61) or the matrix
    (firmware 1.0: 57, 49) */
 const knownLayout = (info) => info.gcount === EXPECT.gcount &&
-  [[125, 117], [103, 95], [100, 92], [99, 91], [91, 83], [89, 81], [69, 61], [57, 49]].some(([c, e]) => info.pcount === c && info.pe0 === e);
+  [[135, 127], [125, 117], [103, 95], [100, 92], [99, 91], [91, 83], [89, 81], [69, 61], [57, 49]].some(([c, e]) => info.pcount === c && info.pe0 === e);
 const P = { LEVEL: 0, SLEN: 29 };
 const LAYOUT = (pe0) => [
-  { t: "ENV", pages: [["ENV", 0, [1, 2, 3, 4]], ["ENV DEST", 0, [5, 6, 7]],   /* ((Skiff W5) P_ED_FX, 8: nothing reads it) */
+  { t: "ENV", pages: [["ENV", 0, [1, 2, 3, 4]], ["ENV DEST", 0, pe0 >= 127 ? [5, 6, 7, P_ESYNC] : [5, 6, 7]],   /* ((Skiff W5) P_ED_FX,
+                                                    8: nothing reads it; (1.3) ENV SYNC) */
     ...(pe0 >= 117 ? [["ENV 2", 0, P_ENV2]] : [])] },   /* ((Skiff phase 9) ENV 2: the MOD matrix's ENV2) */
-  { t: "LFO", pages: [["LFO", 0, [9, 10, 11, 12]], ["LFO DEST", 0, [13, 14, 15, 16]]] },
+  { t: "LFO", pages: [["LFO", 0, [9, 10, 11, 12]], ...(pe0 >= 127 ? [["LFO 2", 0, P_LFO2]] : []), ["LFO DEST", 0, [13, 14, 15, 16]]] },
   ...(pe0 >= 61 ? [{ t: "MOD", mod: 49 }] : []),   /* the matrix: P_M1SRC 49 .. P_M4AMT 60, one row per slot */
   { t: "EDIT", engine: true, pages: [["EDIT 1", 0, [pe0, pe0 + 1, pe0 + 2, pe0 + 3]], ["EDIT 2", 0, [pe0 + 4, pe0 + 5, pe0 + 6, pe0 + 7]],
     ...(pe0 >= 91 && ["DRUM", "DRUM-X"].includes(engName()) ? [["LANES", 0, P_LANES.slice(0, 4)], ["LANES 2", 0, P_LANES.slice(4)]] : []),   /* lane levels 83..90 */
@@ -3614,8 +3649,10 @@ const LAYOUT = (pe0) => [
                                                     FELUCCA_FM4=1 firmware only: DIGITAL retired, its engine is "-") */
     ...[0, 1, 2, 3].map((k) => [`OP${k + 1}`, 0, [61 + 5 * k, 62 + 5 * k, 63 + 5 * k, 64 + 5 * k]]),
     ["OP LVL", 0, [65, 70, 75, 80]]] }] : []),
-  { t: "VOICE", pages: [["LEVEL", 0, [0]], ["VOICE", 0, [37, 38, 41, 42]], ["VOICE 2", 0, [43, 44, 39, 40]]] },
+  { t: "VOICE", pages: [["LEVEL", 0, [0]], ["VOICE", 0, [37, 38, 41, 42]], ["VOICE 2", 0, [43, 44, 39, 40]],
+    ...(pe0 >= 127 ? [["SPREAD", 0, [P_SPRD]]] : [])] },   /* ((1.3) the voices left and right of PAN) */
   { t: "FX", pages: [["FX", 0, [33, 34, 35, 36]], ...(pe0 >= 117 ? [["DRIVE", 0, [33, ...P_DRIVE]]] : []),
+    ...(pe0 >= 127 ? [["INSERT", 0, P_INSERT], ["INSERT 2", 0, [P_IMIX]]] : []),   /* ((1.3) the track's INSERT) */
     ["SLICER", 0, [45, 46, 47, 48]], ...(pe0 >= 95 ? [["DUCK", 0, P_DUCK]] : []), ["DLY", 1, [4, 5, 6, 7]], ["REVERB", 1, [24, 8, 9]], ["CHORUS", 1, pe0 >= 117 ? [10, 11, 25, 26] : [10, 11]]] },   /* G_RTYPE 24: ROOM / SPRING */
   { t: "SCALE", pages: [["SCALE", 0, [25, 26, 27, 28]], ...(pe0 >= 83 ? [["CHORD", 0, P_CHORD]] : [])] },   /* CHRD VOIC 81, 82 */
   { t: "ARP", pages: [["ARP", 0, [17, 18, 19, 20]], ["ARP 2", 0, [21, 22, 23, 24]]] },
@@ -4041,10 +4078,17 @@ function paramRow(s, id) {
   return row;
 }
 
+/* (Skiff 1.3) ENV SYNC on (P_ESYNC): ATTACK DECAY RELEASE are note values of the tempo (params.c ESYNC_NAMES: 0..127 split
+   evenly over them) */
+const ESYNC_NAMES = ["0", "1/64T", "1/64", "1/32T", "1/64D", "1/32", "1/16T", "1/32D", "1/16", "1/8T", "1/16D", "1/8", "1/4T", "1/8D",
+  "1/4", "1/2T", "1/4D", "1/2", "1/1T", "1/2D", "1/1", "1/1D", "2BAR", "3BAR", "4BAR"];
+const eSyncOn = (c) => !c.scope && [1, 2, 4].includes(c.id) && !!dev && !!dev.info && dev.info.pe0 >= 127 && !!dev.dump &&
+  !!dev.dump.p[P_ESYNC];
 function showValue(k, v, force) {
   const c = ctl.get(k);
   if (!c || v == null) return;
-  const [txt0, unit] = fmtValue(c.desc, v), txt = modDst(c.desc, txt0);
+  let [txt0, unit] = fmtValue(c.desc, v), txt = modDst(c.desc, txt0);
+  if (eSyncOn(c)) { txt = ESYNC_NAMES[(v & 127) * ESYNC_NAMES.length >> 7]; unit = ""; }   /* ((1.3) ENV SYNC: a note value) */
   c.out.textContent = unit ? `${txt} ${unit}` : txt;
   if (c.input.type === "range") c.input.setAttribute("aria-valuetext", c.out.textContent);   /* ((Skiff W6) read as shown) */
   if (force || !touched(k)) c.input.value = String(v);

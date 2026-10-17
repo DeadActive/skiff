@@ -151,10 +151,11 @@ static void graph_lfodst(const track_t *t, uint16_t c)
 
 /* DELAY: the dry hit, then an echo every TIME, the first MIX high, each next FEEDBACK lower (fx.c fx_buses), over a
  * bar's beats (TIME longer than a beat: four echoes, over bars) */
-static const uint16_t DLY_6TH[] = {24, 12, 6, 3, 8, 4, 48, 96, 192, 384};   /* N_DIV in sixths of a 1/16 */
+static const uint16_t DLY_6TH[] = {24, 12, 6, 3, 8, 4, 48, 96, 192, 384, 18, 9, 36};   /* N_DTIME in sixths of a 1/16
+                                                                                       * ((1.3) the dotted ones too) */
 static void graph_delay(uint16_t c)
 {
-    uint32_t tap = DLY_6TH[song.g[G_DTIME] % 10], win = tap * 4u > 96u ? tap * 4u : 96u, unit = win > 96u ? 96u : 24u;
+    uint32_t tap = DLY_6TH[song.g[G_DTIME] % 13], win = tap * 4u > 96u ? tap * 4u : 96u, unit = win > 96u ? 96u : 24u;
     int32_t lvl = 1000, i, n = (int32_t)(win / unit), w = (int32_t)(tap * 208u / win) - 3;
     char b[8];
     for (i = 0; i < n; i++) {                        /* the beats (bars), every one named up to 8, else every 4th */
@@ -418,15 +419,15 @@ static void pg_drive_wave(const track_t *t, uint32_t type, int32_t d, int32_t *y
             y[i - 88u] = d ? lp2 : x;
     }
 }
-static void graph_drive(const track_t *t, uint16_t c)
+/* ((1.3) shared with INSERT's graph) a transfer curve and a wave: the curve of at() across the input (-32768 .. 32768),
+ * the wave w (88 samples) at the right, in each theme's look; k: at()'s own values */
+typedef struct { uint32_t type; int32_t d, a, b, c, mix; } pg_curve_t;
+static void pg_curve_graph(int32_t (*at)(const pg_curve_t *, int32_t), const pg_curve_t *k, const int32_t *w, uint16_t c)
 {
-    uint32_t type = (uint32_t)t->p[P_DTYPE] & 3u;
-    int32_t d = t->p[P_DIST], i, py = 0, pk = 0, w[88];
+    int32_t i, py = 0, pk = 0;
     int16_t ys[117];
-    char b[24];
-    pg_drive_wave(t, type, d, w);
     for (i = 0; i <= 116; i++) {                     /* (the curve; its highest point, the first) */
-        ys[i] = (int16_t)(66 - pg_drive_at(type, d, (i - 58) * 32768 / 58) * 58 / 32768);
+        ys[i] = (int16_t)(66 - at(k, (i - 58) * 32768 / 58) * 58 / 32768);
         if (ys[i] < ys[pk])
             pk = i;
     }
@@ -435,7 +436,7 @@ static void graph_drive(const track_t *t, uint16_t c)
                                                       * wave as OSC's: ASCII art, blood in its teeth (22 of 4, 9 of 8)) */
         uint8_t L[39], S[39], W[22];
         for (i = 0; i < 39; i++) {
-            L[i] = (uint8_t)clamp(6 - pg_drive_at(type, d, (i * 2 - 38) * 32768 / 38) * 6 / 32768, 0, 12);
+            L[i] = (uint8_t)clamp(6 - at(k, (i * 2 - 38) * 32768 / 38) * 6 / 32768, 0, 12);
             S[i] = (uint8_t)(12 - i * 12 / 38);
         }
         for (i = 0; i < 22; i++)
@@ -484,6 +485,16 @@ static void graph_drive(const track_t *t, uint16_t c)
             ne_spark(227, py + 1, T_ACCENT, 1);
         }
     }
+}
+static int32_t pg_drive_curve(const pg_curve_t *k, int32_t x) { return pg_drive_at(k->type, k->d, x); }
+static void graph_drive(const track_t *t, uint16_t c)
+{
+    uint32_t type = (uint32_t)t->p[P_DTYPE] & 3u;
+    int32_t d = t->p[P_DIST], w[88];
+    pg_curve_t k = {type, d, 0, 0, 0, 0};
+    char b[24];
+    pg_drive_wave(t, type, d, w);
+    pg_curve_graph(pg_drive_curve, &k, w, c);
     cv_text(140, 26 - AF_M.asc, &AF_M, N_DTYPE[type], d ? c : T_DIM);
     if (type == DT_BITS && d) {                      /* (the bits left of 16, each sample held) */
         fmt_int(b, 16 - d / 11);
@@ -491,6 +502,52 @@ static void graph_drive(const track_t *t, uint16_t c)
         fmt_int(b + str_len(b), 1 << (d >> 5));
         pg_text(140, 42, b, T_MID);
     }
+}
+
+/* (Skiff 1.3) FX > INSERT and INSERT 2: the TYPE as fx.c track_insert runs it, in DRIVE's look (pg_curve_graph). The
+ * drives and CRUSH: the transfer (DRIVE / BITS, blended by MIX) across the input, and a sine's cycle through it, TONE /
+ * LPF and LEVEL (CRUSH: its held samples); the swept ones: the sweep over one of its cycles (PHASR and FLANG a triangle,
+ * FLANG's squared, CHOR a sine, as deep as DEPTH) and two of its cycles at the right. OFF or MIX 0: the straight line */
+static int32_t pg_ins_curve(const pg_curve_t *k, int32_t x)
+{
+    int32_t y;
+    if (!k->type || !k->mix)
+        return x;
+    if (k->type >= IT_PHASER) {                      /* (x: the place in the sweep's cycle) */
+        uint32_t ph = (uint32_t)(x + 32768) << 16;      /* (one whole cycle across: the end wraps to the start) */
+        int32_t s = k->type == IT_CHORUS ? osc_sine(ph) : (int32_t)ins_tri(ph) - 32768;
+        if (k->type == IT_FLANGER)
+            s = (int32_t)(((uint32_t)(s + 32768) * (uint32_t)(s + 32768)) >> 16) - 32768;
+        return s * k->b / 127;
+    }
+    if (k->type == IT_CRUSH)
+        y = ins_shape(IT_CRUSH, x, ins_bits_sh(k->a));
+    else
+        y = (ins_shape(k->type, ((x >> 3) * (4096 + k->a * k->a * 3)) >> 9, 0) * LEVEL_Q12[k->c & 127]) >> 12;
+    return x + (int32_t)(((int64_t)(clamp(y, -40000, 40000) - x) * k->mix) >> 15);
+}
+static void graph_insert(const track_t *t, uint16_t c)
+{
+    uint32_t ty = (uint32_t)clamp(t->p[P_ITYPE], 0, IT_N - 1), i;
+    pg_curve_t k = {ty, 0, t->p[P_IA], t->p[P_IB], t->p[P_IC], ins_mixq(t->p[P_IMIX])};
+    int32_t w[88], lp1 = 0, lp2 = 0, h = 0, kq = ins_lpk(ty == IT_CRUSH ? k.c : k.b);
+    uint32_t hold = INS_HOLD[clamp(k.b, 0, 127) >> 3];
+    for (i = 0; i < 176u; i++) {                     /* (the wave: a sine's cycle of 88 samples, its second pass) */
+        int32_t x = sine_i(i * 48806447u) * 3 / 4, y;
+        if (ty >= IT_PHASER) {
+            y = pg_ins_curve(&k, (int32_t)((i % 44u) * 65536u / 44u) - 32768);   /* (two of its cycles) */
+        } else {
+            if (ty != IT_CRUSH || !(i % hold))
+                h = pg_ins_curve(&k, x);
+            lp1 += mulq16(h - lp1, (uint32_t)kq) * 2;
+            lp2 += mulq16(lp1 - lp2, (uint32_t)kq) * 2;
+            y = ty ? lp2 : x;
+        }
+        if (i >= 88u)
+            w[i - 88u] = y;
+    }
+    pg_curve_graph(pg_ins_curve, &k, w, c);
+    cv_text(140, 26 - AF_M.asc, &AF_M, N_ITYPE[ty], ty && k.mix ? c : T_DIM);
 }
 
 /* GLOBAL: a bar's 16 steps (a beat's tallest), the off steps late by SWING+ (seq: core.h swing_step_len) over a mark
@@ -617,7 +674,7 @@ static void graph_voice2(const track_t *t, uint16_t c)
         } else
         cv_rect(76, 95 + k * t->p[P_DETUNE] * 40 / 889, 152, 2, !uni ? T_DIM : k == 0 || k == 1 || k == -1 ? c : T_MID);
     }
-    pg_text(12, 100, uni ? "SPREAD" : "UNI ONLY", T_DIM);
+    pg_text(12, 100, uni ? "DETUNE" : "UNI ONLY", T_DIM);   /* ((1.3) DETUNE's: SPREAD is the stereo one) */
 }
 
 /* ANALOG's OSC: the wave three times as the oscillator makes it (SAW SQR TRI SIN PWM), the second one (MIX in) under
@@ -750,21 +807,20 @@ static void graph_arp(const track_t *t, uint16_t c)
     uint32_t oct = t->p[P_AOCT] > 0 ? (uint32_t)t->p[P_AOCT] : 1u;
     int32_t pitch, th, base, gw = 2 + t->p[P_AGATE] * 10 / 127, sw = t->p[P_ASWING] * 12 / 250;
     char nb[6];
-    for (i = 0; i < cnt; i++)
-        list[i] = t->nheld ? t->held[i] : EX[i];
-    if (!t->p[P_AORDER])
-        for (i = 1; i < cnt; i++)
-            for (j = i; j > 0 && list[j - 1] > list[j]; j--) {
-                uint32_t x = list[j];
-                list[j] = list[j - 1];
-                list[j - 1] = x;
-            }
-    for (o = 0; o < oct; o++)
-        for (i = 0; i < cnt && len < 64u; i++)
-            list[len++] = (uint32_t)clamp((int32_t)list[i] + 12 * (int32_t)o, 0, 127);
-    if (m == AM_REPEAT) {
-        list[0] = t->nheld ? t->held[t->nheld - 1u] : 67u;
-        len = 1;
+    if (t->nheld && (len = arp_list(t, list, &cnt)) == 0u) {   /* (the notes as they play now: TRN, SCALE since) */
+        list[0] = 60;                               /* (every key silent now: one row, no tiles' notes matter) */
+        len = cnt = 1;
+    }
+    if (!t->nheld) {
+        for (i = 0; i < cnt; i++)
+            list[i] = EX[i];
+        for (o = 0; o < oct; o++)
+            for (i = 0; i < cnt && len < 64u; i++)
+                list[len++] = (uint32_t)clamp((int32_t)list[i] + 12 * (int32_t)o, 0, 127);
+        if (m == AM_REPEAT) {
+            list[0] = 67u;
+            len = 1;
+        }
     }
     if (m == AM_UP8)
         list[len++] = (uint32_t)clamp((int32_t)list[0] + 12 * (int32_t)oct, 0, 127);

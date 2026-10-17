@@ -430,7 +430,7 @@ static int last_track(void)
     detach(k);
     ok &= ent_go(k, 0) == 0;
     for (i = 0; i < motion.count; i++)
-        n += motion.event[i].place == (k << 6 | 63u) && motion.event[i].param == (P_PAN | MOTION_LOCK) &&
+        n += motion.event[i].place == (k << 6 | 63u) && (motion.event[i].id == P_PAN && motion.event[i].lock) &&
              motion.event[i].value == -64;
     bad += check("the last track's lock on step 64 (its place past a byte with six) kept and loaded back",
                  ok && n == 1u && motion_count(&trk[k]) == 1u);
@@ -446,13 +446,17 @@ static int last_track(void)
     ok = motion_put(&trk[k], 3, P_E5, 20, MOTION_LOCK) == 0 && keep_all() == 0 && trk_pid[k] != 0u;
     id = trk_pid[k] - 1u;
     ok &= !pat_read(id, r) && r[1] == PROJ_NP && r[BK_MOT + 1u] == ((P_E5 - PROJ_NX) | MOTION_LOCK) &&
-          !pat_decode(&trk[k], id, st, v, &ms) && ms.count == 1u && ms.event[0].param == (P_E5 | MOTION_LOCK);
+          !pat_decode(&trk[k], id, st, v, &ms) && ms.count == 1u && (ms.event[0].id == P_E5 && ms.event[0].lock);
+    ok &= r[0] == BK_VER;
     bad += check("  (phase 9) a lock on E5: the record of 103 parameters (E5 at 100), back at today's P_E5", ok);
     ok = motion_put(&trk[k], 4, P_DTONE, -9, MOTION_LOCK) == 0 && keep_all() == 0 && trk_pid[k] == id + 1u;
     ok &= !pat_read(id, r) && r[1] == P_COUNT && !pat_decode(&trk[k], id, st, v, &ms) && ms.count == 2u;
     for (i = n = 0; i < ms.count; i++)
-        n += ms.event[i].param == (P_E5 | MOTION_LOCK) || ms.event[i].param == (P_DTONE | MOTION_LOCK);
+        n += (ms.event[i].id == P_E5 && ms.event[i].lock) || (ms.event[i].id == P_DTONE && ms.event[i].lock);
     bad += check("  .. and one on DRIVE's TONE (phase 9's): the record of today's ids, both back", ok && n == 2u);
+    ok = !pat_read(id, r) && P_E5 > 127u && r[0] == BK_VER2 && (r[BK_MOT] & 64u) &&
+         r[BK_MOT + 1u] == ((P_E5 & 127u) | MOTION_LOCK) && !(r[BK_MOT + 4u] & 64u);
+    bad += check("  (1.3) E5 is past 127 there: version 2, its id's bit 7 in its step byte's bit 6", ok);
     return bad;
 }
 

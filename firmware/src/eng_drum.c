@@ -11,7 +11,7 @@
  * load as this engine, core.h drum_from_perc).
  *
  * Parameters: KIT the kit: STD (Felucca's own: TOM RIM BELL on lanes 6..8, other GM notes their congas, claves,
- * cymbals) or a model kit (80 10 66 55 77: every lane that kit's own piece, drum_voice.c DV_KIT; KICK does not
+ * cymbals) or a model kit (80 10 66 55 77, 1.5.6 DEEP TIGHT PERC: every lane that kit's own piece, drum_voice.c DV_KIT; KICK does not
  * apply). Its stored values 1..3 were HAND CYM H+CYM (STD with CONGA CLAVE / CYM on lanes 6..8) until 1.0.4: they
  * play 66 10 77 now (DK_PLAYS), and whatever stores them lands there (params.c enum_orig, param_fit: the knob
  * steps over them, the editor's SET, projects, user presets, motion). KICK the kick (PUNCH, ROUND). TUNE (64: as
@@ -36,14 +36,17 @@
  * and metal source of each lane). */
 #include "drum_voice.c"
 
-enum { DK_STD, DK_HAND, DK_CYM, DK_HCYM, DK_80, DK_10, DK_66, DK_55, DK_77, DK_COUNT };   /* (stored values) */
+/* 1.5.6 (Discussion #216): DEEP TIGHT PERC (9..11), kits put together from the five's pieces (drum_voice.c DV_KIT),
+ * appended. Firmware before (Skiff 1.2, Felucca before 1.5.6) clamps 9..11 to 8 (77) when it loads them (param_fit) */
+enum { DK_STD, DK_HAND, DK_CYM, DK_HCYM, DK_80, DK_10, DK_66, DK_55, DK_77, DK_DEEP, DK_TIGHT, DK_PERC, DK_COUNT };   /* (stored values) */
 /* the kit a stored KIT value plays: HAND CYM H+CYM (retired after 1.0.4) -> 66 (a conga on TOM), 10 (a cymbal on
  * BELL), 77 (claves on RIM, a cymbal on BELL) */
-static const uint8_t DK_PLAYS[DK_COUNT] = {DK_STD, DK_66, DK_10, DK_77, DK_80, DK_10, DK_66, DK_55, DK_77};
+static const uint8_t DK_PLAYS[DK_COUNT] = {DK_STD, DK_66, DK_10, DK_77, DK_80, DK_10, DK_66, DK_55, DK_77, DK_DEEP,
+                                           DK_TIGHT, DK_PERC};
 static uint32_t drum_kit_plays(int32_t v) { return DK_PLAYS[clamp(v, 0, DK_COUNT - 1)]; }
 /* the model kits' pieces where a lane plays another than its own (the lane's name): 1 TOM -> CONGA, 2 RIM -> CLAVE,
  * 4 BELL -> CYM */
-static const uint8_t DK_SWAP[DV_NKIT] = {0, 4, 1, 0, 2 | 4};
+static const uint8_t DK_SWAP[DV_NKIT] = {0, 4, 1, 0, 2 | 4, 4, 0, 1 | 2};
 static const uint8_t DV_TYPE_LANE[DVT_COUNT] = {
     DV_KICK, DV_KICK, DV_SNARE, DV_CLAP, DV_HATC, DV_HATO, DV_TOM, DV_TOM, DV_RIM, DV_RIM, DV_BELL, DV_BELL,
 };
@@ -61,7 +64,7 @@ typedef struct {
 
 
 /* 1..3 named as the kit they play: aliases, never shown or offered (EDITOR_PROTOCOL.md: retired values) */
-static const char *const N_DRUM_KIT[] = {"STD", "66", "10", "77", "80", "10", "66", "55", "77"};
+static const char *const N_DRUM_KIT[] = {"STD", "66", "10", "77", "80", "10", "66", "55", "77", "DEEP", "TIGHT", "PERC"};
 static const char *const N_DRUM_KICK[] = {"PUNCH", "ROUND"};
 
 /* General MIDI notes 35..81 -> the drum (DVT_*; DVT_PUNCH: the kick KICK picks) and semitones from its
@@ -111,6 +114,10 @@ static uint32_t drum_swaps(const track_t *t)
 }
 
 /* the lane's name as the track's KIT plays it (5 characters at most) */
+/* (Skiff 1.3, from Felucca 1.4.1) the lanes' mutes, a bit each a track (KICK .. BELL), DRUM's and DRUM-X's: the EDIT
+ * layer's black keys 1..8 (ui_layer.c). Performance state: not saved; a sound load clears the track's, a project load
+ * every track's. A muted lane's voice rings on unheard (its hits still take a voice: un-muting is seamless) */
+static uint8_t drum_mute[NTRK];
 static const char *drum_lane_name(const track_t *t, uint32_t l)
 {
     static const char *const N[NLANE] = {"KICK", "SNARE", "CLAP", "CL HAT", "OP HAT", "TOM", "RIM", "BELL"};
@@ -287,6 +294,8 @@ static void drum_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     if (dv_uses_metal(L->c.type) && (L->v.live || L->v.trig))
         dv_metal_run(&L->mb, mb, n);
     dv_run(&L->c, &L->v, mb, y, n);
+    if ((drum_mute[(uint32_t)(t - trk) % NTRK] >> ln) & 1u)
+        return;                                          /* ((1.3) a muted lane rings on unheard) */
     if (drv > 0) {                                       /* DRV: x1..x4 into the soft clip, the level kept (Q12) */
         g = 4096 + drv * 3 * 4096 / 127;
         mk = (int32_t)((19661u << 15) / (uint32_t)softclip((19661 * g) >> 12));
@@ -320,6 +329,10 @@ static const preset_t DRUM_PRESETS[] = {
     {"STUDIO KIT", {8, 64, 64, 64, 64, 100, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 25), TAG(PT_DRUM)},
     {"TIGHT KIT", {0, 70, 80, 30, 100, 110, 0, 10}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 12), TAG(PT_DRUM)},
     {"LOFI KIT", {0, 56, 30, 70, 40, 100, 1, 50}, {0, 100, 127, 100}, 0, 0, FX(20, 0, 0, 30), TAG(PT_DRUM)},
+    /* (1.3, from Felucca 1.5.6) the kits DEEP TIGHT PERC (KIT's values appended), each a preset (appended) */
+    {"DEEP DRUMS", {DK_DEEP, 64, 64, 64, 64, 100, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 28), TAG(PT_DRUM)},
+    {"SNAP KIT", {DK_TIGHT, 64, 64, 56, 64, 100, 0, 16}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 8), TAG(PT_DRUM)},
+    {"PERC KIT", {DK_PERC, 64, 64, 64, 64, 100, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 24), TAG(PT_DRUM)},
 };
 
 static const engine_t ENG_DRUM = {

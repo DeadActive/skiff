@@ -14,13 +14,13 @@ synths and drums, patterns and songs, live performance, and a screen that shows 
   <img src="https://img.shields.io/badge/hardware-M--VAVE%20FM--1-555" alt="Hardware: M-VAVE FM-1">
 </p>
 
-<p align="center"><b>New in 1.2.1:</b> fixes and wishes from your issues: rests in a song, NEW and DELETE for projects,
-the GLO keys in order, the battery always shown ·
-<a href="https://github.com/illuminus5/skiff/releases/tag/v1.2.1">the release notes</a></p>
+<p align="center"><b>New in 1.3:</b> the FM-1's second core (BETA: 12 voices), MIDI LEARN and a channel per track,
+an INSERT effect, LFO sync, SPREAD and more from Felucca 1.6.1 ·
+<a href="https://github.com/illuminus5/skiff/releases/tag/v1.3">the release notes</a></p>
 
 ![Skiff on the FM-1's screen: HOME, a step page, PERFORM, the MIXER, DELAY and the SHIFT map](docs/skiff.png)
 
-Skiff turns the FM-1 into a six-track groovebox: fourteen synth and drum engines with 143 factory sounds you can list
+Skiff turns the FM-1 into a six-track groovebox: fourteen synth and drum engines with 148 factory sounds you can list
 by type (only the basses, only the pads), a 64-step sequencer with chords, ratchets, trig conditions and parameter
 locks, a shared pool of patterns played through per-track lists and scenes, and a performance layer for launching it
 all live. Every page draws what its knobs do, and holding HOME shows what
@@ -40,12 +40,12 @@ Custom firmware, at your own risk; the way back to the official firmware is belo
 connect the FM-1 by USB and follow it. The same page takes the FM-1 back to the official V15 firmware, saving a
 complete backup of your music first.
 
-**With Python 3:** download `skiff-1.2.1.fwsc` from the [latest release](https://github.com/illuminus5/skiff/releases/latest)
+**With Python 3:** download `skiff-1.3.fwsc` from the [latest release](https://github.com/illuminus5/skiff/releases/latest)
 and, with this repository's `tools/` folder,
 
 ```
 pip install mido python-rtmidi
-python tools/fm1_install.py skiff-1.2.1.fwsc
+python tools/fm1_install.py skiff-1.3.fwsc
 ```
 
 It takes about two minutes and the FM-1 restarts on Skiff.
@@ -58,18 +58,18 @@ Edge, over USB MIDI).
 
 | | |
 | --- | --- |
-| **Tracks** | 6, each with its own engine, sound, sequence and mix; 8 voices shared between them (T5 and T6 play every engine but PHYS and GRAIN) |
-| **Engines** | 14: ANALOG, FM6, PHASE, LOFI, SAMPLE, VOICE, TRIO, WHEEL, GRAIN, PHYS, NOISE, SLICE, DRUM, DRUM-X; 143 factory sounds, at least 8 an engine, each a BASS, LEAD, PAD, KEYS, PLUCK, DRUM or FX sound that SAVE › PRESETS lists by type; presets for all six of DRUM's kits and eight DRUM-X kits among them; every value of an FM6 patch (6 operators, 32 algorithms) editable on the unit |
+| **Tracks** | 6, each with its own engine, sound, sequence and mix; 8 voices shared between them, 12 with the second core (MENU › CPU 2 CORES, BETA, 1.3) (T5 and T6 play every engine but PHYS and GRAIN) |
+| **Engines** | 14: ANALOG, FM6, PHASE, LOFI, SAMPLE, VOICE, TRIO, WHEEL, GRAIN, PHYS, NOISE, SLICE, DRUM, DRUM-X; 148 factory sounds, at least 8 an engine, each a BASS, LEAD, PAD, KEYS, PLUCK, DRUM or FX sound that SAVE › PRESETS lists by type; presets for all nine of DRUM's kits and eight DRUM-X kits among them; every value of an FM6 patch (6 operators, 32 algorithms) editable on the unit |
 | **Sequencer** | 64 steps a track; LENGTH 1–64; 1/1 to 1/32, triplets, 2 and 4 bars a step; chords of up to 4 notes, velocity, accent, slide, tie; per-step chance, ratchet ×1–4 or FLAM, 12 trig conditions (FILL, !FILL, 1:2 … 4:4), NUDGE (−32 to +31 64ths of a step); swing, gate; FWD, RVRS, PING or RAND |
 | **Recording** | live with overdub, FEEL (keeps where you played), count-in and click; step recording; TAKE keeps the last loop you played, after the fact |
 | **Automation** | knob moves and parameter locks (hold a step, turn a knob), 64 records, listed and edited on SEQ › AUTOMATION |
 | **Patterns and songs** | a pool of 64 patterns shared by every project; each track a list of 16 entries (A–P), each a pattern played 1–16 times; SONG walks each track down its list |
 | **Performance** | PERFORM: launch any track's entries and stage mutes on LOOP, BAR, BEAT or NOW; 16 scenes; throws (CUTOFF, REVERB, DELAY, DIST) that glide back; the FX layer: repeat, reverse, filter sweeps, tape stop, freeze, harmonizer, gate, dub echo, flanger, vinyl, cuts |
-| **Sound** | per track: an envelope and a second one for modulation (ENV 2), an LFO with depths per destination, a 4-slot modulation matrix, DIST in four types (SOFT, HARD, FOLD, BITS) with a TONE, the SLICER (16 patterns), DUCK (sidechain); a drum kit's lanes tuned and their decay set one by one; arpeggiator (14 modes), chord keys (9 chords, 5 voicings), 16 scales; MONO, LEGATO, UNISON, glide |
+| **Sound** | per track: an envelope (in milliseconds or note values) and a second one for modulation (ENV 2), an LFO with depths per destination (free or synced to the tempo), a 4-slot modulation matrix, DIST in four types (SOFT, HARD, FOLD, BITS) with a TONE, an INSERT (drives, a bitcrusher, phaser, flanger, chorus) with MIX, the SLICER (16 patterns), DUCK (sidechain), SPREAD (the voices across the stereo field); a drum kit's lanes tuned and their decay set one by one; arpeggiator (14 modes), chord keys (9 chords, 5 voicings), 16 scales; MONO, LEGATO, UNISON, glide |
 | **Effects** | chorus (CHORUS, FLANGER or PHASER, with FEEDBACK), delay and reverb (ROOM, SPRING or HALL) as sends |
 | **Memory** | 4 projects, 32 user sounds, 3 user sample slots; the music comes back at power-on (RESTORE LAST); 8 levels of undo |
 | **Screen** | 240 × 240 colour; a graph on every page; HOME held shows every control's job; 6 themes; LARGE mode with tall cards |
-| **MIDI and USB** | USB MIDI in and out, TRS MIDI in; clock from inside, USB or TRS; channels 1–6 play tracks 1–6; a stereo USB audio input to record the master on a computer |
+| **MIDI and USB** | USB MIDI in and out, TRS MIDI in; clock from inside, USB or TRS; each track its own channel (1–6 by default); MIDI LEARN for any knob; Program Change; a stereo USB audio input to record the master on a computer |
 | **Editor** | in the browser: sounds, steps, the mixer, the song lists, scenes and pattern pool, projects, the DRUM-X kit, the settings, PLAY, STOP and REC |
 | **Audio** | 44.1 kHz |
 
@@ -100,7 +100,7 @@ a bass, list the basses and step through them, across every engine, until one fi
 The LIST stays where you leave it, through a power-off too, and it is the unit's, not the track's. While it is on a
 type, the PRESETS knob steps through that type on HOME and the sound pages too, and the footer says BASS beside the
 engine, so you can browse from whichever page you are on. For track 3's pad: ALGORITHM to track 3, LIST to PAD. Back on
-**ALL**, PRESETS steps through all 143 again.
+**ALL**, PRESETS steps through all 148 again.
 
 - **FAV** lists your favourites. On SAVE › PRESETS, turn **KNOB 3, FAV,** right to mark the sound playing, left to
   unmark it. Your own sounds (SAVE › USER) are listed on ALL and FAV.
@@ -193,13 +193,19 @@ the modulators make it bite).
 <td><img src="docs/img/edit_phys.png" alt="PHYS"><br><sub><b>PHYS</b>: the model sounding</sub></td>
 <td><img src="docs/img/voice_glide.png" alt="VOICE"><br><sub><b>VOICE</b>: legato and glide</sub></td>
 <td><img src="docs/img/chord.png" alt="CHORD"><br><sub><b>CHORD</b>: the chord on the keys</sub></td>
-<td><img src="docs/img/menu.png" alt="MENU"><br><sub><b>MENU</b>: four tabs of settings</sub></td>
+<td><img src="docs/img/menu.png" alt="MENU"><br><sub><b>MENU</b>: five tabs of settings</sub></td>
 </tr>
 <tr>
 <td><img src="docs/img/drive_fold.png" alt="FX › DRIVE"><br><sub><b>DRIVE</b>: the TYPE's curve, a sine through it</sub></td>
 <td><img src="docs/img/env_2.png" alt="ENV › ENV 2"><br><sub><b>ENV 2</b>: a second envelope, for the MOD matrix</sub></td>
 <td><img src="docs/img/lanes_tune.png" alt="EDIT › LANES"><br><sub><b>LANES</b>: a drum lane's level, tune and decay</sub></td>
 <td><img src="docs/img/chorus_flanger.png" alt="CHORUS as a flanger"><br><sub><b>CHORUS</b>: FLANGER's comb</sub></td>
+</tr>
+<tr>
+<td><img src="docs/img/insert_flanger.png" alt="FX › INSERT"><br><sub><b>INSERT</b> (1.3): FLANG's sweep</sub></td>
+<td><img src="docs/img/lfo_2.png" alt="LFO 2"><br><sub><b>LFO 2</b> (1.3): synced to 1/4, one-sided</sub></td>
+<td><img src="docs/img/menu_midi.png" alt="MENU › MIDI"><br><sub><b>MIDI</b> (1.3): LEARN, a channel per track</sub></td>
+<td><img src="docs/img/learn_cc.png" alt="MIDI LEARN"><br><sub><b>MIDI LEARN</b> (1.3): a knob, then a CC</sub></td>
 </tr>
 </table>
 
@@ -231,9 +237,10 @@ FM6 patches from `.syx` files and saves complete backups.
 
 ## Features
 
-- **Six tracks**, each its own engine and sound; 8 voices shared between them. T5 and T6 play every engine but
+- **Six tracks**, each its own engine and sound; 8 voices shared between them, 12 with the FM-1's second core (MENU ›
+  SYSTEM › CPU 2 CORES, BETA, 1.3). T5 and T6 play every engine but
   PHYS and GRAIN. ALGORITHM selects the track on every page; HOME, PERFORM, SONG and the MIXER show all six
-- **Fourteen engines** (below), DRUM-X among them, each with at least 8 factory presets, 143 in all
+- **Fourteen engines** (below), DRUM-X among them, each with at least 8 factory presets, 148 in all
 - **Sounds by type** (1.2): every factory sound is a BASS, LEAD, PAD, KEYS, PLUCK, DRUM or FX sound; SAVE › PRESETS'
   LIST (KNOB 4) shows one type across every engine, and the PRESETS knob then steps through it on every page
   ([Find a sound by type](#find-a-sound-by-type))
@@ -248,7 +255,9 @@ FM6 patches from `.syx` files and saves complete backups.
   conditions (1:2, 3:4 ..), ratchets and **FLAM**, **NUDGE** (a step early or late, in 64ths), a step's own
   GATE, play direction (FWD, RVRS, PING, RAND); SEQ › STEP as 16 tiles, the piano roll (ROLL), a drum grid
   (white keys steps, black keys lanes); live loop recording with overdub, **FEEL** (recording keeps where you
-  played), step recording, count-in and click
+  played), step recording, count-in and click. While playing, the step pages follow the playhead past step 16
+  (1.3); MENU › STEP PREVIEW sounds the step KNOB 1 lands on in the piano roll (1.3); QUANTIZE SEQ+T transposes the
+  sequencer's notes by TRANSP before it snaps them to the scale (1.3)
 - **Patterns and songs:** 64 patterns shared by every project; each track has a list of 16 entries (A–P),
   each a pattern played REPS times; **SONG** plays each track down its list. Patterns keep themselves: no save
   needed
@@ -260,13 +269,19 @@ FM6 patches from `.syx` files and saves complete backups.
   automation edits); OCT− and OCT+ step through them while the undo box shows
 - **Parameter locks and automation:** hold a step and turn a knob to lock it; knob moves recorded live; SEQ ›
   AUTOMATION lists them all to edit, move or delete
-- **SEQ TOOLS** (hold SEQ): CLEAR, REVERSE, SHIFT < / >, RANDOM, COOK; on a drum track BEAT and each lane's
+- **SEQ TOOLS** (hold SEQ): CLEAR, REVERSE, SHIFT < / >, RANDOM, COOK, and (1.3) EUCLID (hits spread over the steps,
+  rotated; OCT+ applies), DOUBLE and HALF (the length and the steps with it); on a drum track BEAT and each lane's
   tools
+- **MOMENTARY** (1.3): hold LFO and turn knobs on HOME, a sound page, an FX page or the MIXER: let go and the values
+  spring back (OCT+ keeps them), not recorded
+- **Lane mutes** (1.3): on a DRUM or DRUM-X track the EDIT layer's black keys 1–8 mute its lanes
 - **DUCK** (FX › DUCK): a track dips under another track's hits, the sidechain pump
 - **Effects:** per track DIST, in four types on FX › DRIVE (SOFT, HARD, FOLD, BITS) with a TONE, and the SLICER;
   the buses on GLO: chorus (CHORUS, FLANGER or PHASER, with FEEDBACK), delay and reverb (ROOM, SPRING or HALL); the
   FX layer (hold FX): fourteen effects on the white keys and cuts on the black ([the keys](#the-fx-layers-keys));
-  new in 1.2: DRIVE's types and TONE, the chorus's modes, HALL, and GATE, DUB, FLANGE and VINYL on the FX layer
+  new in 1.2: DRIVE's types and TONE, the chorus's modes, HALL, and GATE, DUB, FLANGE and VINYL on the FX layer;
+  new in 1.3: **FX › INSERT**, a second effect per track after DRIVE (SOFT, HARD, FOLD, FUZZ, CRUSH, PHASR, FLANG or
+  CHOR, its A, B and C named by the type, INSERT 2's MIX), and the delay's dotted times (1/8D, 1/16D, 1/4D)
 - **Quick layers:** hold FX, GLO, SEL, EDIT, ARP or SEQ for its map on the keys and knobs; SHIFT + the button,
   or the button held + HOME (1.2.1), keeps it open. The GLO layer: solos, mutes, FILL, tap tempo
 - **DRUM-X** (from [JIANT FM](https://github.com/juanjiant-bit/JIANT)): a synthesized kit of 8 sounds, each
@@ -275,14 +290,22 @@ FM6 patches from `.syx` files and saves complete backups.
 - **Chord keys, arpeggiator, scales:** in-key chords with voicings; an arpeggiator with 14 modes, CHANCE,
   SWING and HOLD; 16 scales with a white-key mode; MONO, LEGATO, UNISON and glide
 - **Modulation matrix:** 4 slots a track; the sources the LFO, ENV and a second envelope of its own (ENV › ENV 2, 1.2),
-  velocity, the key, a random value and MIDI controllers
+  velocity, the key, a random value, MIDI controllers and (1.3) S&H and SLEW (a random value a cycle of the LFO,
+  stepped or gliding); (1.3) the destinations DEPTH (the LFO's depth: MODW › DEPTH is a mod-wheel vibrato), and VEL
+  and TIME to humanize: each note's velocity, each step a little late
+- **LFO 2** (1.3): SYNC to a note value of the tempo (4 bars to 1/32), TRIG FREE (a note leaves its phase), POLARITY
+  UNI (one-sided); **ENV SYNC** (ENV DEST, 1.3): ATTACK, DECAY and RELEASE as note values, 1/64T to 4 bars
+- **SPREAD** (EDIT › VOICE 2, 1.3): a POLY or UNISON track's voices left and right of PAN in turn
 - **Presets and projects:** factory presets, 32 user sounds and 4 projects, named on the device; SAVE › PROJECT
   loads, saves, renames and deletes them, and NEW on an empty slot starts a blank project (1.2.1); the music comes back at
   power-on (RESTORE LAST, an autosave of its own)
 - **Screen and LEDs:** the BLOCKS look in Barlow Condensed with Fukiai icons; six themes; MENU › LARGE for tall
   cards; messages say the way out; idle buttons glow, what can be pressed breathes, never blinks
 - **USB and MIDI:** class-compliant MIDI in and out, TRS MIDI in, a stereo USB audio input to record the
-  master on a computer; channels 1–6 play tracks 1–6 (MENU › MIDI IN CH1-6); clock from internal, USB or TRS
+  master on a computer; channels 1–6 play tracks 1–6 (MENU › MIDI IN CH1-6), and (1.3) each track can listen on a
+  channel of its own (MENU › MIDI › T1–T6 CHANNEL); clock from internal, USB or TRS. **MIDI LEARN** (1.3): MENU › MIDI
+  › MIDI LEARN, turn a knob, send a CC: the controller sets that parameter, up to 10 of them; **Program Change** (1.3)
+  loads the track's nth preset
 
 ### Patterns, lists and the song
 
@@ -355,13 +378,14 @@ how deep it cuts).
 
 In the order the device lists them:
 
-- **ANALOG**: virtual analog; two oscillators, noise, drive, resonant low-pass filter
+- **ANALOG**: virtual analog; two oscillators, noise, drive, resonant low-pass filter; (1.3) WAVE SYNC (a hard-synced
+  saw the envelope sweeps) and SUB (a saw on a square an octave down)
 - **FM6**: classic 6-operator FM (Dexed-based): 32 algorithms, a full patch per track, every value of it
   editable on the device (EDIT › OPERATOR and ALL OPS: the operators' envelopes drawn as they play, each
   carrier shaded by how bright the modulators make it) or in the web editor (which imports .syx files);
   INIT starts from a bare sine; macros on the device, an algorithm chart; SLOT picks a factory patch
   (F1–F8) or the track's own (OWN)
-- **PHASE**: phase distortion (ported from CrispyZebra)
+- **PHASE**: phase distortion (ported from CrispyZebra); (1.3) FOLD, a wavefolder
 - **LOFI**: chiptune; pulse, triangle, saw, noise and a 4-bit wave RAM, stepped envelope, sweep, arpeggio
 - **SAMPLE**: multisampled instruments and 3 user sample slots
 - **VOICE**: formant oscillator, sung vowels
@@ -377,7 +401,8 @@ In the order the device lists them:
   classic analog drum machines (the numbers are a hint), every lane its own voice: **80** (deep sine kick with a long decay, noisy snare,
   six-square hats), **10** (swept kick, white-noise snare, long-tailed claps, a cymbal), **66** (soft
   round kick, bright snare, noise hats, a conga), **55** (dropping kick, high metal hats, a metal bell)
-  and **77** (swelling kick, multi-burst claps, claves, a cymbal). All of them are synthesized, no samples, and
+  and **77** (swelling kick, multi-burst claps, claves, a cymbal), and (1.3) **DEEP**, **TIGHT** and **PERC**, put
+  together from those five's pieces. All of them are synthesized, no samples, and
   each has presets (BOOM KIT, CRISP KIT, RHYTHM BOX, ELECTRO KIT, STUDIO KIT ..). EDIT › LANES sets each lane on its
   own: KNOB 1 the lane, KNOB 2 its level, KNOB 3 its tune (±12 semitones), KNOB 4 its decay (0 as the kit has it)
 - **DRUM-X**: a synthesized 8-sound kit from [JIANT FM](https://github.com/juanjiant-bit/JIANT), after the idea of
@@ -415,11 +440,13 @@ and BREAK 1.1's own break.
 
 ## Menu
 
-Hold **HOME** and let it go for the menu. It is in four tabs: **DISPLAY** (THEME to LEDS, SCREEN OFF, HINTS),
-**CONTROL** (HOLD to BPM LOCK, SCALE LEDS, CLOCK, MIDI IN), **AUDIO** (SPEAKER EQ, USB LEVEL, CLICK, CLICK LEVEL,
-COUNT-IN, TUNE) and **SYSTEM** (USB SERIAL, RESTORE LAST, CPU, HARDWARE CALIBRATION, RESET SETTINGS, ABOUT).
+Hold **HOME** and let it go for the menu. It is in five tabs: **DISPLAY** (THEME to LEDS, SCREEN OFF, HINTS),
+**CONTROL** (HOLD to BPM LOCK, SCALE LEDS, STEP PREVIEW), **AUDIO** (SPEAKER EQ, USB LEVEL, CLICK, CLICK LEVEL,
+COUNT-IN, TUNE), **SYSTEM** (USB SERIAL, RESTORE LAST, CPU, HARDWARE CALIBRATION, RESET SETTINGS, ABOUT) and **MIDI**
+(CLOCK, MIDI IN, MIDI LEARN, LEARN CLEAR, T1–T6 CHANNEL; its rows scroll, six at a time).
 ALGORITHM moves between the tabs and PRESETS through the rows of one; any of KNOB 1–4, or OCT+ / OCT−,
-changes the value (OCT+ opens HARDWARE CALIBRATION and ABOUT); press HOME to close the menu. RESET SETTINGS puts
+changes the value (OCT+ opens HARDWARE CALIBRATION and ABOUT, starts MIDI LEARN and clears what it learned); press
+HOME to close the menu. RESET SETTINGS puts
 every setting back as a new unit has it. The web editor's Settings tab reads and changes them too.
 
 <details>
@@ -451,14 +478,27 @@ every setting back as a new unit has it. The web editor's Settings tab reads and
   SELECT either way
 - **SCALE LEDS:** OFF or ON: the keys show the selected track's scale all the time (the root a little
   brighter); not on DRUM or SLICE tracks
-- **CLOCK:** INT, USB or TRS, where the tempo comes from. **MIDI IN:** CH1-6, channels 1–6 play tracks 1–6,
-  or SEL, every channel the selected track. **TUNE** (AUDIO): the whole unit in cents, ±50. The three are the
-  unit's, so loading a project never changes them
-- **CPU** (SYSTEM): how busy the audio is, read only
+- **CLOCK:** INT, USB or TRS, where the tempo comes from. **MIDI IN:** CH1-6, channels 1–6 play tracks 1–6 (TRACK
+  once one of them is set to another channel), or SEL, every channel the selected track. **TUNE** (AUDIO): the whole
+  unit in cents, ±50. The three are the unit's, so loading a project never changes them
+- **T1–T6 CHANNEL** (MIDI, 1.3): the channel each track hears and its keys play out on, CH 1–16 (CH 1–6 by default); two
+  tracks on one channel: the first of them plays it, and a channel no track is on is left for other instruments
+- **MIDI LEARN** (MIDI, 1.3): OCT+ turns it on and closes the menu. Turn a knob (on HOME, a sound page, the MIXER, the
+  GLO layer's levels): the footer says what it picked; send a CC from your controller and it is learned to that
+  parameter of that track. Turn the next knob for another; OCT− clears the picked one's CC, OCT+ is done. Up to 10 CCs,
+  on any channel MIDI IN hears; a CC learned no longer reaches the standard map (CC7 LEVEL, CC74 the brightness ..).
+  CC1, 6, 11, 32, 38, 64, 96–101 and 120–127 are never learned. **LEARN CLEAR** forgets them all
+- **STEP PREVIEW** (CONTROL, 1.3): ON, KNOB 1 on the piano roll sounds the step it lands on, when stopped
+- **CPU** (SYSTEM): **1 CORE** (default) or **2 CORES (BETA)**, then how busy the audio is. 2 CORES takes effect
+  at the next power-on: stop playing first (the row says STOP while the music plays, since settings are saved
+  stopped), then restart when it says RESTART: the FM-1's second core renders some of the tracks of
+  every block, the sound bit for bit the same, and up to 12 voices sound at once instead of 8. If the second core
+  misreads or stops answering (some units do), the FM-1 goes on with one core, says CORE 2 FAILED and sets the row
+  back to 1 CORE
 - **HINTS** (DISPLAY): ON or OFF; OFF drops the one line of hint (HOLD HOME: SHIFT, KEYS: STEPS, a layer's
   first HOLD [X]: SHORTCUTS) and SHIFT's map; what OCT+ and OCT- do on an action page stays
-- **RESET SETTINGS** (SYSTEM): OCT+ asks, then puts every MENU setting back as a new unit has it; the
-  calibration, the favourite sounds and the music stay
+- **RESET SETTINGS** (SYSTEM): OCT+ asks, then puts every MENU setting back as a new unit has it (the channels too, and
+  nothing learned); the calibration, the favourite sounds and the music stay
 - **SPEAKER EQ:** FLAT, LOWCUT or BASS+, a tone setting for the built-in speaker (not a switch). It also
   shapes the headphone out and USB audio, so keep it on FLAT when recording. The firmware cannot turn
   the speaker off, but headphones in the jack do
@@ -533,7 +573,8 @@ Skiff stands on Felucca. If it is useful to you, support Felucca's author:
 ## Credits
 
 - **[Felucca](https://github.com/hugelton/Felucca)** by **[Hügelton Instruments](https://hugelton.com)** (Leo
-  Kuroshita, [@kurogedelic](https://github.com/kurogedelic)): the firmware Skiff is built on; the PHASE engine's waveforms (a C port of the oscillator of
+  Kuroshita, [@kurogedelic](https://github.com/kurogedelic)): the firmware Skiff is built on, and in 1.3 the features of its
+  1.2 to 1.6.1 (LFO 2, the INSERT, MIDI LEARN and the channels, SPREAD, ENV SYNC, the MOD additions, EUCLID, and more); the PHASE engine's waveforms (a C port of the oscillator of
   [CrispyZebra](https://github.com/hugelton/CrispyZebra), GPL-3.0); the DRUM voices and kits; the Hügelton Sample
   Pack (the drum samples, GPL-3.0-only, not CC0); the [Fukiai](https://github.com/hugelton/Fukiai) icon
   font ([MIT](LICENSES/MIT-Fukiai.txt))
@@ -547,13 +588,18 @@ Skiff stands on Felucca. If it is useful to you, support Felucca's author:
 - FM6 engine: msfa from [Dexed](https://github.com/asb2m10/dexed) by Google Inc. and Pascal Gauthier ([Apache-2.0](LICENSES/Apache-2.0-msfa.txt))
 - DRUM-X engine: from [JIANT FM](https://github.com/juanjiant-bit/JIANT) by [juanjiant-bit](https://github.com/juanjiant-bit) (GPL-3.0-only), after the idea of Sonic Charge's Microtonic
 - Browser emulator: after [X0X](https://github.com/charlesvestal/fm1-x0x) by [charlesvestal](https://github.com/charlesvestal) (GPL-3.0), a Felucca fork whose browser build showed the way
+- Second core: as [Felucca](https://github.com/hugelton/Felucca) 1.6.1 has it, its start code from [X0X](https://github.com/charlesvestal/fm1-x0x),
+  after [Melodee](https://github.com/keremimo/melodee) by [keremimo](https://github.com/keremimo) and with
+  [Jangada](https://github.com/zednaked/jangada)'s measurements and hardening by [zednaked](https://github.com/zednaked) (all GPL-3.0);
+  its host tests by gospodindilly-ops
 - Package format and boot files: [JieLi AC79 SDK](https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK) ([Apache-2.0](LICENSES/Apache-2.0.txt); three of its files are in every package, none in this tree)
 - Contributions to Felucca: [keremimo](https://github.com/keremimo) (white-key scales, #2), [ChanceTheMaker](https://github.com/ChanceTheMaker)
   (TRS MIDI, bend, sustain and clock, palettes, favourites, editor display settings: #8, #10, #11, #12),
   [andreahaku](https://github.com/andreahaku) (sample recording and trim, #29; SLICE manual slices and tests, #27, #22),
   [spinkham](https://github.com/spinkham) (the boot fix for 0.9 projects, #111),
   [zednaked](https://github.com/zednaked) (ratchets, #100),
-  [jasonpersinger](https://github.com/jasonpersinger) (the ROOM reverb click fix, #121)
+  [jasonpersinger](https://github.com/jasonpersinger) (the ROOM reverb click fix, #121),
+  [renebohne](https://github.com/renebohne) (MIDI Program Change, #179)
 
 ## Licence
 

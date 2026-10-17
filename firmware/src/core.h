@@ -12,6 +12,31 @@
 #define NTRK 6                   /* tracks (the formats and the protocol count these): every track is a part;
                                   * (Skiff phase 6) T5 and T6 light (NHEAVY) */
 #define NPART NTRK               /* synth parts: tracks 1..NTRK */
+#ifndef FELUCCA_CPU2
+#define FELUCCA_CPU2 1           /* (Skiff 1.3) the second core (src/felucca.c): 1 = built in, MENU > CPU 2 CORES lets it
+                                  * render some tracks; 0 = none of it */
+#endif
+#define C1_NP (FELUCCA_CPU2 ? NPART : 1)   /* the copies of the state a track's render writes that tracks shared before the
+                                            * second core (mod.c, eng_formant.c, eng_phys.c): one each with two cores,
+                                            * one for all with one, as up to 1.2 */
+#define C1_PI(t) ((uint32_t)((t) - trk) % C1_NP)   /* a track's copy */
+#if FELUCCA_CPU2 && !defined(C1_RUN)              /* (no second core here: the host's tests, the browser; felucca.c and
+                                                  * tests/c1_host.h define their own before this) */
+#define C1_ON() 0                                 /* a second core is answering */
+#define C1_RUN(fn, arg) 0                         /* hand it fn(arg): 1 = taken */
+#define C1_WAIT() 0                               /* wait for it: 0 = done */
+#endif
+/* (Skiff 1.3) the voices that sound at once across the tracks (voice.c voice_room, voice_alloc): NVOICE with one core;
+ * VOICES_2CORE while the second core runs (C1_ON: MENU > CPU 2 CORES and it answered), the room its render gives. A
+ * track still has NVOICE of its own (track_t.v); audio.c's shedding still guards the load either way */
+#ifndef VOICES_2CORE
+#define VOICES_2CORE 12u
+#endif
+#if FELUCCA_CPU2
+#define VOICE_BUDGET (C1_ON() ? VOICES_2CORE : NVOICE)
+#else
+#define VOICE_BUDGET NVOICE
+#endif
 _Static_assert(NTRK <= 8 && NPART < NVOICE, "a track mask is a uint8_t; each part protects one voice (voice.c)");
 #define NSTEP 64
 #define HALF_FRAMES 128          /* I2S half buffer: 2.9 ms at 44.1 kHz (a key waits 0..1 half, then plays 1 half later) */
@@ -78,6 +103,11 @@ enum {                          /* per-track parameters */
     P_EG2_ATK, P_EG2_DEC, P_EG2_SUS, P_EG2_REL,   /* (Skiff phase 9) ENV 2 (voice.c env2_tick): a MOD source */
     P_LTUNE0, P_LTUNE1, P_LTUNE2, P_LTUNE3, P_LTUNE4, P_LTUNE5, P_LTUNE6, P_LTUNE7,   /* (Skiff phase 9) the DRUM lanes' */
     P_LDECAY0, P_LDECAY1, P_LDECAY2, P_LDECAY3, P_LDECAY4, P_LDECAY5, P_LDECAY6, P_LDECAY7,   /* TUNE and DECAY */
+    P_LSYNC, P_LTRIG, P_LPOL,                  /* (Skiff 1.3, #16, from Felucca 1.2) LFO SYNC (OFF, a note value), TRIG (NOTE,
+                                                * FREE), POL (BI, UNI) */
+    P_SPRD,                                    /* (1.3, from Felucca) SPREAD: a POLY / UNISON track's voices around PAN */
+    P_ITYPE, P_IA, P_IB, P_IC, P_IMIX,         /* (1.3, from Felucca 1.5) the INSERT, its TYPE, three values and MIX (fx.c) */
+    P_ESYNC,                                   /* (1.3, from Felucca 1.5) ENV SYNC: ATK DEC REL as note values of the tempo */
     P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7,
     P_COUNT
 };
@@ -170,6 +200,7 @@ typedef struct {
     int32_t s[8];                /* engine state (filters, envs) */
     uint32_t age;
     uint8_t mvel;                /* mod.c: the note-on velocity (before UNISON scaling) and RAND of the note */
+    uint8_t side;                /* (1.3) SPREAD: 0 the left of PAN, 1 the right (voice.c voice_start, fx.c mix_spread) */
     int16_t mrnd;
     int32_t env2;                /* (Skiff phase 9) ENV 2, Q24: a MOD source only (mod.c MS_ENV2) */
 } voice_t;
@@ -312,17 +343,19 @@ static void step_set_rflam(step_t *s, uint32_t v)
         s->flags |= SF_FLAM;
 }
 #define MOTION_MAX 64u
-/* place: track << 6 | step ((Skiff phase 6) 16 bits: up to eight tracks x 64 steps); the stored formats of before
+/* place: track << 6 | step ((Skiff phase 6) 9 bits: up to eight tracks x 64 steps); the stored formats of before
  * hold it in a byte (four tracks: project.c proj_mot_put, the pattern records only the step). value: the parameter's
  * value, -64..127 (motion_valid, motion_put: what a project's byte holds), so one byte.
- * param: the P_* id (< 128: P_COUNT is at most 127, project.c), bit 7 (MOTION_LOCK, 1.1) a parameter lock: the value
- * sounds on that step only and goes back after it (motion.c motion_step); without it an automation event, the
- * value holds until another one changes it. One record per (track, step, id), of either kind */
-#define MOTION_LOCK 0x80u
-#define MOTION_ID(e) ((uint32_t)(e)->param & 0x7Fu)
-typedef struct { uint16_t place; uint8_t param; int8_t value; } motion_event_t;
+ * id: the P_* id, 0..254 ((Skiff 1.3) it was 7 bits, the lock bit 7 of the same byte: P_COUNT passed 127). lock (1.1):
+ * a parameter lock: the value sounds on that step only and goes back after it (motion.c motion_step); without it an
+ * automation event, the value holds until another one changes it. One record per (track, step, id), of either kind.
+ * The stored formats keep the lock as bit 7 of their id byte (MOTION_LOCK), an id from 128 on as bit 6 of a pattern's
+ * step byte (bank.c BK_VER2). The record stays 4 bytes: every copy (launch, undo, the tools) the size it was */
+#define MOTION_LOCK 0x80u                       /* (the stored id byte's lock bit; motion_put's kind) */
+#define MOTION_ID(e) ((uint32_t)(e)->id)
+typedef struct { uint16_t place : 9, lock : 1, : 6; uint8_t id; int8_t value; } motion_event_t;
 typedef struct { uint8_t count, on, rsv[2]; motion_event_t event[MOTION_MAX]; } motion_store_t;
-_Static_assert(sizeof(motion_store_t) == 260u, "motion disk layout");
+_Static_assert(sizeof(motion_store_t) == 260u, "motion: a record is 4 bytes");
 #define CHAIN_ROWS 16u
 typedef struct { uint8_t slot, repeat; } chain_row_t;
 /* (Skiff phase 5) the patterns: one pool (bank.c, ids 0..NPAT-1); each track's list of NENT entries names them */
@@ -347,6 +380,7 @@ typedef struct track {
     int32_t lfo_val;             /* Q15 */
     int32_t lfo_fade;            /* Q15 ramp after note-on */
     uint32_t lfo_rnd;
+    int16_t lfo_prev;            /* (1.3) the S&H value of the cycle before (mod.c SLEW glides from it to lfo_rnd's) */
     uint32_t lfo_t;              /* (Skiff) control ticks since its retrigger (the graphs: ui_graph.c lfo_view_at) */
     /* keyboard / arp input: held notes in press order */
     uint8_t held[16];
@@ -395,11 +429,17 @@ typedef struct track {
     int32_t peak;
     int32_t dist_hp, dist_lp1, dist_lp2;   /* DIST insert state (fx.c) */
     int32_t dist_dc;                       /* (Skiff phase 9) the DC after HARD's and FOLD's clip (fx.c dist_hard) */
-    uint8_t tail;                /* blocks to mix after the last voice (the DIST tail) */
+    uint8_t tail;                /* blocks to mix after the last voice (the DIST tail; (1.3) the INSERT's) */
+    uint8_t ins_run;             /* (Skiff 1.3) the INSERT runs (fx.c track_insert): on, or fading */
+    uint8_t lfo_wrap;            /* (Skiff 1.3) the LFO's phase wrapped this block: its S&H is drawn after the tracks
+                                  * (voice.c track_lfo_end; in the pad before armp: track_t keeps its size) */
     int16_t armp, aholdp;        /* P_AMODE / P_AHOLD as last seen by the ISR */
     /* engine switch (voice.c engine_block): the old engine's voices fade out, then it switches */
     uint8_t xf_on, xf;           /* fading; blocks of the fade still to render */
     int16_t pe_old[8];           /* P_E0..P_E7 of the sounding engine: the fade renders with these */
+    uint32_t esync_k[3];         /* (1.3) ATK's step, DEC's and REL's coefficient (Q16) this block (voice.c esync_coef) */
+    uint8_t spread_on;           /* (1.3) SPREAD this block (fx.c mix_part, voice.c track_render) */
+    uint8_t sp_alt;              /* (1.3) SPREAD: the side the next voice starts on (alternating, voice.c voice_start) */
     uint8_t xp_n, xp_note[4], xp_vel[4];   /* note-ons during the fade, played on the new engine */
     /* modulation matrix (mod.c): MIDI performance controllers of the track's channel, 0..127 */
     uint8_t mw, at;              /* CC1 mod wheel, channel aftertouch */

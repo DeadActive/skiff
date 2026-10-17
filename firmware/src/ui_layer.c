@@ -31,7 +31,7 @@
  * Held past HOLD alone: the map (a peek), letting go does nothing. A key, a knob or a button meanwhile: a combo,
  * the map at once, no tap. Keys pressed with the button down are the layer's (seq.c keyboard_block): silent, no
  * MIDI, never recorded; keys held before stay notes. Only one layer at a time: a second layer button is ignored.
- * PLAY and REC work in every layer (GLO + PLAY: RESTART); SAVE, HOME, SEQ and the other page buttons are swallowed. In SET
+ * PLAY and REC work in every layer (GLO held + PLAY: RESTART; GLO's lock: PLAY as always, Felucca #183); SAVE, HOME, SEQ and the other page buttons are swallowed. In SET
  * layers OCT± do not shift the octave: OCT- (on release, not with OCT+) puts back what the layer changed since it
  * opened. A HOLD key's effect lasts until the key is let go, the map with it. No layer in the menu, a dialog,
  * NAME or the UPDATE MODE countdown. After a tap, until the layer has been opened once: "HOLD [GLO] QUICK"
@@ -75,6 +75,8 @@ static const page_t *ly_page(uint32_t l) { return l == LAYER_SCL ? &LY_SCL : l =
 typedef char ly_init_fits[LY_INIT < 16u ? 1 : -1];   /* (a white key: F3 .. G5) */
 #define layer_seen (favorites.factory[15][31])   /* bit l: layer l opened once (a byte no engine uses) */
 static const khint_t FX_LATCH_FOOT[3] = {{KC_KEYS, "ON / OFF"}, {KC_K14, "MACROS"}, {KC_OCTDN, "ALL OFF"}};
+static const khint_t GLO_LOCK_FOOT[3] = {{KC_OCTDN, "UNDO"}, {KC_GLO, "DONE"}, {0, 0}};   /* (locked: PLAY plays) */
+static const khint_t EU_FOOT[3] = {{KC_OCTUP, "APPLY"}, {KC_OCTDN, "CANCEL"}, {0, 0}};   /* ((1.3) SEQ TOOLS' EUCLID open) */
 
 static struct {
     uint8_t l, trk, loaded, oct;       /* SET: the layer and the track of the snapshot; EDIT: a sound loaded since
@@ -91,6 +93,7 @@ static struct {
     uint8_t quiet;                     /* #39: a layer closed after it opened: KNOB 1..4 do nothing until quiet_t + */
     uint32_t quiet_t;                  /* LY_QUIET_MS (fm1_ms) */
     uint32_t clr_t;                    /* (Skiff U2) REC's CLEAR key pressed (fm1_ms | 1; 0: none): it clears when held */
+    uint8_t mute[NTRK];                /* ((1.3) EDIT: the DRUM lanes' mutes when it opened (eng_drum.c drum_mute; OCT-) */
 } lys;
 #define LY_BPM (2u * NTRK)             /* lys.v: the BPM's */
 #define LY_QUIET_MS 250u
@@ -153,6 +156,8 @@ static void layer_arm(uint32_t pressed, uint32_t now)
  * opened, or a combo: KNOB 1..4 quiet for a while (#39: the knob still turning is not the page's) */
 static void layer_let_go(uint32_t quiet)
 {
+    if (eu.on)                                          /* ((1.3) SEQ TOOLS: an open EUCLID is applied) */
+        eu_close(&trk[lys.trk % NTRK], 1);
     if (ui.ly == LAYER_FX) {                            /* (a lock let go: its latched effects with it) */
         perf_k[0] = perf_k[1] = perf_k[2] = perf_k[3] = 0;
         perf_latched = 0;
@@ -264,6 +269,7 @@ static void layer_opened(uint32_t l)
     lys.v[LY_BPM] = song.g[G_BPM];
     if (l == LAYER_REC)
         lys.v[0] = ui_rec_prefs;
+    memcpy(lys.mute, drum_mute, sizeof lys.mute);
 }
 
 /* the armed button: 0, or the layer whose button was tapped (let go) */
@@ -374,6 +380,22 @@ static void tools_key(uint32_t p)
     char n[4];
     if (!tl_cell(TSEL, p))
         return;
+    if (eu.on) {                                        /* ((1.3) EUCLID open: applied; F4 again does only that) */
+        eu_close(TSEL, 1);
+        if (p == TL_EUCLID) {
+            ui_message("EUCLID APPLIED");
+            ui.force = 1;
+            return;
+        }
+    }
+    if (p == TL_EUCLID) {                               /* (its message: eu_say; one undo copy for all of it) */
+        eu_open(TSEL);
+        if (!lys.loaded)
+            str_cpy(ui.msg2, "HOLD [SAVE]: UNDO", sizeof ui.msg2);
+        lys.loaded = 1;
+        ui.force = 1;
+        return;
+    }
     if (!(m = tl_do(TSEL, p, ui.lane)))
         return;
     if (p == TL_COOK && lys.cook < 99u) {               /* "COOKED 3": the third since the layer opened */
@@ -517,6 +539,11 @@ static void layer_key(uint32_t l, uint32_t k)
             edit_load(eng_vis(p), 0);
         else if (p == LY_INIT)
             confirm_open(CF_INIT_SOUND, song.sel);      /* (the dialog closes the layer) */
+    } else if (l == LAYER_EDIT && p < NLANE && drum_track(TSEL)) {   /* ((1.3, from Felucca 1.4.1) black keys 1..8:
+                                                         * the lanes' MUTE, latched (eng_drum.c drum_mute) */
+        drum_mute[song.sel] ^= (uint8_t)(1u << p);
+        ui_say(drum_lane_name(TSEL, p), (drum_mute[song.sel] >> p) & 1u ? " MUTED" : " ON");
+        ui.force = 1;
     } else if (l == LAYER_REC) {
         if (!key_black(k) && p < 4u)
             rec_key(p);
@@ -530,8 +557,10 @@ static void layer_key(uint32_t l, uint32_t k)
     } else if (l == LAYER_SEQ) {
         if (!key_black(k))
             tools_key(p);
-        else if (p < NLANE && drum_track(TSEL))
+        else if (p < NLANE && drum_track(TSEL)) {
             ui.lane = (uint8_t)p;                       /* (black keys 1..8: the lane, as on the grid) */
+            eu_lane(TSEL);                              /* ((1.3) EUCLID open: on that lane now) */
+        }
     }
 }
 /* each pass: the keys the layer got now; then GLO's solo: the tracks of its keys still held (perform.c) */
@@ -565,6 +594,7 @@ static void layer_knob(uint32_t k, int32_t s)
         *vp = (int16_t)clamp(*vp + accel(EN_K1 + k, s, TP[P_LEVEL].max - TP[P_LEVEL].min), TP[P_LEVEL].min,
                              TP[P_LEVEL].max);
         motion_capture(t, P_LEVEL, *vp);
+        ml_knob(t, P_LEVEL);                            /* ((1.3) MIDI LEARN: Tk LEVEL picked) */
     } else if (l == LAYER_EDIT) {                       /* ENG, No., FAV */
         if (k == 0u)
             edit_load(eng_step_for(song.sel, TSEL->eng_req, s), 0);
@@ -585,6 +615,8 @@ static void layer_knob(uint32_t k, int32_t s)
             rp_apply();
             lys.rp_dirty = 1;
         }
+    } else if (l == LAYER_SEQ && eu.on) {               /* ((1.3) EUCLID: HITS STEPS ROT; KNOB 4: none) */
+        eu_knob(TSEL, k, s);
     } else if (l) {                                     /* the page's knobs, wherever the page is */
         uint8_t h = ui.home, pg = ui.page;
         ui.home = 0;
@@ -598,10 +630,11 @@ static void layer_knob(uint32_t k, int32_t s)
 }
 
 /* PLAY with GLO held open: RESTART (from the top, playing on); stopped: PLAY. (Skiff phase 5) SONG on: each track
- * from its list's first entry (bank.c song_top). 1 = done here */
+ * from its list's first entry (bank.c song_top). 1 = done here. GLO's lock is not held: PLAY starts and stops there
+ * as in every layer (Felucca #183: locked, PLAY restarted and never stopped) */
 static int layer_play(void)
 {
-    if (layer_open() != LAYER_GLO)
+    if (layer_open() != LAYER_GLO || !(fm1_in.buttons & ly_bit(LAYER_GLO)))
         return 0;
     if (song.g[G_CLOCK] && song.playing) {
         ui_message("RESTART: CLOCK EXTERNAL");
@@ -633,6 +666,12 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
     if (layer_set_open())
         lys.oct |= (uint8_t)(((pressed >> dn) & 1u) | ((pressed >> up) & 1u) << 1);
     mine = oct & lys.oct;
+    if ((mine & 3u) && eu.on && lys.l == LAYER_SEQ) {   /* ((1.3) EUCLID open: OCT+ applies, OCT- cancels; only that) */
+        eu_close(&trk[lys.trk % NTRK], mine & 2u);
+        ui_message(mine & 2u ? "EUCLID APPLIED" : "EUCLID CANCELLED");
+        ui.force = 1;
+        mine = 0;
+    }
     if (mine & 1u) {                                    /* OCT-: back to when it opened */
         if (lys.l == LAYER_FX) {                        /* (FX LATCH) every effect and macro off */
             perf_latched = 0;
@@ -642,6 +681,7 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
             if (lys.loaded)
                 undo_step(0);                           /* (the copy from its first load) */
             lys.loaded = 0;
+            memcpy(drum_mute, lys.mute, sizeof drum_mute);   /* ((1.3) the lanes' mutes as it opened) */
         } else if (lys.l == LAYER_SEQ || lys.l == LAYER_REC) {
             track_t *t = &trk[lys.trk % NTRK];
             if (lys.loaded) {                           /* (SAVE held then: the tools / the clear again) */
@@ -716,8 +756,13 @@ static uint32_t layer_leds(uint32_t *br)
                                                          * one the track may not play dark: engines.c eng_allowed) */
             on = p < NENG_SHOWN && p < LY_INIT && eng_vis(p) == TSEL->eng_req % NENGINES;
             can = p < NENG_SHOWN && p < LY_INIT ? (uint32_t)eng_allowed(song.sel, eng_vis(p)) : p == LY_INIT;
+        } else if (l == LAYER_EDIT && p < NLANE && drum_track(TSEL)) {   /* ((1.3) the lanes: sounding lit, muted
+                                                         * breathe, as GLO's track mutes) */
+            on = !((drum_mute[song.sel] >> p) & 1u);
+            can = 1;
         } else if (l == LAYER_SEQ) {                    /* the tools breathe; DRUM: the lane */
-            on = b && p < NLANE && drum_track(TSEL) && p == ui.lane;   /* lit, the other lanes breathe */
+            on = (b && p < NLANE && drum_track(TSEL) && p == ui.lane) || (!b && p == TL_EUCLID && eu.on);   /* lit,
+                                                         * the other lanes breathe ((1.3) EUCLID open: lit) */
             can = b ? p < NLANE && drum_track(TSEL) : tl_cell(TSEL, p);
         } else if (l == LAYER_PERF && b && p < NTRK) {  /* (Skiff) a track sounding lit; a muted one, a staged one */
             on = !trk[p].p[P_MUTE] && !mute_arm[p];      /* breathe */
@@ -1051,21 +1096,44 @@ static void layer_edit(void)                            /* the engines from F3, 
         else
             lcell(x, y, (int32_t)h, 0, ICON_X_WARN, "INIT", LS_OFF);
     }
-    engine_sound_row(104);
+    if (!drum_track(TSEL)) {
+        engine_sound_row(104);
+        return;
+    }
+    for (i = 0; i < NLANE; i++) {                       /* ((1.3) DRUM: the black keys' lane mutes in the sound's place,
+                                                         * 8 cells of 25 px as SEQ TOOLS' lanes; a muted one dim) */
+        int32_t x = 6 + 29 * (int32_t)i;
+        uint16_t ink, fill = lc_box(x, 100, 25, 18, lc_fill((drum_mute[song.sel] >> i) & 1u ? LS_DIM : LS_OFF, &ink));
+        GFX_HOOK_ALIGN(x, 100, x + 25, 118, AL_HV, "edit lane mute cell name centred");
+        cv_text_in(x, 100 + CAP_IN(S, 18), 25, &AF_S, drum_lane_abbr(TSEL, i), ink, fill);
+    }
 }
 
 /* SEQ TOOLS: the white keys' tools, 4 a row from F3 (the whole sequence; RANDOM COOK BEAT; the lane's), on a DRUM
  * track the lanes of black keys 1..8 under them (the selected one: the selection's fill). A melodic track: the two
  * rows of the sequence's tools only */
 static const uint8_t TL_ICON[TL_N] = {ICON_CLEAR, ICON_X_REVERSE, ICON_X_LEFT, ICON_X_RIGHT, ICON_PROB, ICON_W_SH,
-    ICON_DRUM, 0, ICON_CLEAR, ICON_X_REVERSE, ICON_STEPS, ICON_PROB};
-static const char *const TL_NAME[TL_N] = {"CLEAR", "REVERSE", "SHIFT", "SHIFT", "RANDOM", "COOK", "BEAT", 0,
-    "CLR", "REV", "FILL", "RND"};
+    ICON_DRUM, ICON_PULSE, ICON_CLEAR, ICON_X_REVERSE, ICON_STEPS, ICON_PROB, ICON_LENGTH, ICON_DIVISION};
+static const char *const TL_NAME[TL_N] = {"CLEAR", "REVERSE", "SHIFT", "SHIFT", "RANDOM", "COOK", "BEAT", "EUCLID",
+    "CLR", "REV", "FILL", "RND", "DOUBLE", "HALF"};
+/* (1.3, from Felucca 1.5.5) EUCLID open: its cycle as cells, 16 a row (up to 4 rows), the hits filled; past it, inside
+ * LEN, the cells of its repeats faint (DRUM: the lanes' row under them as always) */
+static void layer_euclid(void)
+{
+    uint32_t len = tl_len(TSEL), i, rows = (len + 15u) / 16u, h = rows > 3u ? 16u : 22u;
+    for (i = 0; i < len; i++) {
+        int32_t x = 8 + 14 * (int32_t)(i % 16u), y = 6 + (int32_t)(h + 2u) * (int32_t)(i / 16u);
+        uint16_t c = eu_hit(i) ? (i < eu.steps ? T_THEME : T_MID) : T_RAISE;
+        cv_rrect(x, y, 12, (int32_t)h, 2, c, T_BG);
+    }
+}
 static void layer_seq(void)
 {
     uint32_t p, st = LS_OFF, drum = (uint32_t)drum_track(TSEL);
     char n[3] = {0, 0, 0}, nm[8];
-    for (p = 0; p < TL_N; p++) {
+    if (eu.on)
+        layer_euclid();
+    for (p = 0; p < TL_DOUBLE && !eu.on; p++) {
         if (!tl_cell(TSEL, p))
             continue;
         n[0] = W_NOTE[p];
@@ -1076,11 +1144,20 @@ static void layer_seq(void)
         }
         lcell(LC_X(p % 4u), 4 + 32 * (int32_t)(p / 4u), 28, n, TL_ICON[p], nm, st);
     }
-    for (p = 0; drum && p < NLANE; p++) {               /* the lanes (black keys 1..8): 8 cells of 25 px, 4 px apart */
-        int32_t x = 6 + 29 * (int32_t)p;
-        uint16_t ink, fill = lc_box(x, 100, 25, 18, lc_fill(p == ui.lane % NLANE ? LS_SEL : LS_OFF, &ink));
-        GFX_HOOK_ALIGN(x, 100, x + 25, 118, AL_HV, "tools lane cell name centred");
-        cv_text_in(x, 100 + CAP_IN(S, 18), 25, &AF_S, drum_lane_abbr(TSEL, p), ink, fill);
+    for (p = 0; drum && p < NLANE; p++) {               /* the lanes (black keys 1..8): 8 cells of 18 px, 2 px apart */
+        int32_t x = 6 + 20 * (int32_t)p;
+        uint16_t ink, fill = lc_box(x, 100, 18, 18, lc_fill(p == ui.lane % NLANE ? LS_SEL : LS_OFF, &ink));
+        GFX_HOOK_ALIGN(x, 100, x + 18, 118, AL_HV, "tools lane cell name centred");
+        cv_text_in(x, 100 + CAP_IN(S, 18), 18, &AF_S, drum_lane_abbr(TSEL, p), ink, fill);
+    }
+    for (p = TL_DOUBLE; !eu.on && p < TL_N; p++) {     /* ((1.3) D5 DOUBLE (x2), E5 HALF (/2) at the row's end, */
+        int32_t x = 168 + 35 * (int32_t)(p - TL_DOUBLE);   /* 31 px each: the lanes' row has no room for their names) */
+        uint16_t ink, fill = lc_box(x, 100, 31, 18, lc_fill(st, &ink));
+        n[0] = W_NOTE[p];
+        GFX_HOOK_ALIGN(0, 100, 0, 118, AL_V, "tools resize cell on its middle");
+        cv_text_on(x + 5, 100 + CAP_IN(S, 18), &AF_S, n, fill == T_RAISE || fill == T_SURF ? T_MID : ink, fill);
+        GFX_HOOK_ALIGN(0, 100, 0, 118, AL_V, "tools resize cell on its middle");
+        cv_text_r(x + 26, 100 + CAP_IN(S, 18), &AF_S, p == TL_DOUBLE ? "x2" : "/2", ink, fill);
     }
 }
 
@@ -1174,6 +1251,18 @@ static void layer_cards(uint32_t l)
             draw_column(c, RL_LABEL[c], rl_name(c, v), "", c < 2u && !v ? T_DIM : VAL(c), (int32_t)v * 500, RL_ICON[c]);
         }
         draw_column(3, "FEEL", rec_feel ? "ON" : "OFF", "", rec_feel ? VAL(3u) : T_DIM, rec_feel ? 1000 : 0, ICON_TIME);
+    } else if (l == LAYER_SEQ && eu.on) {               /* ((1.3) EUCLID: HITS STEPS ROT, the lane (DRUM)) */
+        fmt_int(val, eu.hits);
+        draw_column(0, "HITS", val, "", VAL(0u), eu.steps ? eu.hits * 1000 / eu.steps : 0, ICON_PULSE);
+        fmt_int(val, eu.steps);
+        draw_column(1, "STEPS", val, "", VAL(1u), eu.steps * 1000 / NSTEP, ICON_STEPS);
+        fmt_int(val, eu.rot);
+        draw_column(2, "ROTATE", val, "", eu.rot ? VAL(2u) : T_DIM, eu.steps > 1u ? eu.rot * 1000 / (eu.steps - 1u) : 0,
+                    ICON_PHASE);
+        if (drum_track(TSEL))
+            draw_column(3, "LANE", drum_lane_name(TSEL, ui.lane), "", VAL(3u), -1, ICON_DRUM);
+        else
+            draw_column(3, "", "", "", T_THEME, -1, ICON_NONE);
     } else {                                            /* the page's four (SCL: LY_SCL) */
         uint8_t h = ui.home, pg = ui.page;
         ui.home = 0;
@@ -1203,9 +1292,11 @@ static void draw_layer(void)
         sig += bank_gen() * 31u + launch_mode() * 5u + song.sel * 977u + perf_sig() * 131u +
                perf_scenes() * 1299709u + (scene_now() + 1u) * 15485863u + (uint32_t)stage_pending() * 32452843u;
     else if (l == LAYER_SEQ)
-        sig += (uint32_t)drum_track(TSEL) * 31u + ui.lane * 5u + (uint32_t)TSEL->p[P_E0] * 131u + song.sel * 977u;
+        sig += (uint32_t)drum_track(TSEL) * 31u + ui.lane * 5u + (uint32_t)TSEL->p[P_E0] * 131u + song.sel * 977u +
+               (eu.on ? 7u + eu.hits * 13u + eu.steps * 1031u + eu.rot * 65537u + (uint32_t)TSEL->p[P_SLEN] * 257u : 0u);
     else
-        sig += snd_id() * 31u + (uint32_t)preset_favorite() * 5u + up_gen * 101u + song.sel * 977u;   /* ((Skiff phase 6) its
+        sig += snd_id() * 31u + (uint32_t)preset_favorite() * 5u + up_gen * 101u + song.sel * 977u +
+               drum_mute[song.sel] * 2654435761u;   /* ((1.3) the lanes' mutes) */   /* ((Skiff phase 6) its
                                                                                     * track: what it may play) */
     if (ui.force || sig != ui.layer_sig) {
         ui.layer_sig = sig;
@@ -1238,7 +1329,9 @@ static void draw_layer(void)
             cv_free_hint(8, foot_line_y(), perf_scenes() ? "WHITE: SCENE" : "WHITE: PATTERN", T_MID, T_BG, 110);
             cv_free_hint(232 - head_hint_w(r, 120), foot_line_y(), r, T_MID, T_BG, 120);
         } else {
-            const khint_t *ft = l == LAYER_FX && perf_latch_on ? FX_LATCH_FOOT : LAYERS[l].foot;
+            const khint_t *ft = l == LAYER_FX && perf_latch_on ? FX_LATCH_FOOT
+                              : l == LAYER_GLO && ui.lock == LAYER_GLO ? GLO_LOCK_FOOT
+                              : l == LAYER_SEQ && eu.on ? EU_FOOT : LAYERS[l].foot;
             cv_key_row(8, 232, foot_line_y() - KC_TY, ft, ft[2].act ? 3u : 2u, 7u, T_BG);
         }
         cv_blit(0, foot_y());

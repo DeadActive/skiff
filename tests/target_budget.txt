@@ -37,10 +37,10 @@ dv_bell_run 52
 dv_cym_run 67
 dv_out 35
 dv_metal_mix 16
-slicer_track 632
+slicer_track 558
 slice_render 453
 slc_rev 120
-fm1_alnk0_irq 37502
+fm1_alnk0_irq 30289
 fm1_timer5_irq 33387
 click_render 30
 mod_begin 158
@@ -66,3 +66,11 @@ launch_step 28
 launch_swap 68
 throw_on 187
 throw_off 15
+mix_part 778
+mix_split 42
+track_insert 3
+ins_drive 280
+ins_swept 228
+mix_spread 73
+esync_coef 0
+mod_depth 25

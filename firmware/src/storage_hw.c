@@ -19,12 +19,14 @@ static int st_read(uint32_t off, void *dst, uint32_t n)   /* 256-byte IRQ-off wi
     }
     return 0;
 }
-static void audio_silence(void)                 /* IRQs off: the DMA would loop stale audio (buzz) */
-{
+static void audio_silence(void)                 /* IRQs off: the DMA would loop stale audio (buzz). Called before */
+{                                               /* every erase (here, ota_hw.c, editor.c's sample slots) */
     uint32_t i;
     for (i = 0; i < sizeof abuf / sizeof abuf[0]; i++)
         abuf[i] = 0;
-}
+    fm1__led_lines(0);                          /* (Felucca #236) the erase stops the LED scan for ~17 ms: one column */
+}                                               /* would stay lit at full duty and the rest dark, a flash of the whole
+                                                 * panel. Dark rows: the panel just drops out; the tick relights them */
 static int st_erase(uint32_t off)
 {
     uint32_t took, f;

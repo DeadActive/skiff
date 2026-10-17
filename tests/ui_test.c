@@ -1438,14 +1438,14 @@ static int test_menu_tabs(void)
     for (t = 0; t < MTAB_COUNT; t++) {
         uint32_t f = mtab_first(t);
         n = mtab_rows(t);
-        ok &= n >= 1u && n <= MTAB_ROWS && f < MI_COUNT;
+        ok &= n >= 1u && f < MI_COUNT;
         for (i = 0; i < MI_COUNT; i++)                  /* its rows in one run */
             ok &= (MI_TAB[i] == t) == (i >= f && i < f + n);
         ui.menu_sel = (uint8_t)f;
-        ui_prefs = 0;
-        ok &= mr_y(n) - mr_gap() + MP_PAD <= MK_Y - 6;
+        ui_prefs = 0;                                   /* ((1.3) the rows shown: MTAB_ROWS at most, MIDI's scroll) */
+        ok &= mr_n() == (n < MTAB_ROWS ? n : MTAB_ROWS) && mr_y(mr_n()) - mr_gap() + MP_PAD <= MK_Y - 6;
         ui_prefs = PREF_LARGE;
-        ok &= mr_y(n) - mr_gap() + MP_PAD <= MK_Y - 6;
+        ok &= mr_y(mr_n()) - mr_gap() + MP_PAD <= MK_Y - 6;
     }
     ok &= MP_Y + MP_PAD + (int32_t)MTAB_ROWS * 25 - 1 + MP_PAD <= MK_Y - 6;   /* (room for MTAB_ROWS: 24 px rows 1 px apart) */
     for (i = 0; i < MI_COUNT; i++) ok &= MI_TAB[i] < MTAB_COUNT;
@@ -1461,9 +1461,11 @@ static int test_menu_tabs(void)
             }
     }
     ui_prefs = 0;
-    bad += check("MENU tabs: DISPLAY CONTROL AUDIO SYSTEM (6 rows each), 1..6 each in a run, fit the page; tab gaps constant (S, LARGE)",
-                 ok && MTAB_COUNT == 4u && str_eq(MTAB_NAME[0], "DISPLAY") && mtab_rows(MTAB_DISPLAY) == 6u &&
-                 mtab_rows(MTAB_CONTROL) == 6u && mtab_rows(MTAB_AUDIO) == 6u && mtab_rows(MTAB_SYSTEM) == 6u);
+    bad += check("MENU tabs: DISPLAY CONTROL AUDIO SYSTEM MIDI ((1.3) MIDI appended), rows in a run, 6 shown fit the page; "
+                 "tab gaps constant (S, LARGE)",
+                 ok && MTAB_COUNT == 5u && str_eq(MTAB_NAME[0], "DISPLAY") && str_eq(MTAB_NAME[MTAB_MIDI], "MIDI") &&
+                 mtab_rows(MTAB_DISPLAY) == 6u && mtab_rows(MTAB_CONTROL) == 5u && mtab_rows(MTAB_AUDIO) == 6u &&
+                 mtab_rows(MTAB_SYSTEM) == 6u && mtab_rows(MTAB_MIDI) == 10u);
 
     ui_power_on();
     hold(B_HOME);
@@ -1479,7 +1481,7 @@ static int test_menu_tabs(void)
     turn(EN_ALGO, 1); ok &= ui.menu_sel == MI_LOWCUT && menu_tab() == MTAB_AUDIO;
     turn(EN_ALGO, -1); ok &= ui.menu_sel == MI_BPMLOCK;   /* (back at the row left there) */
     turn(EN_ALGO, -1); ok &= ui.menu_sel == MI_SCROFF;
-    turn(EN_ALGO, -1); ok &= ui.menu_sel == MI_SERIAL && menu_tab() == MTAB_SYSTEM;   /* (wraps) */
+    turn(EN_ALGO, -1); ok &= ui.menu_sel == MI_CLOCK && menu_tab() == MTAB_MIDI;   /* (wraps; (1.3) MIDI last) */
     turn(EN_ALGO, 1); ok &= ui.menu_sel == MI_SCROFF;
     bad += check("MENU: ALGORITHM steps between the tabs and wraps, each tab back at its last row", ok && ui.menu == 1);
     turn(EN_ALGO, 1); turn(EN_PRESET, -1);            /* CONTROL: from FX LATCH up to KNOB ACCEL */
@@ -1496,9 +1498,11 @@ static int test_menu_tabs(void)
 
     /* OCT+ / OCT-: the next / previous value on every kind of row (as the knobs: stopping at the ends; COLOR wraps) */
     ok = 1;
+    favorites.factory[15][24] = 0xA5u;                  /* ((1.3) STEP PREVIEW's bit: a byte bank.c freed, as on a unit) */
     for (i = 0; i < MI_VALUES; i++) {
         uint32_t n = menu_n(i), v, j, seen, want;
-        if (i == MI_TUNE || i == MI_CPU)               /* ((U3) TUNE's 101 values: below; CPU: read only) */
+        if (i == MI_TUNE || i == MI_CPU || menu_act(i))   /* ((U3) TUNE's 101 values: below; CPU: below; (1.3) MIDI
+                                                        * LEARN, LEARN CLEAR: actions, test_midi_learn) */
             continue;
         ui.menu_sel = (uint8_t)i;
         for (j = 0; j <= n; j++)                       /* down to the first value (COLOR: round) */
@@ -1532,16 +1536,50 @@ static int test_menu_tabs(void)
     ui_prefs = 0; settings_hold = HOLD_DEF; settings_leds = LEDS_DIM;
     settings.lowcut = 0; fx_lowcut = 0; menu_put(MI_COLOR, UI_SKIFF_INDEX);
     song.g[G_CLOCK] = song.g[G_ROUTE] = 0;
+    menu_put(MI_PREVIEW, 0);
+    memset(&favorites.factory[15][6], 0, 6);            /* ((1.3) T1..T6 on channels 1..6 again) */
     bad += check("MENU: OCT+ / OCT- step every value row up / down (THEME wraps, the rest stop), the menu stays", ok);
     ui.menu_sel = MI_TUNE;                              /* ((Skiff U3, R8) TUNE: cents, the unit's) */
     press(B_OCTUP); press(B_OCTUP);
     ok = song.g[G_TUNE] == 2 && str_eq(menu_vname(MI_TUNE, menu_get(MI_TUNE)), "+2 CT") &&
          str_eq(menu_vname(MI_TUNE, 40), "-10 CT") && str_eq(menu_vname(MI_TUNE, 50), "0 CT");
     ui.menu_sel = MI_CPU;
+#if FELUCCA_CPU2
+    favorites.factory[15][24] = 0xA5u;                  /* (the settings byte it is a bit of, freed: bank.c SCENE_FREED) */
+    song.cpu_q8 = 36;
+    ok &= str_eq(menu_vname(MI_CPU, 0), "1 CORE 14 %");
+    {
+        uint32_t s0;
+        frame();
+        s0 = ui.menu_sig;
+        press(B_OCTUP);
+        ok &= menu_n(MI_CPU) == 2u && song.g[G_TUNE] == 2 && CPU2_SET && str_eq(menu_vname(MI_CPU, 1), "2 CORES: RESTART") &&
+              ui.menu == 1u && ui.menu_sig != s0;        /* (the row drawn again: its value is in the menu's signature) */
+        s0 = ui.menu_sig;
+        song.cpu_q8 = 72;                               /* (the load it shows changed: drawn again too) */
+        frame();
+        ok &= ui.menu_sig != s0;
+        song.playing = 1;                               /* (playing: the settings wait for STOP, a restart would lose */
+        frame();                                        /* it: the row says so, and is drawn again at STOP) */
+        s0 = ui.menu_sig;
+        ok &= str_eq(menu_vname(MI_CPU, 1), "2 CORES: STOP");
+        song.playing = 0;
+        frame();
+        ok &= ui.menu_sig != s0 && str_eq(menu_vname(MI_CPU, 1), "2 CORES: RESTART");
+    }
+    press(B_OCTDN);
+    song.cpu_q8 = 36;
+    ok &= !CPU2_SET && str_eq(menu_vname(MI_CPU, 0), "1 CORE 14 %");
+    song.cpu_q8 = 0;
+    song.g[G_TUNE] = 0;
+    bad += check("(U3) MENU > AUDIO > TUNE steps in cents (+2 CT); (Skiff 1.3) SYSTEM > CPU 1 CORE / 2 CORES (from the next "
+                 "power-on: RESTART), the load after it", ok);
+#else
     press(B_OCTUP);
     ok &= menu_n(MI_CPU) == 1u && song.g[G_TUNE] == 2;
     song.g[G_TUNE] = 0;
     bad += check("(U3) MENU > AUDIO > TUNE steps in cents (+2 CT); SYSTEM > CPU is read only", ok);
+#endif
     {   /* (1.2.1) a step of TUNE, CLOCK, MIDI IN draws the row again at once, and the CPU row follows the load (their
          * values were not in the menu's signature: they stayed as drawn until the cursor moved) */
         static const uint8_t RW[] = {MI_TUNE, MI_CLOCK, MI_ROUTE};
@@ -5195,8 +5233,10 @@ static int test_seq_quant(void)
     ok = cur_page()->id[2] == P_QUANT && t->p[P_QUANT] == 0;
     turn(EN_K3, 10);
     param_format(&TP[P_QUANT], t->p[P_QUANT], val, &unit);
-    bad += check("SCL KNOB 3 QNT: OFF SNAP WHITE SEQ, SEQ last (default OFF)", ok && t->p[P_QUANT] == 3 &&
-                 str_eq(val, "SEQ"));
+    ok &= t->p[P_QUANT] == 4 && str_eq(val, "SEQ+T");  /* ((1.3) SEQ+T appended) */
+    t->p[P_QUANT] = 3;
+    param_format(&TP[P_QUANT], t->p[P_QUANT], val, &unit);
+    bad += check("SCL KNOB 3 QNT: OFF SNAP WHITE SEQ SEQ+T, SEQ+T last (default OFF)", ok && str_eq(val, "SEQ"));
     t->p[P_SCALE] = 1;
     t->p[P_ROOT] = 0;
     ok = kb_map(t, 8) == 60u && kb_map(t, 7) == 60u;   /* C#4 key -> C4, as SNAP */
@@ -5737,7 +5777,9 @@ static int test_seq_tools(void)
     ok &= tl_count(TSEL, DV_TOM) >= 1u && tl_lanes_of(TSEL, DV_KICK) == 0x1111u;
     bad += check("  A4 / G4 / C5: the lane reversed (its accents with it), cleared, at random; the others stay", ok);
     a = leds_at(0); b2 = leds_at(250);
-    ok = ((a ^ b2) >> white(0)) & 1u && ((a ^ b2) >> white(11)) & 1u && !(((a | b2) >> white(7)) & 1u) &&
+    ok = ((a ^ b2) >> white(0)) & 1u && ((a ^ b2) >> white(11)) & 1u && ((a ^ b2) >> white(7)) & 1u &&   /* ((1.3)
+                                                         * F4 EUCLID, D5 DOUBLE, E5 HALF too) */
+         ((a ^ b2) >> white(12)) & 1u && ((a ^ b2) >> white(13)) & 1u &&
          ((a & b2) >> black(DV_TOM)) & 1u && ((a ^ b2) >> black(0)) & 1u && !(((a | b2) >> black(8)) & 1u);
     btn_up(B_SEQ); frame();
     ui_power_on();
@@ -5746,7 +5788,8 @@ static int test_seq_tools(void)
     btn_down(B_SEQ); frames(500);                       /* (the map: a peek) */
     memcpy(ref, TSEL->step, sizeof ref);
     a = leds_at(0); b2 = leds_at(250);
-    ok &= ((a ^ b2) >> white(5)) & 1u && !(((a | b2) >> white(6)) & 1u) && !(((a | b2) >> black(0)) & 1u);
+    ok &= ((a ^ b2) >> white(5)) & 1u && !(((a | b2) >> white(6)) & 1u) && !(((a | b2) >> black(0)) & 1u) &&
+          ((a ^ b2) >> white(7)) & 1u;                 /* ((1.3) EUCLID: melodic too) */
     tl_key(6); tl_key(10);
     key_down(black(2)); frame(); key_up(black(2)); frame();
     ok &= !memcmp(TSEL->step, ref, sizeof ref) && ui.lane == 0u && !gates();
@@ -5919,6 +5962,40 @@ static int test_layer_lock(void)
     ok &= ui.lock == LAYER_FX;
     stop_transport();
     bad += check("  another button between the taps: no lock; PLAY in a locked layer plays, the lock stays", ok);
+    {   /* (Felucca #183) in every lock PLAY starts and stops (GLO's lock no RESTART: that needs GLO held) */
+        static const uint8_t PB[5] = {B_FX, B_GLO, B_SCL, B_EDIT, B_SEQ};
+        static const uint8_t PL[5] = {LAYER_FX, LAYER_GLO, LAYER_SCL, LAYER_EDIT, LAYER_SEQ};
+        uint32_t i, k;
+        int okk;
+        ok = 1;
+        for (i = 0; i < 5u; i++) {
+            ui_power_on();
+            go_title("ENV"); frame();
+            shift_lock(PB[i]); frames(100);
+            transport_req = 0;
+            okk = ui.lock == PL[i];
+            press(B_PLAY);                              /* stopped: PLAY */
+            okk &= transport_req == 1u;
+            events_block(CTL);
+            okk &= song.playing != 0;
+            for (k = 0; k < 2u; k++) {                  /* playing: PLAY stops, twice over */
+                press(B_PLAY);
+                okk &= transport_req == 2u;
+                events_block(CTL);
+                okk &= !song.playing && ui.lock == PL[i];
+                press(B_PLAY);
+                okk &= transport_req == 1u;
+                events_block(CTL);
+                okk &= song.playing != 0;
+            }
+            stop_transport();
+            transport_req = 0;
+            if (!okk)
+                printf("    #183: %s locked, PLAY does not start / stop\n", LAYERS[PL[i]].head);
+            ok &= okk;
+        }
+        bad += check("  FX GLO SCL EDIT SEQ locked: PLAY starts and stops (no RESTART without GLO held)", ok);
+    }
     {   /* EDIT on STEP clears a step: two quick taps clear two (no lock) */
         track_t *t;
         ui_power_on();
@@ -6195,7 +6272,9 @@ static int test_div_order(void)
         uint32_t prev = 0xFFFFFFFFu, len;
         for (n = 0; n < 40; n++) v = param_turn(d, v, -1);
         for (n = 0; n <= d->max - d->min; n++) {
-            len = d->names == N_SLDIV ? 1000000u / SL_DEN[v] : div_samples((uint32_t)v);
+            len = d->names == N_SLDIV ? 1000000u / SL_DEN[v] :
+                  d->names == N_DTIME && v >= 10 ? (beat_samples() * 3u) >> DIV_DOT[v - 10] :   /* ((1.3) dotted) */
+                  div_samples((uint32_t)v);
             if (!(len < prev && enum_rank(d, v) == d->min + n && !((seen >> v) & 1))) {
                 printf("  %s: %s (value %d, place %d, length %u) after %u\n", d->label, d->names[v], (int)v,
                        (int)enum_rank(d, v), len, prev);
@@ -6222,11 +6301,11 @@ static int test_div_order(void)
             if (!page_visible(id) || !(d = page_desc(cur_page(), c, &vp)) || !vp || !enum_order(d))
                 continue;
             found++;
-            *vp = d->names == N_DIV ? 2 : 1;        /* 1/16 */
+            *vp = d->names == N_DIV || d->names == N_DTIME ? 2 : 1;   /* 1/16 */
             turn(EN_K1 + c, 1);
-            ok &= *vp == (d->names == N_DIV ? 5 : 4);  /* 16T */
+            ok &= *vp == (d->names == N_DIV || d->names == N_DTIME ? 5 : 4);  /* 16T */
             turn(EN_K1 + c, -2);
-            ok &= *vp == (d->names == N_DIV ? 4 : 3);  /* 8T */
+            ok &= *vp == (d->names == N_DIV || d->names == N_DTIME ? 4 : 3);  /* 8T */
         }
     bad += check("#48 the pages' knobs step the divisions by length (SEQ, ARP, DLY, SLICER)", ok && found >= 4u);
     return bad;
@@ -7286,16 +7365,16 @@ static int test_select_pages(void)
     ok &= str_eq(cur_page()->title, "ENV") && song.g[G_BPM] == b0 && !ui.msg_t;
     bad += check("SELECT: ENV DEST, back to ENV, the ends where they are (no wrap), no tempo, no message", ok);
     go_title("FX"); frame();
-    turn(EN_SELECT, 3);
-    ok = str_eq(cur_page()->title, "DUCK");                          /* ((U3) FX (phase 9: DRIVE) SLICER DUCK: the buses
-                                                                      * are GLO's) */
+    turn(EN_SELECT, 5);
+    ok = str_eq(cur_page()->title, "DUCK");                          /* ((U3) FX (phase 9: DRIVE; 1.3: INSERT, INSERT 2)
+                                                                      * SLICER DUCK: the buses are GLO's) */
     press(B_FX);
     ok &= str_eq(cur_page()->title, "FX");                           /* (FX's button steps on from there: round) */
-    turn(EN_SELECT, 3);
+    turn(EN_SELECT, 5);
     ok &= str_eq(cur_page()->title, "DUCK");
-    turn(EN_SELECT, -4);
+    turn(EN_SELECT, -6);
     ok &= str_eq(cur_page()->title, "FX");
-    bad += check("SELECT: three FX pages on (DUCK), the FX button round (FX), SELECT on and four back (FX)", ok);
+    bad += check("SELECT: five FX pages on (DUCK), the FX button round (FX), SELECT on and six back (FX)", ok);
     press(B_GLO);
     ok = cur_page()->fam == FAM_TRK;                                 /* (MIXER) */
     turn(EN_SELECT, 1);

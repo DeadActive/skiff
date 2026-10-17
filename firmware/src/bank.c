@@ -13,7 +13,10 @@
  *   7          its motion records (0..64), bit 7: the automation plays (motion.on)
  *   8..583     the 64 steps, 9 bytes each (project.c step_put9)
  *   584..631   their NUDGE (core.h nudge_pack)
- *   632..887   the motion, 64 x (step, id (bit 7: a lock), value low, value high)
+ *   632..887   the motion, 64 x (step (bit 6: the id's bit 7), id (bit 7: a lock), value low, value high)
+ * (Skiff 1.3) A record whose motion names an id from 128 on (P_COUNT passed 127: only one written with r[1] = P_COUNT,
+ * a parameter added since phase 9 named) is version 2 (BK_VER2), its ids' bit 7 in bit 6 of their step byte; every
+ * other one version 1 as before, which firmware before reads (it shows a version 2 as empty)
  * Phase 5: the records are one pool, ids 0..BK_POOL-1 (pool_put, pat_decode); id = track x 16 + slot, so a chunk is
  * still one track's A..D, E..H, I..L or M..P and every bank saved before reads the same by id.
  * Flash: BK_CHUNKS chunks of BK_PER patterns (ids 4c .. 4c+3), each written whole to one
@@ -26,6 +29,8 @@
  * Without the flash driver (FELUCCA_FLASH 0) BK_RAM keeps the sectors in RAM (the host's UI tests); else no bank. */
 #define BK_SLOTS 16u
 #define BK_VER 1u
+#define BK_VER2 2u                                 /* (Skiff 1.3) an id from 128 on (see the top) */
+static int bk_ver(uint32_t v) { return v == BK_VER || v == BK_VER2; }
 #define BK_PER 4u
 #define BK_POOL NPAT                               /* the patterns, ids 0 .. 63 (every track's: phase 5) */
 #define BK_CHUNKS (BK_POOL / BK_PER)
@@ -113,7 +118,7 @@ static void bk_lens(uint32_t c)                    /* chunk c's patterns (in bk_
     for (r = 0; r < BK_PER; r++) {
         const uint8_t *p = bk_buf + r * BK_REC;
         int32_t len = (int32_t)p[2] - 64;
-        bk.len[c % BK_CHUNKS * BK_PER + r] = (uint8_t)(p[0] != BK_VER ? 0 : len < 1 ? 1 : len > (int32_t)NSTEP ? NSTEP : len);
+        bk.len[c % BK_CHUNKS * BK_PER + r] = (uint8_t)(!bk_ver(p[0]) ? 0 : len < 1 ? 1 : len > (int32_t)NSTEP ? NSTEP : len);
     }
 }
 
@@ -218,8 +223,11 @@ static int bk_pack_raw(uint8_t *r, uint32_t k, const step_t *st, const int16_t *
         uint8_t *m = r + BK_MOT + n * 4u;
         if ((e->place >> 6) != k)
             continue;
-        m[0] = e->place & 63u;
-        m[1] = (uint8_t)(np == P_COUNT || MOTION_ID(e) < P_E0 ? e->param : e->param - PROJ_NX);   /* (the lock bit kept) */
+        uint32_t id = np == P_COUNT || MOTION_ID(e) < P_E0 ? MOTION_ID(e) : MOTION_ID(e) - PROJ_NX;
+        m[0] = (uint8_t)((e->place & 63u) | (id >> 7) << 6);   /* ((1.3) the id's bit 7: BK_VER2) */
+        m[1] = (uint8_t)((id & 127u) | (e->lock ? MOTION_LOCK : 0u));
+        if (id > 127u)
+            r[0] = BK_VER2;
         m[2] = (uint8_t)e->value;
         m[3] = (uint8_t)((uint16_t)e->value >> 8);
         n++;
@@ -284,7 +292,7 @@ static uint32_t pend_free(void)                    /* the slots free */
 static int pool_used(uint32_t id)
 {
     uint32_t i = pend_at(id);
-    return i < PEND_N ? pend_rec[i][0] == BK_VER : bk.len[id % BK_POOL] != 0u;
+    return i < PEND_N ? bk_ver(pend_rec[i][0]) : bk.len[id % BK_POOL] != 0u;
 }
 /* pattern id's record as it is now -> r: its waiting copy, else flash's: 0, 1 none (empty, or one no firmware wrote) */
 static int pat_read(uint32_t id, uint8_t *r)
@@ -295,7 +303,7 @@ static int pat_read(uint32_t id, uint8_t *r)
     else if (!bk.len[id % BK_POOL] || !bk.sect[c] ||
              bk_read(bk_sector(bk.sect[c] - 1u) + 256u + id % BK_PER * BK_REC, r, BK_REC))
         return 1;
-    return r[0] == BK_VER && (r[7] & 127u) <= MOTION_MAX ? 0 : 1;
+    return bk_ver(r[0]) && (r[7] & 127u) <= MOTION_MAX ? 0 : 1;
 }
 /* record r (all 0: empty it) to be pattern id: the same as it is now, nothing; else it waits (over id's waiting copy,
  * or in a free slot): 0 kept (or the same), 1 no room. Nothing is written here: pat_flush_one does, stopped */
@@ -304,7 +312,7 @@ static int pat_keep_rec(uint32_t id, const uint8_t *r)
     uint32_t i = pend_at(id);
     int now = pat_read(id, bk_buf);
     bk_bufc = 0;
-    if (r[0] == BK_VER ? !now && !memcmp(bk_buf, r, BK_REC) : now)
+    if (bk_ver(r[0]) ? !now && !memcmp(bk_buf, r, BK_REC) : now)
         return 0;                                  /* (the same, or empty and empty) */
     if (i == PEND_N)
         for (i = 0; i < PEND_N && pend_id[i] != PAT_NONE; i++)
@@ -332,7 +340,7 @@ static int pat_flush_one(void)
         for (i = 0; i < PEND_N; i++)
             if (pend_id[i] != PAT_NONE && bk_chunk(pend_id[i]) == c) {
                 uint8_t *r = bk_buf + pend_id[i] % BK_PER * BK_REC;
-                if (pend_rec[i][0] == BK_VER)
+                if (bk_ver(pend_rec[i][0]))
                     memcpy(r, pend_rec[i], BK_REC);
                 else
                     memset(r, 0, BK_REC);
@@ -404,7 +412,8 @@ static int pat_decode(const track_t *t, uint32_t id, step_t *st, int16_t *v, mot
         const uint8_t *m = r + BK_MOT + i * 4u;
         int32_t val = (int16_t)(m[2] | (uint16_t)m[3] << 8);   /* (stored 16 bits: checked before it is a byte) */
         ms->event[i].place = (uint16_t)(tk << 6 | (m[0] & 63u));
-        ms->event[i].param = m[1];
+        ms->event[i].id = (uint8_t)((m[1] & 127u) | (m[0] & 64u) << 1);   /* ((1.3) bit 7: BK_VER2's; 0 before) */
+        ms->event[i].lock = m[1] >> 7;
         ms->event[i].value = (int8_t)val;
         out |= val < -64 || val > 127;
     }
@@ -422,7 +431,7 @@ static uint32_t pool_len(uint32_t id)               /* pattern id's LEN, 0 empty
     int32_t len;
     if (i == PEND_N)
         return bk.len[id % BK_POOL];
-    if (pend_rec[i][0] != BK_VER)
+    if (!bk_ver(pend_rec[i][0]))
         return 0;
     len = (int32_t)pend_rec[i][2] - 64;
     return (uint32_t)(len < 1 ? 1 : len > (int32_t)NSTEP ? (int32_t)NSTEP : len);
@@ -1230,7 +1239,7 @@ static const uint8_t *bank_chunk(uint32_t c, uint32_t *len)
         bk_bufc = (uint8_t)(c + 1u);
     }
     for (r = 0; r < BK_PER; r++)
-        if (bk_buf[r * BK_REC] == BK_VER)
+        if (bk_ver(bk_buf[r * BK_REC]))
             *len = BK_LEN;
     return bk_buf;
 }
@@ -1247,7 +1256,7 @@ static int bank_chunk_ok(const uint8_t *b, uint32_t len)
         const uint8_t *p = b + r * BK_REC;
         if (!p[0])
             continue;
-        if (p[0] != BK_VER || p[1] < 8u || p[1] > 127u || (p[7] & 127u) > MOTION_MAX)
+        if (!bk_ver(p[0]) || p[1] < 8u || p[1] > P_COUNT || (p[7] & 127u) > MOTION_MAX)
             return 0;
         for (i = 0; i < NSTEP; i++)
             if (!step_get9(&s, p + BK_STEPS + i * 9u))

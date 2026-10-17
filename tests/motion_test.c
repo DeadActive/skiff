@@ -150,9 +150,9 @@ static int fun7_89(void)
     project_capture(&before);
     memset(&m, 0, sizeof m);                                       /* as the 89-parameter firmware numbered them */
     m.count = 3; m.on = 1;
-    m.event[0] = (motion_event_t){3, P_REV, 90};
-    m.event[1] = (motion_event_t){5, 81, 40};                      /* its P_E0 (81) */
-    m.event[2] = (motion_event_t){6, 61, 20};                      /* FM OP1 ATK: 61 then and now */
+    m.event[0] = (motion_event_t){.place = 3, .id = P_REV, .value = 90};
+    m.event[1] = (motion_event_t){.place = 5, .id = 81, .value = 40};                      /* its P_E0 (81) */
+    m.event[2] = (motion_event_t){.place = 6, .id = 61, .value = 20};                      /* FM OP1 ATK: 61 then and now */
     pack_fun7_89(&old, &before, &m);
     ok = proj_import(&after, &old, sizeof old);
     for (k = 0; ok && k < PROJ_NT; k++) {
@@ -164,13 +164,13 @@ static int fun7_89(void)
     bad += check("89 parameters: E0..E7 at P_E0.., the chord keys OFF / CLOSE, lanes 100 %, the rest in place", ok &&
         after.t[0].p[P_FM1_ATK] == 33 && !memcmp(after.t[0].step, before.t[0].step, sizeof before.t[0].step));
     bad += check("  its motion: E0 (81) -> P_E0, REV and FM OP1 ATK (61) kept",
-        after.motion.count == 3u && after.motion.event[0].param == P_REV && after.motion.event[1].param == P_E0 &&
-        after.motion.event[1].value == 40 && after.motion.event[2].param == P_FM1_ATK);
+        after.motion.count == 3u && (after.motion.event[0].id == P_REV && !after.motion.event[0].lock) && (after.motion.event[1].id == P_E0 && !after.motion.event[1].lock) &&
+        after.motion.event[1].value == 40 && (after.motion.event[2].id == P_FM1_ATK && !after.motion.event[2].lock));
     bad += check("  written again ((phase 9) PROJ_NP parameters): the same project", proj_pack(&old, &after) && old.raw[66] == PROJ_NP &&
         proj_import(&before, &old, sizeof old) && !memcmp(&before, &after, sizeof before));
-    m.event[1].param = 82;                                          /* (any id P_E0 .. P_E7 of then moves up) */
+    m.event[1].id = 82;                                          /* (any id P_E0 .. P_E7 of then moves up) */
     pack_fun7_89(&old, &before, &m);
-    bad += check("  E1 (82) -> P_E1", proj_import(&after, &old, sizeof old) && after.motion.event[1].param == P_E1);
+    bad += check("  E1 (82) -> P_E1", proj_import(&after, &old, sizeof old) && (after.motion.event[1].id == P_E1 && !after.motion.event[1].lock));
     return bad;
 }
 static int loads_and_song(void)
@@ -439,7 +439,7 @@ static int lock_playback(void)
     project_t q;
     ok = !motion_set_lock(t, 2, P_REV, 100) && !motion_set_event(t, 4, P_REV, 60) && !motion_set_lock(t, 6, P_REV, 90);
     bad += check("a lock is one of the shared 64 records, bit 7 of its id (MOTION_LOCK)", ok && motion.count == 3u &&
-        motion.event[0].param == (P_REV | MOTION_LOCK) && motion.event[1].param == P_REV && motion_lock_count(t) == 2u &&
+        (motion.event[0].id == P_REV && motion.event[0].lock) && (motion.event[1].id == P_REV && !motion.event[1].lock) && motion_lock_count(t) == 2u &&
         motion_count(t) == 3u && motion_lock_steps(0) == ((1u << 2) | (1u << 6)));
     bad += check("lock: its value on its step only, back after it (the sound's own, or the automation held)",
         lock_passes(t, want));
@@ -539,14 +539,14 @@ static int lock_project(void)
     project_capture(&before);
     ok = proj_pack(&a, &before) && proj_import(&after, &a, sizeof a) && proj_pack(&b, &after) && !memcmp(&a, &b, sizeof a);
     for (i = 0; i < before.motion.count; i++)
-        ok &= before.motion.event[i].param < 128u && !(before.motion.event[i].param & MOTION_LOCK);
+        ok &= !before.motion.event[i].lock;
     bad += check("a project without locks: the bytes as before (ids < 128), the same round trip", ok);
     motion_set_lock(t, 2, P_REV, 101); motion_set_lock(t, 7, P_E4, 77);
     project_capture(&before);
     proj_power_on(&before, PROJ_NT); before.sum = proj_sum(&before);   /* ((Skiff phase 6) four tracks in SKF1) */
     ok = proj_pack(&a, &before) && proj_import(&after, &a, sizeof a) && !memcmp(&before, &after, sizeof before);
     bad += check("FUN9 round trip keeps the locks (bit 7 of the id byte), their values and steps", ok &&
-        after.motion.event[1].param == (P_REV | MOTION_LOCK) && after.motion.event[2].value == 77);
+        (after.motion.event[1].id == P_REV && after.motion.event[1].lock) && after.motion.event[2].value == 77);
     project_save(2);
     bank_put((uint32_t)(t - trk), 1, 0);                 /* (phase 5: the track onto a copy, B: the clear its) */
     motion_clear(t);
@@ -560,15 +560,15 @@ static int lock_project(void)
         for (uint32_t n = 0; n < 2u; n++) {
             motion_store_t m = before.motion;
             for (i = 0; i < m.count; i++)
-                if ((m.event[i].param & 0x7Fu) == P_E4)
-                    m.event[i].param = (uint8_t)((P_E4 - (P_COUNT - np[n])) | MOTION_LOCK);
+                if (m.event[i].id == P_E4)
+                    m.event[i].id = (uint8_t)(P_E4 - (P_COUNT - np[n]));   /* (a lock: motion_set_lock above) */
             ok = proj_motion_ids(&m, np[n]);
             bad += check(n ? "  FUN8 of 91: a lock's id moves up with P_E0 (87 -> P_E4), still a lock"
                            : "  FUN7 of 89: a lock's id moves up with P_E0 (85 -> P_E4), still a lock",
-                ok && m.event[2].param == (P_E4 | MOTION_LOCK) && m.event[1].param == (P_REV | MOTION_LOCK) &&
-                m.event[0].param == P_REV);
+                ok && (m.event[2].id == P_E4 && m.event[2].lock) && (m.event[1].id == P_REV && m.event[1].lock) &&
+                (m.event[0].id == P_REV && !m.event[0].lock));
             m = before.motion;
-            m.event[2].param = (uint8_t)(np[n] | MOTION_LOCK);
+            m.event[2].id = (uint8_t)np[n];
             bad += check("    an id that store could not name (np): refused", !proj_motion_ids(&m, np[n]));
         }
     }

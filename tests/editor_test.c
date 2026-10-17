@@ -144,12 +144,51 @@ static int motion_locks(void)
     return bad;
 }
 
+/* (Skiff 1.3, INFO 49 01) ids from 128 on: TRACK_PARAM's track byte bit 6, SET / GET scope 2, a MOTION op's and its
+ * reply's step byte bit 6: each the id's bit 7 */
+static int wide_ids(void)
+{
+    int bad = 0;
+    uint32_t n, id = P_E5;
+    int32_t v;
+    uint8_t a[8];
+    const param_desc_t *d;
+    reset();
+    song.sel = 1;
+    d = param_desc_of(trk[1].eng_req % NENGINES, id);
+    v = d->max > d->min ? d->max : d->min;
+    a[0] = 1u | 64u; a[1] = id & 127u; a[2] = (uint8_t)((v + 8192) & 127); a[3] = (uint8_t)((v + 8192) >> 7);
+    n = request(ED_TRACK_PARAM, a, 4);
+    bad += check("(1.3) TRACK_PARAM of an id past 127 (track byte bit 6): set, echoed", id > 127u && trk[1].p[id] == v &&
+        host_wire[5] == (1u | 64u) && host_wire[6] == (id & 127u) && n == 5u + 4u + 1u);
+    a[0] = 2; a[1] = id & 127u; v = d->min; a[2] = (uint8_t)((v + 8192) & 127); a[3] = (uint8_t)((v + 8192) >> 7);
+    request(ED_SET, a, 4);
+    bad += check("  SET scope 2: the selected track's id + 128", trk[1].p[id] == v && host_wire[5] == 2u);
+    a[0] = 0; a[1] = id & 127u;
+    request(ED_GET, a, 2);
+    bad += check("  .. scope 0 is still the id below 128", trk[1].p[id & 127u] == (int16_t)((host_wire[7] | host_wire[8] << 7) - 8192));
+    motion_clear(&trk[1]);
+    v = d->max > d->min ? d->max : d->min;
+    a[0] = 1; a[1] = 5; a[2] = 3u | 64u; a[3] = id & 127u; a[4] = (uint8_t)((v + 8192) & 127); a[5] = (uint8_t)((v + 8192) >> 7);
+    n = request(ED_MOTION, a, 6);
+    bad += check("  MOTION op 5 of an id past 127 (step byte bit 6): a lock on step 4 at that id, the reply's step byte so",
+        host_wire[6] == 0 && motion.count == 1u && motion.event[0].id == id && motion.event[0].lock &&
+        (motion.event[0].place & 63u) == 3u && host_wire[10] == (3u | 64u) && host_wire[11] == (id & 127u));
+    motion_clear(&trk[1]);
+    return bad;
+}
+
 static int preferences(void)
 {
     int bad = 0;
     uint8_t a[4] = {0, 3, 0, 0};                          /* (THEME: 3, CRYPT) */
     reset();
     uint32_t n = request(ED_INFO, a, 0);
+    bad += check("INFO (1.3) wide ids last: 49 01, P_COUNT and P_E0 in two 7-bit bytes each; the plain bytes at most 127",
+        host_wire[n - 7] == 0x49 && host_wire[n - 6] == 1 && host_wire[n - 5] == (P_COUNT & 127u) &&
+        host_wire[n - 4] == P_COUNT >> 7 && host_wire[n - 3] == (P_E0 & 127u) && host_wire[n - 2] == P_E0 >> 7 &&
+        P_COUNT > 127u);
+    n -= 6u;                                              /* (the tags before it, as they were) */
     bad += check("INFO explicitly tags display capabilities after SONG without changing command 33",
         ED_SONG == 33 && ED_UI_STATE == 34 && ED_FAV_SET == 38 &&
         host_wire[n - 9 - 37] == CHAIN_ROWS && host_wire[n - 9 - 36] == 0x55 &&
@@ -1272,7 +1311,7 @@ static int song_cmds(void)
 
 int main(void)
 {
-    int bad = preferences() + motion_locks() + framing() + uart_recovery() + steps() + samples() + song_protocol() + malformed_saves() +
+    int bad = preferences() + motion_locks() + wide_ids() + framing() + uart_recovery() + steps() + samples() + song_protocol() + malformed_saves() +
               fm6_patches() + user_preset_roundtrip() + live_sync() + usb_burst() + menu_protocol() + drum_kit_retired() +
               light_tracks() + preset_more() + transport_names() + song_cmds();
     printf("%s\n", bad ? "EDITOR TEST FAILED" : "editor test passed");

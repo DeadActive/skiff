@@ -64,17 +64,24 @@ static void cr_adsr(const track_t *t)
 }
 
 /* (Skiff) the LFO over time, as it runs (the graphs of LFO, LFO DEST): LFO_WIN of control ticks (2 s) from its retrigger
- * (a phrase's first note, voice.c: PHASE's place, FADE rising from nothing), RATE's cycles in it; past it, the last
- * 2 s (the window scrolls). lfo_view_at: the value at px x of w (+-32768, FADE's share in; RND a value a cycle, the
- * graph's own pick); lfo_view_now: where the LFO is now (px) */
+ * (a phrase's first note, voice.c: FADE rising from nothing), RATE's cycles in it (or (#16) SYNC's); past it, the last
+ * 2 s (the window scrolls).
+ * lfo_view_at: the value at px x of w (+-32768, FADE's share in; RND a value a cycle, the graph's own pick; UNI one
+ * side); lfo_view_now: where the LFO is now (px) */
 #define LFO_WIN (FS / CTL * 2u)
 static uint32_t lfo_view_t0(const track_t *t) { return t->lfo_t > LFO_WIN ? t->lfo_t - LFO_WIN : 0u; }
 static int32_t lfo_view_at(const track_t *t, int32_t x, int32_t w)
 {
-    uint32_t k = lfo_view_t0(t) + (uint32_t)x * LFO_WIN / (uint32_t)w, ft;   /* (32-bit: no 64-bit division here) */
-    uint64_t adv = (uint64_t)k * LFO_INC[t->p[P_LRATE] & 127];
-    int32_t v = t->p[P_LWAVE] == 4 ? (int32_t)(((uint32_t)(adv >> 32) * 2654435761u) >> 16) - 32768 :
-                lfo_wave((track_t *)t, ((uint32_t)t->p[P_LPHASE] << 25) + (uint32_t)adv);
+    uint32_t k = lfo_view_t0(t) + (uint32_t)x * LFO_WIN / (uint32_t)w, ft, inc = lfo_inc(t);   /* (32-bit: no 64-bit
+                                                         * division here) */
+    uint64_t ph = (uint64_t)(t->p[P_LTRIG] ? t->lfo_ph - t->lfo_t * inc : (uint32_t)t->p[P_LPHASE] << 25) +
+                  (uint64_t)k * inc;                   /* (from its phase at the retrigger: PHASE's (TRIG NOTE: turning
+                                                         * PHASE shows at once), or (#16) FREE's, back from where it
+                                                         * runs now; RND's cycles counted from there) */
+    int32_t v = t->p[P_LWAVE] == 4 ? (int32_t)(((uint32_t)(ph >> 32) * 2654435761u) >> 16) - 32768 :
+                lfo_wave((track_t *)t, (uint32_t)ph);
+    if (t->p[P_LPOL])
+        v = (v + 32768) >> 1;
     ft = t->p[P_LFADE] ? TIME_MS_X10[t->p[P_LFADE] & 127] * (FS / CTL) / 10000u : 0u;   /* FADE, ticks */
     return ft && k < ft ? v * (int32_t)((k << 14) / ft) >> 14 : v;   /* (FADE is under 2^18 ticks) */
 }
@@ -583,7 +590,9 @@ static void graph_grid(const track_t *t, uint16_t c)
             cv_rrect(6, y, 228, 14, 3, T_RAISE, T_SURF);   /* (6 .. 234, as a list row; the hits 40 .. 230) */
         }
         GFX_HOOK_ALIGN(0, y + 2, 0, y + 12, AL_V, "drum lane label on its hits' line");
-        cv_text_on(10, y - 1, &AF_S, drum_lane_abbr(t, l), sel ? T_ACCENT : T_MID, row);   /* ink rows 2 .. 11, as the hits */
+        cv_text_on(10, y - 1, &AF_S, drum_lane_abbr(t, l), (drum_mute[trk_index(t)] >> l) & 1u ? T_DIM :   /* ((1.3) muted:
+                                                                                                    * dim) */
+                   sel ? T_ACCENT : T_MID, row);   /* ink rows 2 .. 11, as the hits */
         for (i = 0; i < 16u && base + i < len; i++) {
             const step_t *st = &t->step[base + i];
             uint32_t b = 1u << l;
@@ -1377,7 +1386,7 @@ static uint32_t graph_signature(void)
         uint8_t idx[MOTION_MAX];
         uint32_t n = ev_rows(idx);
         for (i = 0; i < n; i++)
-            h = (h ^ ((uint32_t)motion.event[idx[i]].place << 24 | (uint32_t)motion.event[idx[i]].param << 16 |
+            h = (h ^ ((uint32_t)motion.event[idx[i]].place << 24 | (uint32_t)(motion.event[idx[i]].id | motion.event[idx[i]].lock << 8) << 15 |
                       (uint16_t)motion.event[idx[i]].value)) * 16777619u;
         h = (h ^ (n + 1u) * 40503u ^ ev_row(n) * 2654435761u ^ ((uint32_t)ui.ev_step << 8 | ui.ev_id) * 104729u) * 16777619u;
     }
@@ -1424,7 +1433,8 @@ static uint32_t graph_signature(void)
         uint32_t ph = song.playing ? t->seq_idx : 0xFFFFu;
         if (pg->graph != GR_STEPS && ph / 16u != ui.bank)
             ph = 0xFFFFu;                            /* the roll shows the cursor's bank only */
-        h ^= steps_hash(t) + ph * 31u + ui.cursor * 7919u + ui.lane * 104723u + ui.bank * 613u;
+        h ^= steps_hash(t) + ph * 31u + ui.cursor * 7919u + ui.lane * 104723u + ui.bank * 613u +
+             drum_mute[trk_index(t)] * 2654435761u;   /* ((1.3) the lanes' mutes: the names dim) */
         if (pg->graph != GR_STEPS) {                 /* the parameter locks' marks (the roll, the grid) */
             uint64_t lk = motion_lock_steps(trk_index(t));
             h = (h ^ (uint32_t)lk ^ (uint32_t)(lk >> 32) * 2654435761u) * 16777619u;
@@ -1745,7 +1755,7 @@ static void graph_events(void)
         }
         {
             const motion_event_t *e = &motion.event[idx[k]];
-            uint32_t id = MOTION_ID(e), lock = (e->param & MOTION_LOCK) != 0u;
+            uint32_t id = MOTION_ID(e), lock = e->lock;
             char b[16], nm[12];
             const char *unit;
             const param_desc_t *d = track_desc(t, id);
@@ -2014,7 +2024,7 @@ static void mix_strip(uint32_t c, uint32_t sel, uint32_t st, uint32_t mute, uint
         str_cpy(v, "C", sizeof v);
     else {
         v[0] = pan < 0 ? 'L' : 'R';
-        fmt_int(v + 1, (pan < 0 ? -pan : pan) * 100 / 64);
+        fmt_int(v + 1, pan < 0 ? -pan * 100 / 64 : pan * 100 / 63);   /* (R100 at the top, as params.c F_BIPCT) */
     }
     GFX_HOOK_ALIGN(0, 0, MS_W, 0, AL_H, "mixer strip value centred across");
     cv_text_in(0, 123, MS_W, &AF_S, v, ib ? T_INK : hot == 2u ? T_ACCENT : T_MID, g);
@@ -2112,7 +2122,7 @@ static void draw_tracks(void)
             knob(15 - KNOB_SMALL_R, KS_Y, KNOB_SMALL_R, KNOB_SMALL_COV, KNOB_SMALL_ANG, pan, -64, 63, pc);
             knob(42 - KNOB_SMALL_R, KS_Y, KNOB_SMALL_R, KNOB_SMALL_COV, KNOB_SMALL_ANG, rv, 0, 127, rc);
             v[0] = '+';                              /* the cards' numbers, without the % */
-            fmt_int(pan > 0 ? v + 1 : v, pan * 100 / 64);
+            fmt_int(pan > 0 ? v + 1 : v, pan * 100 / (pan > 0 ? 63 : 64));
             GFX_HOOK_ALIGN(15 - KNOB_SMALL_R, 0, 15 + KNOB_SMALL_R, 0, AL_H, "mixer value under its knob");
             cv_text_in(15 - KNOB_SMALL_R, KS_Y + 17, 2 * KNOB_SMALL_R, &AF_S, v, pc, T_SURF);
             fmt_int(v, (rv * 100 + 63) / 127);
@@ -2359,6 +2369,10 @@ static void draw_graph(void)
         case GR_DRIVE:                               /* (Skiff phase 9) */
             cv_oy = 0;
             graph_drive(t, c);
+            break;
+        case GR_INS:                                 /* (Skiff 1.3) */
+            cv_oy = 0;
+            graph_insert(t, c);
             break;
         case GR_LFODST:
             cv_oy = 0;

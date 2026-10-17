@@ -47,6 +47,19 @@ has), `UP_LOAD` of a user sound on one replies rc 1; the device's header says wh
 greys them for those tracks. NTRK is 6; `TRACK`, `TRACK_*` and `MOTION` reach tracks 0..5 (a seventh gets no reply).
 Firmware without the tag has no light tracks.
 
+**Wide ids (Skiff 1.3, INFO `49 01 c0 c1 e0 e1`):** P_COUNT passed 127 (135: LFO SYNC, TRIG, POLARITY; SPREAD; the
+INSERT's TYPE, A, B, C, MIX; ENV SYNC, all just before P_E0, which is now 127). A SysEx byte holds 7 bits, so:
+- INFO's plain P_COUNT and P_E0 bytes say at most 127; the tag, last, has them whole: `c0 | c1 << 7`, `e0 | e1 << 7`.
+- `GET`, `SET`, `DESC` and the `CHANGED` push address a track parameter from 128 on as scope **2**, id - 128
+  (scope 0 is still ids 0..127, scope 1 the globals).
+- `TRACK_PARAM`: bit 6 of the track byte is the id's bit 7 (tracks are 0..5).
+- `MOTION`: in ops 3, 4 and 5 bit 6 of the step byte is the id's bit 7, and so in each record of the reply (steps
+  are 0..63).
+- `DUMP`, `UP_GET`, `UP_PUT` and `TRACK_DUMP` carry P_COUNT values, as they always did.
+An editor without the tag can't edit 1.3 firmware's sounds (its counts are off). Firmware without it has P_COUNT
+below 128. The web editor (1.3) speaks it at the wire only (`widOut` / `widIn`): inside, a track parameter is scope 0
+and its whole id, as before.
+
 **Chord keys (91 parameters, 1.0):** two track parameters, `CHRD` (81) and `VOIC` (82), went in before the
 engine parameters, which moved from 81..88 to 83..90: P_COUNT 91, P_E0 83. No command changed; an editor that
 takes P_COUNT and P_E0 from `INFO` keeps working (see "The chord keys" below).
@@ -169,7 +182,7 @@ at 1..3 and hides 6 5 8: what it sets still plays the right kit, and the device 
 
 | cmd | Request args | Reply args |
 | --- | --- | --- |
-| 1 INFO | — | version string, NENGINES, P_COUNT, G_COUNT, NSTEP, P_E0, then NENGINES engine-name strings, then (v3) NTRK (4; Skiff phase 6: 6), then (v6) CHAIN_ROWS (16), then the tagged blocks `55 01 uiCaps`, `4D 01 64 01`, `42 01 3`, `46 01 nfactory nbank`, `53 01 3`, (1.0.3) `50 01 3` and (1.0.4) `4E 01 count` (MENU settings; 12, 1.1: 15, 1.2: 17, 1.1.5: 18, Skiff U2: 16) and (1.0.5) `52 01 4` (ratchet) and (1.1) `4C 01 1` (parameter locks) and (Skiff phase 6) `54 01 tracks e0 e1 e2` (light tracks) (below) and (Skiff W1) `43 01 count` (a step's FLAM, COND, NUDGE; count: the trig conditions) and (Skiff W3) `4B 01 8` (the DRUM-X kit, below) and (Skiff W3) `57 01 caps` (bit 0 TRANSPORT, bit 1 PROJ_NAME, bit 2 POOL, bit 3 LIST, bit 4 PERFORM, below) ; older firmware ends earlier |
+| 1 INFO | — | version string, NENGINES, P_COUNT, G_COUNT, NSTEP, P_E0, then NENGINES engine-name strings, then (v3) NTRK (4; Skiff phase 6: 6), then (v6) CHAIN_ROWS (16), then the tagged blocks `55 01 uiCaps`, `4D 01 64 01`, `42 01 3`, `46 01 nfactory nbank`, `53 01 3`, (1.0.3) `50 01 3` and (1.0.4) `4E 01 count` (MENU settings; 12, 1.1: 15, 1.2: 17, 1.1.5: 18, Skiff U2: 16) and (1.0.5) `52 01 4` (ratchet) and (1.1) `4C 01 1` (parameter locks) and (Skiff phase 6) `54 01 tracks e0 e1 e2` (light tracks) (below) and (Skiff W1) `43 01 count` (a step's FLAM, COND, NUDGE; count: the trig conditions) and (Skiff W3) `4B 01 8` (the DRUM-X kit, below) and (Skiff W3) `57 01 caps` (bit 0 TRANSPORT, bit 1 PROJ_NAME, bit 2 POOL, bit 3 LIST, bit 4 PERFORM, below) and (Skiff 1.3) `49 01 c0 c1 e0 e1` (wide ids: P_COUNT and P_E0, above) ; older firmware ends earlier |
 | 2 GET | scope, id | scope, id, v14 |
 | 3 SET | scope, id, v14 | scope, id, v14 (the value after clamping). Setting global `G_ENGSEL` (id from DESC label "ENG") changes the engine: its defaults, then its first preset (as on the device) |
 | 4 DUMP | — | engine, preset, then P_COUNT × v14 (the selected track), then G_COUNT × v14 (globals) |

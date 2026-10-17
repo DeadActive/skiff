@@ -135,6 +135,12 @@ static uint32_t ed_eng(const track_t *t) { return t->eng_req % NENGINES; }
  * go out only into a half-empty SysEx ring, so they never wait. */
 #define ED_PUSH_MAX 4u                                   /* frames per pass */
 #define ED_NV (P_COUNT + G_COUNT)
+/* (Skiff 1.3, INFO 49 01) a track parameter's address: scope 0 ids 0..127, scope 2 ids 128.. (id - 128): a SysEx byte
+ * holds 7 bits and P_COUNT passed 127. ED_TID(scope, id): the P_* id of a track's; ED_SCOPE / ED_ID7: the address
+ * of ed_w's value k (P_COUNT and up: a global) */
+#define ED_TID(scope, id) ((scope) == 2u ? (id) + 128u : (id))
+#define ED_SCOPE(k) ((k) < P_COUNT ? ((k) >> 7) << 1 : 1u)
+#define ED_ID7(k) ((k) < P_COUNT ? (k) & 127u : (k) - P_COUNT)
 /* v4: the parameters of the tracks that are not selected which TRACK_CHANGED follows (the mixer) */
 static const uint8_t ED_TIDS[3] = {P_LEVEL, P_PAN, P_MUTE};
 #define ED_NT (NTRK * 3u)
@@ -252,8 +258,8 @@ static void ed_sync(void)                                /* main loop */
         ed_w.v[k] = v;
         ed_w.t[k] = (uint16_t)now;
         ed_begin(ED_CHANGED);
-        ed_b(k < P_COUNT ? 0u : 1u);
-        ed_b(k < P_COUNT ? k : k - P_COUNT);
+        ed_b(ED_SCOPE(k));
+        ed_b(ED_ID7(k));
         ed_v(v);
         ed_send();
         n++;
@@ -281,10 +287,12 @@ static void ed_sync(void)                                /* main loop */
 /* descriptor of parameter id of track t: the engine parameters of the engine it asked for
  * (t->engine follows in the audio ISR, after a short fade) */
 static const param_desc_t *ed_tdesc(const track_t *t, uint32_t id) { return param_desc_of(t->eng_req % NENGINES, id); }
-/* descriptor and value slot of (scope, id): scope 0 = the selected track, 1 = global */
+/* descriptor and value slot of (scope, id): scope 0 / 2 = the selected track, 1 = global */
 static const param_desc_t *ed_desc(uint32_t scope, uint32_t id, int16_t **vp)
 {
-    if (scope == 0 && id < P_COUNT) {
+    if (scope != 1u) {
+        if (scope > 2u || (id = ED_TID(scope, id)) >= P_COUNT)
+            return 0;
         *vp = &TSEL->p[id];
         return ed_tdesc(TSEL, id);
     }
@@ -368,6 +376,7 @@ static int ed_flash_stop(void)
 /* MOTION's reply: the records of track k as (step, id, v14), a lock's id without its MOTION_LOCK bit (a 7-bit SysEx
  * byte); kinds (1.1: the ops 5..7): then one byte per record, in the same order, 0 automation, 1 lock. The query and
  * the ops 1..4 reply as before 1.1 (an editor of before reads a lock as an automation event) */
+#define ED_MID(a) ((a)[3] | ((a)[2] & 64u) << 1)      /* ((1.3) a MOTION op's id: bit 7 in its step byte's bit 6) */
 static void ed_motion_reply(uint32_t k, uint32_t rc, uint32_t kinds)
 {
     track_t *t = &trk[k];
@@ -376,11 +385,11 @@ static void ed_motion_reply(uint32_t k, uint32_t rc, uint32_t kinds)
     for (i = 0; i < motion.count; i++) {
         const motion_event_t *e = &motion.event[i];
         if ((e->place >> 6) != k) continue;
-        ed_b(e->place & 63u); ed_b(MOTION_ID(e)); ed_v(e->value);
+        ed_b((e->place & 63u) | (MOTION_ID(e) >> 7) << 6); ed_b(MOTION_ID(e)); ed_v(e->value);   /* ((1.3) id bit 7) */
     }
     for (i = 0; kinds && i < motion.count; i++)
         if ((motion.event[i].place >> 6) == k)
-            ed_b((motion.event[i].param & MOTION_LOCK) != 0u);
+            ed_b(motion.event[i].lock);
 }
 static int ed_args_ok(uint32_t cmd, const uint8_t *a, uint32_t n)
 {
@@ -466,9 +475,9 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         } else if (na > 1u) {
             if (a[1] == 1u) motion_set_enabled(t, a[2]);
             else if (a[1] == 2u) { load_begin(t, UNDO_PAT); motion_clear(t); load_end(t); }
-            else if (a[1] == 3u) rc = motion_set_event(t, a[2], a[3], (int16_t)ed_rv(a + 4));
-            else if (a[1] == 4u && a[2] < NSTEP && motion_param(a[3])) motion_delete_event(t, a[2], a[3]);
-            else if (a[1] == 5u) rc = motion_set_lock(t, a[2], a[3], (int16_t)ed_rv(a + 4));
+            else if (a[1] == 3u) rc = motion_set_event(t, a[2] & 63u, ED_MID(a), (int16_t)ed_rv(a + 4));
+            else if (a[1] == 4u && motion_param(ED_MID(a))) motion_delete_event(t, a[2] & 63u, ED_MID(a));
+            else if (a[1] == 5u) rc = motion_set_lock(t, a[2] & 63u, ED_MID(a), (int16_t)ed_rv(a + 4));
             else if (a[1] == 6u && (a[2] < NSTEP || a[2] == 127u)) (void)motion_clear_locks(t, a[2]);
             else rc = 1;
             ui.force = 1;
@@ -479,10 +488,10 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
     case ED_INFO:
         ed_str("FELUCCA " FELUCCA_VERSION, 24);
         ed_b(NENGINES);
-        ed_b(P_COUNT);
+        ed_b(P_COUNT > 127u ? 127u : P_COUNT);            /* ((1.3) more: INFO 49 01) */
         ed_b(G_COUNT);
         ed_b(NSTEP);
-        ed_b(P_E0);
+        ed_b(P_E0 > 127u ? 127u : P_E0);
         for (i = 0; i < NENGINES; i++)
             ed_str(ENGINES[i]->name, 8);
         ed_b(NTRK);                                       /* v3 */
@@ -509,6 +518,9 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         ed_b(0x43); ed_b(1); ed_b(TC_COUNT);   /* (Skiff W1) a step's FLAM, COND (TC_COUNT of them), NUDGE after its ratchet */
         ed_b(0x4B); ed_b(1); ed_b(8);          /* (Skiff W3) the DRUM-X kit: KIT_GET, KIT_PUT, its 8 lanes */
         ed_b(0x57); ed_b(1); ed_b(ED_SKIFF_CAPS);   /* (Skiff W3) TRANSPORT, PROJ_NAME (editor_project.c) */
+        ed_b(0x49); ed_b(1); ed_b(P_COUNT & 127u); ed_b(P_COUNT >> 7); ed_b(P_E0 & 127u); ed_b(P_E0 >> 7);   /* (Skiff 1.3)
+                                         * wide ids: P_COUNT and P_E0 in two bytes; a track id from 128 on as scope 2
+                                         * (ED_TID), a motion record's from 128 on with bit 6 of its step byte */
         break;
     case ED_GET:
     case ED_SET:
@@ -523,13 +535,13 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
                 ed_load_after(&b);
             } else if (d->max > d->min) {
                 *vp = (int16_t)enum_orig(d, clamp(ed_rv(a + 2), d->min, d->max));
-                if (a[0] == 0) {
-                    (void)motion_capture(TSEL, a[1], *vp);
+                if (a[0] != 1u) {
+                    (void)motion_capture(TSEL, ED_TID(a[0], a[1]), *vp);
                     load_extend(TSEL);                      /* (ui.c undo: an audition's values after G_ENGSEL) */
                 }
             }
             ui.force = 1;
-            ed_w.v[a[0] ? P_COUNT + a[1] : a[1]] = *vp;   /* the editor's own change: no push */
+            ed_w.v[a[0] == 1u ? P_COUNT + a[1] : ED_TID(a[0], a[1])] = *vp;   /* the editor's own change: no push */
         }
         ed_b(a[0]);
         ed_b(a[1]);
@@ -872,22 +884,24 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         ed_step_reply(st);
         break;
     }
-    case ED_TRACK_PARAM: {                                 /* track, id [, v14] -> track, id, v14 */
+    case ED_TRACK_PARAM: {                                 /* track, id [, v14] -> track, id, v14 ((1.3) an id from
+                                                            * 128 on: bit 6 of the track byte is its bit 7) */
         track_t *t;
-        if (na < 2u || a[0] >= NTRK || a[1] >= P_COUNT)
+        uint32_t id = a[1] | (a[0] & 64u) << 1;
+        if (na < 2u || (a[0] & 63u) >= NTRK || id >= P_COUNT)
             return;
-        t = &trk[a[0]];
-        d = ed_tdesc(t, a[1]);
+        t = &trk[a[0] & 63u];
+        d = ed_tdesc(t, id);
         if (na >= 4u) {
             if (d->max > d->min)                           /* as SET: clamped; a fixed value stays */
-                t->p[a[1]] = (int16_t)enum_orig(d, clamp(ed_rv(a + 2), d->min, d->max));
-            (void)motion_capture(t, a[1], t->p[a[1]]);
-            ed_known(a[0], a[1]);
+                t->p[id] = (int16_t)enum_orig(d, clamp(ed_rv(a + 2), d->min, d->max));
+            (void)motion_capture(t, id, t->p[id]);
+            ed_known(a[0] & 63u, id);
             ui.force = 1;
         }
         ed_b(a[0]);
         ed_b(a[1]);
-        ed_v(t->p[a[1]]);
+        ed_v(t->p[id]);
         break;
     }
     case ED_SONG:                                          /* (Skiff phase 5: no project-slot song) always empty: */

@@ -207,8 +207,9 @@ int main(void)
 
     bad += check("layout: SLICER after DETUNE, then the matrix just before P_E0 ((Skiff) DIR, the ducking after the lane levels)",
                  P_SLCR == P_DETUNE + 1 && P_SLDEPTH + 1 == P_M1SRC && P_M4AMT + 1 == P_FM1_ATK && P_FM4_LEVEL + 1 == P_CHRD && P_VOIC + 1 == P_LN0 &&
-                 P_LN7 + 1 == P_DIR && P_DIR + 1 == P_DKSRC && P_DKREL + 1 == P_DTYPE && P_LDECAY7 + 1 == P_E0 && P_E0 == 117 &&
-                 P_COUNT == PROJ_NP_V3 + 68u && PROJ_NP == 103u && PROJ_NX == 22u &&
+                 P_LN7 + 1 == P_DIR && P_DIR + 1 == P_DKSRC && P_DKREL + 1 == P_DTYPE && P_LDECAY7 + 1 == P_LSYNC &&
+                 P_ESYNC + 1 == P_E0 && P_E0 == 127 &&   /* ((1.3) LFO SYNC .. ENV SYNC: P_COUNT past 127) */
+                 P_COUNT == PROJ_NP_V3 + 78u && PROJ_NP == 103u && PROJ_NX == 32u && PROJ_NX == PROJ_PX_MAX &&
                  PROJ_NP_V3 == PROJ_NP_V2 + 4u);
     bad += check("SKF1 fits one flash object, the retained cache in NOINIT", sizeof(project_store_t) <= 4096u - 256u &&
                  sizeof(project_store_t) == 3840u && 0xC8u + 4u * sizeof(project_store_t) <= 0x3D50u);
@@ -510,7 +511,7 @@ int main(void)
         ok = proj_pack(&st, &a) && proj_import(&c, &st, sizeof st) && !memcmp(c.t, a.t, PROJ_NT * sizeof a.t[0]) && pow_on(&c);
         bad += check("SKF1: each step's NUDGE round trips (-32, 31, -1, 1, ..), the rest of the step kept", ok);
         a.motion.count = 1;                             /* ((phase 9) a lock on DRIVE's TONE: SKF1 cannot name it) */
-        a.motion.event[0] = (motion_event_t){1u << 6 | 2u, (uint8_t)(P_DTONE | MOTION_LOCK), 5};
+        a.motion.event[0] = (motion_event_t){.place = 1u << 6 | 2u, .lock = 1, .id = P_DTONE, .value = 5};
         bad += check("  (phase 9) SKF1 refuses a motion record of a parameter added since 103", !proj_pack(&st, &a));
         a.motion.count = 0;
         a.t[2].step[7].nudge = NUDGE_MAX + 1;
@@ -552,8 +553,8 @@ int main(void)
             static project_store_t st2;
             project_t m = a;
             m.motion.count = 2; m.motion.on = 9;
-            m.motion.event[0] = (motion_event_t){3u << 6 | 63u, (uint8_t)(P_E3 | MOTION_LOCK), -64};
-            m.motion.event[1] = (motion_event_t){0u << 6 | 1u, P_REV, 127};
+            m.motion.event[0] = (motion_event_t){.place = 3u << 6 | 63u, .lock = 1, .id = P_E3, .value = -64};
+            m.motion.event[1] = (motion_event_t){.place = 0u << 6 | 1u, .id = P_REV, .value = 127};
             m.sum = proj_sum(&m);
             ok = proj_pack(&st2, &m) && proj_import(&c, &st2, sizeof st2) && !memcmp(&c.motion, &m.motion, sizeof m.motion);
             st = st2;
@@ -567,7 +568,7 @@ int main(void)
             bad += check("  saved with every track's automation on: SKF1 holds the four tracks' bits (more: left out)", ok);
             m.motion.count = 3;                                /* (phase 6) a record of the last track between them */
             m.motion.event[2] = m.motion.event[1];
-            m.motion.event[1] = (motion_event_t){(uint16_t)((NTRK - 1u) << 6 | 4u), P_REV, 33};
+            m.motion.event[1] = (motion_event_t){.place = (uint16_t)((NTRK - 1u) << 6 | 4u), .id = P_REV, .value = 33};
             m.sum = proj_sum(&m);
             ok = proj_pack(&st2, &m) && proj_import(&c, &st2, sizeof st2) && motion_valid(&c.motion);
             ok &= c.motion.count == 2u && c.motion.event[1].value == 127;
@@ -595,22 +596,22 @@ int main(void)
             project_t e = a;
             e.t[3].engine = ENGI_DRUM; e.t[3].p[P_E3] = 30;
             e.motion.count = 2; e.motion.on = 8;
-            e.motion.event[0] = (motion_event_t){3u << 6 | 2u, P_E3, 99};
-            e.motion.event[1] = (motion_event_t){3u << 6 | 4u, P_REV, 50};
+            e.motion.event[0] = (motion_event_t){.place = 3u << 6 | 2u, .id = P_E3, .value = 99};
+            e.motion.event[1] = (motion_event_t){.place = 3u << 6 | 4u, .id = P_REV, .value = 50};
             {   /* FUN9 holds parameter locks (bit 7 of the id): on a DRUM lane level and on an engine value */
                 project_t f = e, g;
                 f.motion.count = 4;
-                f.motion.event[2] = (motion_event_t){3u << 6 | 5u, (uint8_t)(P_LN2 | MOTION_LOCK), 40};
-                f.motion.event[3] = (motion_event_t){3u << 6 | 6u, (uint8_t)(P_E5 | MOTION_LOCK), -3};
+                f.motion.event[2] = (motion_event_t){.place = 3u << 6 | 5u, .lock = 1, .id = P_LN2, .value = 40};
+                f.motion.event[3] = (motion_event_t){.place = 3u << 6 | 6u, .lock = 1, .id = P_E5, .value = -3};
                 f.sum = proj_sum(&f);
                 ok = proj_pack(&st, &f) && proj_import(&g, &st, sizeof st) && !memcmp(&f.motion, &g.motion, sizeof f.motion);
                 bad += check("SKF1 round trip: locks on a lane level (P_LN2) and an engine value (P_E5) kept", ok &&
                              st.raw[68u + PROJ_NT * (PROJ_NP + 2u + NSTEP * 9u + PROJ_NUDGE_BYTES) + sizeof(chain_config_t) +
                                     4u + 8u + 1u] ==
-                             (P_LN2 | MOTION_LOCK) && g.motion.event[3].param == (P_E5 | MOTION_LOCK));
+                             (P_LN2 | MOTION_LOCK) && (g.motion.event[3].id == P_E5 && g.motion.event[3].lock));
             }
             e.motion.count = 3;   /* a FUN8 of a 1.1 development build (91 parameters) could hold a lock: its E5 then */
-            e.motion.event[2] = (motion_event_t){3u << 6 | 6u, (uint8_t)(P_E5 | MOTION_LOCK), -3};
+            e.motion.event[2] = (motion_event_t){.place = 3u << 6 | 6u, .lock = 1, .id = P_E5, .value = -3};
             e.sum = proj_sum(&e);
             ok = proj_pack(&st, &e);
             memset(v8, 0, sizeof v8);
@@ -640,8 +641,8 @@ int main(void)
                          c.t[3].engine == ENGI_DRUM && c.t[3].p[P_E3] == 30 && c.t[2].p[P_E7] == 4 &&
                          !memcmp(c.name, "FM SONG", 7) && pow_on(&c));
             bad += check("  its motion: E3 (86 then) at P_E3, REV kept", c.motion.count == 3u &&
-                         c.motion.event[0].param == P_E3 && c.motion.event[0].value == 99 && c.motion.event[1].param == P_REV);
-            bad += check("  a lock on its E5 (88 then): at P_E5, still a lock", c.motion.event[2].param == (P_E5 | MOTION_LOCK) &&
+                         (c.motion.event[0].id == P_E3 && !c.motion.event[0].lock) && c.motion.event[0].value == 99 && (c.motion.event[1].id == P_REV && !c.motion.event[1].lock));
+            bad += check("  a lock on its E5 (88 then): at P_E5, still a lock", (c.motion.event[2].id == P_E5 && c.motion.event[2].lock) &&
                          c.motion.event[2].value == -3);
             bad += check("  one byte short: refused", !proj_import(&c, v8, sizeof v8 - 1u));
             memset(&slot, 0xA5, sizeof slot);
@@ -726,19 +727,19 @@ int main(void)
         fm4_convert(p, v);
         fm6_pack(v, pk);
         a.motion.count = 5;
-        a.motion.event[0] = (motion_event_t){1u << 6 | 3u, P_E4, 20};          /* track 2: INDEX */
-        a.motion.event[1] = (motion_event_t){1u << 6 | 4u, P_FM1_LEVEL, 50};   /* track 2: OP LEVEL */
-        a.motion.event[2] = (motion_event_t){1u << 6 | 5u, P_CHOR, 60};        /* track 2: a send: stays */
-        a.motion.event[3] = (motion_event_t){0u << 6 | 3u, P_E4, 70};          /* track 1 (ANALOG): stays */
-        a.motion.event[4] = (motion_event_t){1u << 6 | 9u, P_E7, 0};           /* track 2: E7 */
+        a.motion.event[0] = (motion_event_t){.place = 1u << 6 | 3u, .id = P_E4, .value = 20};          /* track 2: INDEX */
+        a.motion.event[1] = (motion_event_t){.place = 1u << 6 | 4u, .id = P_FM1_LEVEL, .value = 50};   /* track 2: OP LEVEL */
+        a.motion.event[2] = (motion_event_t){.place = 1u << 6 | 5u, .id = P_CHOR, .value = 60};        /* track 2: a send: stays */
+        a.motion.event[3] = (motion_event_t){.place = 0u << 6 | 3u, .id = P_E4, .value = 70};          /* track 1 (ANALOG): stays */
+        a.motion.event[4] = (motion_event_t){.place = 1u << 6 | 9u, .id = P_E7, .value = 0};           /* track 2: E7 */
         a.sum = proj_sum(&a);
 #define FM4_OK(c) ((c).t[1].engine == ENGI_FM6 && (c).t[1].preset == 4u && !memcmp((c).fm6[1], pk, FM6_PACKED) && \
                    !memcmp((c).t[1].p, p, sizeof p) && (c).t[0].engine == 0u && !memcmp((c).fm6[0], FM6_INIT, FM6_PACKED))
         ok = proj_pack(&st, &a) && proj_import(&c, &st, sizeof st);
         bad += check("FUN8 with a DIGITAL track: FM6, the converted patch its own, PTCH / preset FM6 PAD", ok && FM4_OK(c));
         bad += check("  its motion on INDEX / OP LEVEL / E7 goes; a send's and the other track's stay",
-                     c.motion.count == 2u && c.motion.event[0].param == P_CHOR && c.motion.event[1].place == 3u &&
-                     c.motion.event[1].param == P_E4 && motion_valid(&c.motion) && proj_ok(&c));
+                     c.motion.count == 2u && (c.motion.event[0].id == P_CHOR && !c.motion.event[0].lock) && c.motion.event[1].place == 3u &&
+                     (c.motion.event[1].id == P_E4 && !c.motion.event[1].lock) && motion_valid(&c.motion) && proj_ok(&c));
         bad += check("  imported again: as it is (FM6 now)", proj_import(&d, &c, sizeof c) && !memcmp(&d, &c, sizeof d));
         fun9_from(v9, &st);                             /* the same as FUN7 (as the FUN8 block above) */
         memcpy(v7, v9, PROJ_STORE_V7 - 16u);
@@ -805,9 +806,9 @@ int main(void)
         a.t[2].step[4] = (step_t){{38, 49, 0, 0}, 2, ST_NOTE, 0, 90, 0, 0};
         a.t[0].p[P_E0] = 2;                             /* track 1: FLUTE stays */
         a.motion.count = 3;
-        a.motion.event[0] = (motion_event_t){2u << 6 | 3u, P_E4, 20};          /* track 3: CUT: goes */
-        a.motion.event[1] = (motion_event_t){2u << 6 | 5u, P_REV, 60};         /* track 3: a send: stays */
-        a.motion.event[2] = (motion_event_t){0u << 6 | 3u, P_E4, 70};          /* track 1: stays */
+        a.motion.event[0] = (motion_event_t){.place = 2u << 6 | 3u, .id = P_E4, .value = 20};          /* track 3: CUT: goes */
+        a.motion.event[1] = (motion_event_t){.place = 2u << 6 | 5u, .id = P_REV, .value = 60};         /* track 3: a send: stays */
+        a.motion.event[2] = (motion_event_t){.place = 0u << 6 | 3u, .id = P_E4, .value = 70};          /* track 1: stays */
         a.sum = proj_sum(&a);
 #define PERC_OK(c) ((c).t[2].engine == ENGI_DRUM && (c).t[2].preset == 0u && !memcmp(&(c).t[2].p[P_E0], KIT, sizeof KIT) && \
                     !memcmp((c).t[2].p, a.t[2].p, P_E0 * sizeof(int16_t)) && \
@@ -818,7 +819,7 @@ int main(void)
                      str_eq(ENGINES[ENGI_DRUM]->presets[0].name, "DRUM KIT") &&
                      !memcmp(ENGINES[ENGI_DRUM]->presets[0].e, (int8_t[8])DRUM_KIT_E, 8));
         bad += check("  its motion on CUT goes; a send's and the other track's stay",
-                     c.motion.count == 2u && c.motion.event[0].param == P_REV && c.motion.event[1].place == 3u &&
+                     c.motion.count == 2u && (c.motion.event[0].id == P_REV && !c.motion.event[0].lock) && c.motion.event[1].place == 3u &&
                      motion_valid(&c.motion) && proj_ok(&c));
         bad += check("  imported again: as it is (DRUM now)", proj_import(&d, &c, sizeof c) && !memcmp(&d, &c, sizeof d));
         memset(&a.motion, 0, sizeof a.motion);

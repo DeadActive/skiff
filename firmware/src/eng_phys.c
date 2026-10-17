@@ -120,6 +120,14 @@ static void phys_reset(phys_slot_t *S, uint32_t md, uint32_t seed)
     }
 }
 
+/* the seed of a reset during the render (MODEL changed under a sounding note): (Skiff 1.3, as Felucca 1.6.1) with two
+ * cores the track's own generator, not rng() (shared: the tracks render at once); one core: rng(), as up to 1.2 */
+#if FELUCCA_CPU2
+static int32_t phys_nz[NTRK] = {[0 ... NTRK - 1] = 0x6A09E667};
+#define PHYS_RSEED(t) ((uint32_t)noise32(&phys_nz[C1_PI(t)]))
+#else
+#define PHYS_RSEED(t) rng()
+#endif
 static void phys_note_on(track_t *t, voice_t *v)
 {
     phys_slot_t *S = phys_slot_of(t, v);
@@ -167,7 +175,7 @@ static void phys_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     if (n > CTL)
         n = CTL;
     if (S->model != md)                                  /* MODEL changed under a sounding note */
-        phys_reset(S, md, rng());
+        phys_reset(S, md, PHYS_RSEED(t));
     switch (md) {
     case PM_MODAL: {
         px_modal_blk_t B;
