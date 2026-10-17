@@ -991,7 +991,7 @@ static int takes(void)
 }
 
 /* Skiff trig conditions (core.h TC_*, seq.c step_cond_ok): A:B on pass A of every B of the track's loop, FILL and
- * !FILL with GLO + D4 held (seq_fill); a step without one plays as before */
+ * !FILL with GLO + F4 held (seq_fill); a step without one plays as before */
 static int cond_played(const track_t *t, uint32_t note)   /* the step just entered sounds this note */
 {
     uint32_t i;

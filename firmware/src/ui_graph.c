@@ -1298,15 +1298,11 @@ static void page_title(char *ti)
     }
 }
 /* (Skiff U4, L5) where the page is in its family, for the footer: "2/3" ("": a family of one; a sheet (DRUM-X's,
- * FM6's): what SELECT does) */
+ * FM6's) too (#7): SELECT's rows are on SHIFT's map) */
 static void page_pos(char *ti)
 {
     uint32_t i, n = 0, k = 0;
     ti[0] = 0;
-    if (sheet_of(cur_page()->graph)) {
-        str_cpy(ti, "SELECT: ROWS", 20);
-        return;
-    }
     for (i = 0; i < NPAGES; i++)
         if (page_group(i) == page_group(ui.page) && page_visible(i)) {
             n++;
@@ -1657,8 +1653,12 @@ static void graph_song(void)
         int32_t y = SG_Y(pos), ty = y + 2;
         int band = k == song.sel % NTRK, cb = band;
         uint16_t col = T_TRK(k), g = cb ? col : g0;
-        uint32_t cur = bank_cur(k), nx = bank_next(k);
+        uint32_t cur = bank_cur(k), nx = bank_next(k), first, last, rest = trk_pid[k] ? NENT : lists.cur[k] % NENT;
         char d[2] = {(char)('1' + k), 0};
+        for (first = 0; first < NENT && !bank_used(k, first); first++)   /* ((1.2.1, #12) the empty entries between */
+            ;                                                        /* these two are rests) */
+        for (last = first < NENT ? NENT - 1u : 0u; last > first && !bank_used(k, last); last--)
+            ;
         if (cb && ux.neon) {                         /* ((Skiff S1) NEON: the band its colour into violet) */
             uint16_t st[2] = {col, ux_mix(col, NE_VIOLET, 70)};
             ne_hgrad(0, y, SG_BAND_W, SG_H, st, 2);
@@ -1674,8 +1674,16 @@ static void graph_song(void)
             int pick = band && p == sg.entry % NENT;
             uint16_t fill, ink;
             char s[3];
-            if (id == PAT_NONE) {
-                cv_rect(x + 5, ty + SG_TH / 2 - 1, 2, 2, cb ? ux_mix(col, T_INK, 55) : T_DIM);
+            if (id == PAT_NONE) {                    /* empty: a dot; ((1.2.1, #12) a rest: a dash, lit while it plays, */
+                uint16_t dc = cb ? ux_mix(col, T_INK, 55) : T_DIM;   /* framed while staged, its repeats under it) */
+                if (p > first && p < last) {
+                    cv_rect(x + 3, ty + SG_TH / 2 - 1, SG_W - 6, 2, p == rest ? (cb ? T_INK : col) : dc);
+                    if (p == nx)
+                        cv_frame(x - 1, ty - 1, SG_W + 2, SG_TH + 2, cb ? T_INK : col);
+                    for (r = 0; r + 1u < reps && r < 3u; r++)
+                        cv_rect(x + 1 + 3 * (int32_t)r, ty + SG_TH + 1, 2, 1, cb ? T_INK : col);
+                } else
+                    cv_rect(x + 5, ty + SG_TH / 2 - 1, 2, 2, dc);
                 if (pick)
                     cv_frame(x, ty, SG_W, SG_TH, T_TEXT);
                 continue;
@@ -2016,7 +2024,14 @@ static void draw_tracks(void)
 {
     uint32_t c, pos, sk = strip_kind() == SK_TRK;
     if (ui.force) {
-        lcd_fill(0, graph_y(), 240, graph_h(), T_BG);
+        if (NTRK > 4u)                               /* the six strips are the panel's full height: only the gaps */
+            for (c = 0, pos = 0; c <= NTRK; c++) {   /* between them, so a track change doesn't flash them (#15) */
+                int32_t r = c < NTRK ? MS_X(c) : 240;
+                lcd_fill(pos, graph_y(), (uint32_t)r - pos, graph_h(), T_BG);
+                pos = (uint32_t)(r + MS_W);
+            }
+        else
+            lcd_fill(0, graph_y(), 240, graph_h(), T_BG);
         for (c = 0; c < NTRK; c++)
             ts.meter[c] = 0;
     }
@@ -2268,8 +2283,8 @@ static void draw_graph(void)
         case GR_STEPS:
             graph_steps(t, c);
             break;
-        case GR_TILES:                               /* (Skiff) STEP: the mockup's tiles (a drum track: the grid) */
-            cv_oy = 0;
+        case GR_TILES:                               /* (Skiff) STEP: the mockup's tiles (a drum track: the grid, */
+            cv_oy = drum_track(t) ? pad : 0;         /* where CHANCE and PLAY have it (#10); the tiles centre themselves) */
             if (drum_track(t))
                 graph_grid(t, c);
             else

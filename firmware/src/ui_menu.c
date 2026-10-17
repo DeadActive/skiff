@@ -390,7 +390,11 @@ static void draw_menu(void)
     sig = ui.menu * 7u + ui.menu_sel * 131u + settings.palette * 1009u + settings.lowcut * 7919u + settings_hold * 3511u +
           settings_leds * 6151u + ui_prefs * 4099u + song.rec * 65537u + song.sel * 13u +
           ui_rec_prefs * 92821u +
-          (ui.menu == 2 ? ui.menu_scroll * 48611u : 0u);
+          (ui.menu == 2 ? ui.menu_scroll * 48611u : 0u) +
+          /* (1.2.1) the rows' values that live elsewhere: TUNE, CLOCK, MIDI IN, HINTS, and the load SYSTEM > CPU shows, so
+           * a step or a change of the load redraws them (they stayed as drawn until the cursor moved) */
+          (uint32_t)song.g[G_TUNE] * 24593u + (uint32_t)song.g[G_CLOCK] * 769u + (uint32_t)song.g[G_ROUTE] * 1543u +
+          ui_hints_off * 3079u + song.cpu_q8 * 100u / 256u * 12289u;
     if (!ui.force && sig == ui.menu_sig) {
         if (ui.menu == 1 && mt.pos != pos0) {          /* only the tabs slid: their strip */
             cv_begin(240, MP_Y - H_HEAD, T_BG);

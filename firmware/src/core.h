@@ -283,7 +283,7 @@ static void nudge_unpack(step_t *s, const uint8_t *b, uint32_t n)
         }
     }
 }
-/* Skiff: a step's trig condition (seq.c step_cond_ok): FILL / !FILL while GLO + D4 is held (or not), A:B on pass A of
+/* Skiff: a step's trig condition (seq.c step_cond_ok): FILL / !FILL while GLO + F4 is held (or not), A:B on pass A of
  * every B of its track's loop (take.c take_pass). Saved in bit 7 of the step's note bytes (project.c) */
 enum { TC_NONE, TC_FILL, TC_NFILL, TC_1_2, TC_2_2, TC_1_3, TC_2_3, TC_3_3, TC_1_4, TC_2_4, TC_3_4, TC_4_4, TC_COUNT };
 static const char *const TC_NAME[TC_COUNT] = {"--", "FILL", "!FILL", "1:2", "2:2", "1:3", "2:3", "3:3", "1:4", "2:4",

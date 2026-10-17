@@ -1197,7 +1197,8 @@ static int song_cmds(void)
     a[0] = 5; a[3] = 3;
     ok &= request(ED_LIST, a, 4) && !host_wire[6] && host_wire[14] == 2;                    /* REPS B 3 */
     a[2] = 3;
-    ok &= request(ED_LIST, a, 4) && host_wire[6] == 1;                                       /* REPS on an empty entry */
+    ok &= request(ED_LIST, a, 4) && !host_wire[6] && lists.ent[0][3][1] == 2;               /* REPS on an empty entry: a rest's
+                                                                                               * (1.2.1, #12) */
     a[0] = 1; a[3] = 64;
     ok &= request(ED_LIST, a, 4) && host_wire[6] == 1 && !lists.ent[0][3][0];               /* SET a pattern not kept */
     a[0] = 3; a[2] = 0;
@@ -1206,7 +1207,7 @@ static int song_cmds(void)
     ok &= request(ED_LIST, a, 3) && !host_wire[6] && (p3 = host_wire[11] - 1u) != p1 && pool_used(p3);   /* COPY A */
     a[0] = 6; a[1] = 1;
     ok &= request(ED_LIST, a, 2) && host_wire[7] == 1 && lists.song;                        /* SONG ON */
-    bad += check("LIST: SET, REPS (an empty entry refused), PLAY (at once stopped), COPY, SONG", ok);
+    bad += check("LIST: SET, REPS (an empty entry's too: a rest), PLAY (at once stopped), COPY, SONG", ok);
     song.playing = 1;
     a[0] = 4; a[1] = 0; a[2] = 1;
     ok = request(ED_LIST, a, 3) && host_wire[6] == 3 && lists.ent[0][1][0];                 /* CLEAR B: playing */

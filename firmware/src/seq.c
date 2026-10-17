@@ -223,7 +223,7 @@ static __attribute__((noinline)) uint32_t seq_next(track_t *t, uint32_t len)
 }
 
 #include "take.c"                                   /* Skiff: TAKES' log (input_on/off, the arp, motion_capture) */
-static volatile uint8_t seq_fill;                   /* Skiff: FILL held (GLO + D4, ui_layer.c): the FILL steps play */
+static volatile uint8_t seq_fill;                   /* Skiff: FILL held (GLO + F4, ui_layer.c): the FILL steps play */
 /* Skiff: step s of track t passes its trig condition (core.h TC_*) on this pass of the track's loop (take_pass: the
  * first pass since PLAY is 1; ahead 1: the next pass, a step played early (NUDGE) before its pass starts); a step
  * without one always does. No random number taken (the CHANCE roll after it).

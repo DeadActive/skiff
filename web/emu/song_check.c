@@ -3,7 +3,7 @@
  * then a power cycle on the same flash.
  *   a: a list for every track ((Skiff phase 6) six: LEN 16 12 8 16 12 16, REPS 1..3, empty entries between), SONG
  *      on, PLAY: each track moves on at its own pass end once its entry's REPS are played, in its list's order, round
- *      again; T4's one entry never swaps; an edit made in T1's B plays again the next time round. STOP, then the autosave's quiet stop writes the patterns
+ *      again ((1.2.1, #12) an empty entry between a track's patterns a rest: one silent pass of its LEN); T4's one entry never swaps; an edit made in T1's B plays again the next time round. STOP, then the autosave's quiet stop writes the patterns
  *      and the project. The flash to FILE.
  *   b: a fresh device on FILE: the lists, each track on its entry with that entry's steps, the edit in T1's B.
  *   cc -O2 -ffp-contract=off -w -Ibuild/gen -Ifirmware/src -o build/emu/song_check web/emu/song_check.c -lm
@@ -36,17 +36,25 @@ static const uint8_t REPS[6][4] = {{2, 1, 0, 1}, {1, 3, 0, 0}, {3, 0, 2, 0}, {1,
 _Static_assert(NTRK <= 6, "a list for every track");
 static uint8_t note_of(uint32_t k, uint32_t e) { return (uint8_t)(48u + 12u * (k % 3u) + 2u * e); }
 static uint32_t reps_of(uint32_t k, uint32_t e) { return e < 4u ? REPS[k][e] : 0u; }
-static uint32_t next_of(uint32_t k, uint32_t e)   /* the next entry with a pattern, round the list */
+static uint32_t first_of(uint32_t k) { uint32_t e = 0; while (e < 3u && !REPS[k][e]) e++; return e; }
+static uint32_t last_of(uint32_t k) { uint32_t e = 3; while (e && !REPS[k][e]) e--; return e; }
+static int rest_of(uint32_t k, uint32_t e)        /* ((1.2.1, #12) an empty entry between the track's first and last) */
 {
-    uint32_t n;
-    for (n = 1; n < NENT && !reps_of(k, (e + n) % NENT); n++)
-        ;
-    return (e + n) % NENT;
+    return !reps_of(k, e) && e > first_of(k) && e < last_of(k);
+}
+static uint32_t passes_of(uint32_t k, uint32_t e) { return rest_of(k, e) ? 1u : reps_of(k, e); }   /* (a rest: REPS 1) */
+static uint32_t next_of(uint32_t k, uint32_t e)   /* the next entry, a pattern or a rest; after the last, the first */
+{
+    return e >= first_of(k) && e < last_of(k) ? e + 1u : first_of(k);
 }
 static int steps_are(uint32_t k, uint32_t e)      /* track k plays entry e's steps (fill) */
 {
     return trk[k].step[0].n == 1u && trk[k].step[0].note[0] == note_of(k, e) && trk[k].step[4].note[0] == note_of(k, e) &&
            trk[k].p[P_SLEN] == LEN[k];
+}
+static int steps_at(uint32_t k, uint32_t e)       /* .. or a rest's: none, the track's LEN */
+{
+    return rest_of(k, e) ? !trk[k].step[0].n && !trk[k].step[4].n && trk[k].p[P_SLEN] == LEN[k] : steps_are(k, e);
 }
 static void fill(uint32_t k, uint32_t e)        /* a note on every fourth step of the pass */
 {
@@ -89,7 +97,7 @@ static int run_a(FILE *f)
             uint32_t c = lists.cur[k] % NENT;
             if (c == cur[k])
                 continue;
-            wrong[k] += c != next_of(k, cur[k]) || (uint16_t)(take_p0[k] - p0[k]) != reps_of(k, cur[k]) || !steps_are(k, c);
+            wrong[k] += c != next_of(k, cur[k]) || (uint16_t)(take_p0[k] - p0[k]) != passes_of(k, cur[k]) || !steps_at(k, c);
             moves[k]++;
             p0[k] = take_p0[k];
             cur[k] = c;
@@ -105,7 +113,7 @@ static int run_a(FILE *f)
     for (k = 0; k < NTRK; k++) {
         if (k == 3u)
             continue;
-        snprintf(b, sizeof b, "T%u: %u moves, each to the next entry after its REPS passes, its steps in", k + 1, moves[k]);
+        snprintf(b, sizeof b, "T%u: %u moves, each to the next entry (a rest too) after its REPS passes", k + 1, moves[k]);
         check(b, moves[k] >= 6u && !wrong[k]);
     }
     check("T4: one entry, never swapped", moves[3] == 0u && steps_are(3, 0));
@@ -136,7 +144,7 @@ static int run_b(FILE *f)
                   (!reps_of(k, e) || lists.ent[k][e][1] + 1u == reps_of(k, e));
     check("its lists: the same entries, the same REPS", ok);
     for (k = 0, ok = 1; k < NTRK; k++)
-        ok &= lists.cur[k] == at[k] && trk_pid[k] == lists.ent[k][at[k]][0] && steps_are(k, at[k]);
+        ok &= lists.cur[k] == at[k] && trk_pid[k] == lists.ent[k][at[k]][0] && steps_at(k, at[k]);
     check("each track on the entry it stopped on, with that entry's steps", ok);
     ok = ent_go(0, 1) == 0 && steps_are(0, 1) && trk[0].step[5].n == 1u && trk[0].step[5].note[0] == 72u;
     check("T1's B with the edit made while playing", ok);

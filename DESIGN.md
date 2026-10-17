@@ -56,11 +56,11 @@ Things to avoid:
 | SAVE | Its page family (PRESETS, USER, PATTERNS, PROJECT): the page it was left on, USER the first time (U3) | **UNDO**, one level back (8 levels kept) | — |
 | FX | FX pages | FX layer: effects on the white keys, cuts on the black (a track silent while held: the gate; GLO's latched MUTE keeps the speaker, U2), macros on K1–K4 | Lock the layer open; locked, it latches (U2: MENU > FX LATCH retired) |
 | GLO | MIXER, DELAY, REVERB, CHORUS, GLOBAL (U3: the buses, FX's before; SYSTEM gone) | GLO layer: mutes, solos, tap tempo; with SELECT: tempo | Lock |
-| SCL | SCL, CHORD | SCL layer: root on the keys | Lock |
+| SEL | SCALE, CHORD (1.2.1, #8: the button is printed SEL; the page was SCL) | SEL layer: root on the keys | Lock |
 | EDIT | EDIT pages, on every page (U2; on STEP and ROLL with REC armed it clears the cursor step, with a step held its locks) | EDIT layer: engine on the keys | Lock |
 | SEQ | SEQ pages | SEQ TOOLS, on every page (U2) | Lock |
 | REC | Arm / disarm, on the press (U2) | — | REC layer, locked: CLEAR (held), CLICK, COUNT-IN, LEVEL, FEEL |
-| HOME | HOME (a locked layer closes); on HOME, the tracks or the scope | **SHIFT**. Let go alone: MENU (not over a dialog or NAME, U2) | — |
+| HOME | HOME (a locked layer closes); on HOME, the tracks or the scope; with a layer's button held: locks that layer (1.2.1, #13) | **SHIFT**. Let go alone: MENU (not over a dialog or NAME, U2) | — |
 | PLAY | Start / stop | — | — |
 | OCT− / OCT+ | Octave. In dialogs and on action pages: OCT− cancel (or HOME, as its footer says), OCT+ do it. While the undo box (or message) shows: OCT− undo further, OCT+ redo (on action pages too, U2) | Both for 5 s: UPDATE MODE | — |
 
@@ -151,7 +151,7 @@ Add a combo here before adding it to the code. Every SHIFT combo has to appear o
   - **PLAY** (no pick): the track goes to the entry as a PERFORM key does: at once when stopped, at the LAUNCH point when playing.
   - OCT− drops the pick (CANCELLED); with none, a launch staged for the track (not the song's next).
 - **CLEAR clears the entry** (KNOB 2's last choice, after COPY; U2: was EDIT), stopped (STOP TO CLEAR), after a dialog: CLEAR ENTRY C?, then what becomes of its pattern. It goes too when nothing else names it (erases pattern 07 too) or stays (pattern 07 stays: entry D uses it; entries D and T1 A use it; 3 entries use it; a saved project uses it). T2 goes empty when the track is on that entry: its steps and automation go with it. Can't be undone.
-- **SONG ON:** playing, each track moves to its next entry at its own pass end, once the entry's REPS are played, whatever LAUNCH says. Empty entries are passed over; after the last, the first again. A list of one entry stays on it.
+- **SONG ON:** playing, each track moves to its next entry at its own pass end, once the entry's REPS are played, whatever LAUNCH says. An empty entry between the track's first and last pattern is a rest (1.2.1, #12): silence, for its REPS passes of the track's LEN (the timing the track has), on no pattern, so nothing is kept unless it is recorded into (then a new pattern names that entry). The empty entries after the last end the list; after the last, the first again. A list of one entry stays on it. On the rows a rest is a dash, lit while it plays, framed while staged, its repeats under it; KNOB 3 sets an empty entry's REPS too (were --).
   - PLAY goes on from the entry each track is on; GLO + PLAY starts every track from its first entry.
   - A launch (a PERFORM key, a scene, SONG's PLAY) moves the track's place: the song goes on from there. PERFORM's OCT− leaves the song's next alone.
   - SONG OFF: each track loops the entry it's on.
@@ -220,7 +220,7 @@ Add a combo here before adding it to the code. Every SHIFT combo has to appear o
   - MIXER: six 36 px strips at the layer maps' columns (`ui_graph.c` `mix_strip`): the number, its state (recording a square in REC, armed its outline in the accent, muted M), the sound's first word, LEVEL a fader with the output meter beside it and its dB under it, the PAN (L31, C, R37). REV is on the cards only (the selected track's KNOB 3). The selected track's strip is a band of its colour. LARGE: the number, the state, the name, LEVEL as a gauge and the meter under it.
   - GLO's cards: four, the ones around the selected track (T1–T4, or the four ending at T5 or T6; `ui.c` `trk_top`), KNOB 1–4 their LEVELs.
 - **The key maps show all six:**
-  - GLO: SOLO 1–6 on F G A B E G, ALL on C4, FILL on D4, TAP on F4 (two columns wide), MUTE 1–6 on F# G# A# C# D# F#. 36 px cells.
+  - GLO: SOLO 1–6 on F G A B C D, then ALL on E4, FILL on F4, TAP on G4 (two columns wide; in this order since 1.2.1, #11), MUTE 1–6 on F# G# A# C# D# F#. 36 px cells.
   - FX: the effects as before; the mute row of six as GLO's.
   - PERFORM: black keys 1–6 stage the mutes.
 - **MIDI IN** (MENU > MIDI IN CH1-6, U3): channels 1–6 play T1–T6; 7–16 are free for other instruments.
@@ -238,7 +238,7 @@ Add a combo here before adding it to the code. Every SHIFT combo has to appear o
 - **EDIT › SOUND, the sound sheet** (phase 8, after EDIT 2, DRUM-X tracks only; `ui_dx.c`; the user's pick of three mockups, `design/mock_p8.py` direction 2): one sound of the kit, all of it on one page.
   - **The sound:** a key struck on the track, or PRESETS (BD .. CB; no sound is loaded). The header names it: SOUND SD.
   - **The knobs** are a window on the sheet that SELECT moves, A beside B so there is no side to choose: PITCH A, PITCH B, P MOD A, P MOD B; then DECAY A, DECAY B, NOISE A, NOISE B; then COLOR A, COLOR B, LEVEL (the sound's lane level: automation as any knob), DRIVE; then the switches WAVE (SIN FM MTL BEL), FILTER (LP BP HP), SNAP, P SHAPE (the pitch modulation: DECAY LONG NOISE SINE). Past its top SELECT goes on to EDIT 2; the sheet is the family's last page (U3: VOICE and VOICE 2 change nothing on the hits, LANES is DRUM's: the sheet has LEVEL).
-  - **The panel:** the 8 sounds, the one edited in the track's colour; then a row a value, A's bar in the track's colour and B's in white with their numbers, LEVEL and DRIVE, the switches in words; the knobs' rows on a band with a mark at the left, a scroll bar at the right. The footer says SELECT: ROWS.
+  - **The panel:** the 8 sounds, the one edited in the track's colour; then a row a value, A's bar in the track's colour and B's in white with their numbers, LEVEL and DRIVE, the switches in words; the knobs' rows on a band with a mark at the left, a scroll bar at the right. The footer shows the page number, as every page does (SELECT: ROWS is on SHIFT's map).
 - **A kit edit isn't undoable,** as a knob turn isn't. **INIT SOUND** on a DRUM-X track puts the factory kit back too (the dialog says INITIALIZE SOUND? and the DRUM-X kit); SAVE held undoes both at once (`ui.c` `sound_init`, UNDO_KIT).
 - Left out of JIANT's DRUM-X, for now: its group mutes, X-MOD (a tempo-synced LFO on MORPH), PUNCH and the dice. Features like these would come as one considered choice, not piecemeal. The SOUND pages' look may be revisited.
 
@@ -321,7 +321,7 @@ The colours differ in lightness as well as hue, and always appear with the track
 
 **BLOCKS**, the look (`firmware/src/ui_blocks.c`, `ui_home.c`). U2: the only one; FLAT and LINE and the MENU's STYLE are retired (a saved STYLE byte is left as it was):
 - Square tiles on BG, with no dividers.
-- **Header:** the transport on the left: the play state, which becomes the REC mark while a track is armed; the selected track's bar.beat (grey 1.1 when stopped); then "124 BPM". At the right, as the mockup's, the page's title in MID (HOME: the project's name; a layer its own: GLO SET, PERFORM BAR). The octave sits before the title only while shifted; the battery after it only when low (level 1 or 0) or on USB. A message starts right of the BPM, at x 106 or later, and takes the title's place for a while.
+- **Header:** the transport on the left: the play state, which becomes the REC mark while a track is armed; the selected track's bar.beat (grey 1.1 when stopped); then "124 BPM". At the right, as the mockup's, the page's title in MID (HOME: the project's name; a layer its own: GLO SET, PERFORM BAR). The octave sits before the title only while shifted; the battery after it at every level (charging on USB). A message starts right of the BPM, at x 106 or later, and takes the title's place for a while.
 - **Knob cards:**
   - The label (S) sits top left.
   - The value is big (V), with its unit right-aligned on the same baseline. The value drops to M, then S, when it is too wide.
@@ -341,7 +341,7 @@ The colours differ in lightness as well as hue, and always appear with the track
 - **One level of tiles:** SURF tiles on the black ground, the selection a white tile with INK. The layer maps' cells and the NAME screen's keys sit on the ground with no panel under them. Every shape is square, the "rounded in every style" pills included: the menu's tabs, its page dots, the COLOR swatches.
 - **Menu:** ON and OFF are words like its other values (OFF in DIM), and there are no rules between its rows.
 - **A footer short of room** for its hints keeps only the page's n/m at the right (the header names the page), so every hint keeps its word. An action card's value is its key's name, in M (LOAD: OCT+).
-- **A page's own actions are cards** (U2, the review's G3): EDIT always means the EDIT pages. SAVE › USER's KNOB 3 picks ERASE and, one step further, NAME; SAVE › PROJECT's KNOB 2 is NAME; SONG's PATTERN knob ends in COPY, then CLEAR; AUTOMATION's VALUE turned past its lowest shows DELETE. OCT+ does the picked card, OCT− drops it.
+- **A page's own actions are cards** (U2, the review's G3): EDIT always means the EDIT pages. SAVE › USER's KNOB 3 picks ERASE and, one step further, NAME; SAVE › PROJECT's KNOB 2 picks DELETE and, one step further, NAME (1.2.1, #6), and its KNOB 3 is NEW on an empty slot (a blank project, the power-on one); SONG's PATTERN knob ends in COPY, then CLEAR; AUTOMATION's VALUE turned past its lowest shows DELETE. OCT+ does the picked card, OCT− drops it.
 - **The header names the page, the footer where it is** (U4, the review's L5): the header the page's name (EDIT: the engine's own, OSC, KIT), the footer at the right only its place in the family (1/4; with the page's icon), so a name is said once. ROLL's scale (C MIN, the footer's before) sits under the roll at its right.
 - **No silent dead ends** (U4, F7): SELECT at a family's first or last page flashes the footer's n/m; OCT+ on an action page with nothing picked says PICK WITH A KNOB FIRST; a second layer's button says ONE LAYER AT A TIME; GLO's TAP counts the taps before the tempo (TAP 2 MORE); PRESETS on SLICES picks the slice (KNOB 1's).
 - **MENU > SYSTEM > RESET SETTINGS** (U4, A3): its dialog on the page under the MENU, then every MENU setting as a new unit has it (Skiff's palette, BPM LOCK ON, CLOCK INT, MIDI IN CH1-6, TUNE 0, HINTS ON ..); the calibration, the favourites and the music stay.
@@ -354,7 +354,7 @@ The colours differ in lightness as well as hue, and always appear with the track
   - SEQ goes by task: STEP, ROLL, CHANCE, PLAY, PATTERN, AUTOMATION, SONG last. On a drum track STEP is the grid and ROLL is not there.
   - AUTOMATION is 1.1.5's AUTO LIST: the records, and a first row of its own (ROW ALL) with PLAY on KNOB 2 and CLEAR on KNOB 4. The AUTOMATION page of before, its counts and scope, is gone.
   - EDIT > LANES (DRUM) is one page: KNOB 1 the lane (the grid's too), KNOB 2 its LEVEL, (phase 9) KNOB 3 its TUNE (±12 semitones, 0.0 as the kit has it), KNOB 4 its DECAY (a signed offset, 0 as the kit has it), the eight as faders; a held step's KNOB 2 3 4 lock that lane's. DRUM-X has its sheet's LEVEL instead (and tunes its sounds there).
-  - A page that changes nothing on the track's engine is not there: ENV, ENV DEST, ENV 2, VOICE, VOICE 2 and SCL on DRUM and DRUM-X (`engine_t.oneshot`), ENV, ENV DEST and ENV 2 on FM6 (`ownenv`); VOICE 2 is ALLOC and DTUNE (PAN, MUTE: MIXER's). A card that does nothing there is dimmed: LFO DEST's PIT FLT SHP on the hits, DRUM's KICK on a model kit. A button with no page says so (NO ENV ON DRUM); a page a track no longer has goes to its family's first (or HOME) and says so too.
+  - A page that changes nothing on the track's engine is not there: ENV, ENV DEST, ENV 2, VOICE, VOICE 2 and SCALE on DRUM and DRUM-X (`engine_t.oneshot`), ENV, ENV DEST and ENV 2 on FM6 (`ownenv`); VOICE 2 is ALLOC and DTUNE (PAN, MUTE: MIXER's). A card that does nothing there is dimmed: LFO DEST's PIT FLT SHP on the hits, DRUM's KICK on a model kit. A button with no page says so (NO ENV ON DRUM); a page a track no longer has goes to its family's first (or HOME) and says so too.
   - Every family reopens the page it was left on (SAVE and GLO too), and the MENU closes back onto the page it was opened over.
   - SAVE › TOOLS is gone (CLEAR is the REC and SEQ TOOLS layers', INIT the EDIT layer's), and so is GLO › SYSTEM: CLOCK and MIDI IN are MENU › CONTROL's, TUNE MENU › AUDIO's, CPU (read only) MENU › SYSTEM's.
   - CLOCK, MIDI IN and TUNE are the unit's (`ui.c` `unit_g_*`, settings bytes [15][18..20]): a project still stores them (for older firmware) but a load leaves them; the first boot with U3 takes the restored session's.

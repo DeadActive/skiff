@@ -70,6 +70,8 @@ static void fm1_wdt_feed(void) { if (host_wdt_hook) host_wdt_hook(); }
 static void fm1_irq_off(void) {}
 static void fm1_irq_on(void) {}
 static uint16_t host_screen[240 * 240];
+static void count_wide_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h);   /* (#15: test_mixer_no_flash) */
+#define UI_FILL_HOOK count_wide_fill
 static void lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c)
 {
     uint32_t i, j;
@@ -251,7 +253,7 @@ static void turn(uint32_t role, int32_t s)
 }
 static void stop_transport(void) { transport_req = 0; song.playing = 0; }
 static void user_rename(void) { turn(EN_K3, 2); press(B_OCTUP); }      /* (U2) USER: KNOB 3 past ERASE, NAME */
-static void proj_rename(void) { turn(EN_K2, 1); press(B_OCTUP); }      /* (U2) PROJECT: KNOB 2's NAME */
+static void proj_rename(void) { turn(EN_K2, 2); press(B_OCTUP); }      /* (U2) PROJECT: KNOB 2 past DELETE (1.2.1), NAME */
 static void song_pick_clear(void) { turn(EN_K2, 40); press(B_OCTUP); }      /* (U2) SONG: KNOB 2 to its end, CLEAR */
 static int16_t stored_param(uint32_t slot, uint32_t track, uint32_t id)
 {
@@ -1002,6 +1004,47 @@ static int test_home_footer(void)
     return check("#3 HOME after SEQ's first page (the tiles, a drum grid): the footer as after any other page", ok);
 }
 
+/* (#10) a drum track's grid at one height on SEQ's pages: STEP drew it from the panel's top (cv_oy 0), CHANCE and PLAY
+ * centred (pad lower) */
+static int test_grid_rows(void)
+{
+    static uint16_t ref[240 * 240];
+    uint32_t ok, at = graph_y() * 240u, sz = 240u * graph_h() * sizeof *ref;
+    ui_power_on();
+    set_engine_of(&trk[0], ENGI_DRUM);
+    trk[0].engine = trk[0].eng_req;
+    open_family(FAM_SEQ);
+    frame();
+    memcpy(ref, host_screen, sizeof ref);
+    ok = cur_page()->graph == GR_TILES && grid_on();
+    go_page(GR_CHANCE); frame();
+    ok &= !memcmp(ref + at, host_screen + at, sz);      /* (the same grid, cursor and lane: the same panel) */
+    go_page(GR_PLAY); frame();
+    ok &= !memcmp(ref + at, host_screen + at, sz);
+    return check("#10 a drum track's grid at one height on STEP, CHANCE and PLAY", ok);
+}
+
+/* (#15) GLO's MIXER: ALGORITHM picks the track without blanking the faders (draw_tracks filled the whole panel on
+ * every ui.force, straight to the screen) */
+static uint32_t wide_fills;
+static void count_wide_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h)
+{
+    (void)x;
+    (void)h;
+    if (w > 8u && y >= graph_y() && y < graph_y() + graph_h())
+        wide_fills++;
+}
+static int test_mixer_no_flash(void)
+{
+    uint32_t ok;
+    ui_power_on();
+    go_page(GR_TRK); frame(); frame();
+    wide_fills = 0;
+    turn(EN_ALGO, 1);
+    ok = song.sel == 1u && !wide_fills && swap16(host_screen[(graph_y() + 2u) * 240u + (uint32_t)MS_X(1) + 2u]) == T_TRK(1);
+    return check("#15 MIXER: ALGORITHM moves the band, no fill blanks the faders", ok);
+}
+
 static int test_grid(void)
 {
     int bad = 0;
@@ -1499,6 +1542,29 @@ static int test_menu_tabs(void)
     ok &= menu_n(MI_CPU) == 1u && song.g[G_TUNE] == 2;
     song.g[G_TUNE] = 0;
     bad += check("(U3) MENU > AUDIO > TUNE steps in cents (+2 CT); SYSTEM > CPU is read only", ok);
+    {   /* (1.2.1) a step of TUNE, CLOCK, MIDI IN draws the row again at once, and the CPU row follows the load (their
+         * values were not in the menu's signature: they stayed as drawn until the cursor moved) */
+        static const uint8_t RW[] = {MI_TUNE, MI_CLOCK, MI_ROUTE};
+        uint32_t s0;
+        ok = ui.menu == 1u;
+        for (i = 0; i < NELEM(RW); i++) {
+            ui.menu_sel = RW[i];
+            frame();
+            s0 = ui.menu_sig;
+            press(B_OCTUP);
+            ok &= ui.menu_sig != s0;
+            press(B_OCTDN);
+        }
+        ui.menu_sel = MI_CPU;
+        frame();
+        s0 = ui.menu_sig;
+        song.cpu_q8 = 72;
+        frame();
+        ok &= ui.menu_sig != s0;
+        song.cpu_q8 = 0;
+        song.g[G_TUNE] = song.g[G_CLOCK] = song.g[G_ROUTE] = 0;
+        bad += check("(1.2.1) MENU: a step of TUNE, CLOCK or MIDI IN redraws its row; CPU follows the load", ok);
+    }
     {   /* the ON / OFF rows: up (a knob right, OCT+) is ON, the switch's knob to the right, whichever bit it is */
         static const uint8_t SW[] = {MI_LARGE, MI_ANIM, MI_ACCEL, MI_BPMLOCK, MI_SERIAL, MI_RESTORE};
         ok = 1;
@@ -1662,6 +1728,19 @@ static int test_information(void)
     song.batt_raw = 561; levels &= batt_shown() == 2;
     song.batt_raw = 591; levels &= batt_shown() == 3;
     bad += check("battery operation retains all three ADC level thresholds", levels);
+    {   /* (#5) the battery at every level, not only when low or on USB: its icon (THEME) in its cell */
+        static const uint16_t RAW[2] = {561, 600};
+        uint32_t i, seen, all = 1;
+        for (i = 0; i < 2u; i++) {
+            song.batt_raw = RAW[i];
+            ui.force = 1; draw_head(); ui.force = 0;
+            for (seen = 0, y = 0; y < H_HEAD; y++)
+                for (x = HEAD_BAT_X; x < HEAD_BAT_X + 24u; x++)
+                    seen |= swap16(host_screen[y * 240 + x]) == T_THEME;
+            all &= seen;
+        }
+        bad += check("#5 the header shows the battery at levels 2 and 3 too", all);
+    }
     return bad;
 }
 
@@ -2274,9 +2353,12 @@ static int test_layer(void)
     press(B_SAVE); ok &= ui.home;
     hold(B_SAVE); ok &= !ui.undo_w && !msg_is("NOTHING TO UNDO") && ui.home;
     press(B_ENV); ok &= ui.home;
-    hold(B_HOME); ok &= !ui.menu && ui.home;
+    hold(B_HOME); ok &= !ui.menu && ui.home && ui.lock == LAYER_FX;   /* ((#13) HOME: the layer locked, no menu) */
     btn_up(B_FX); frame();
-    bad += check("in the layer: PLAY plays; SAVE (tap and hold), ENV, HOME (hold) do nothing", ok && ui.home && !ui.menu);
+    ok &= ui.layer == LAYER_FX;                        /* (FX let go: still open) */
+    press(B_HOME); frame();
+    bad += check("in the layer: PLAY plays; SAVE (tap and hold), ENV do nothing; (#13) HOME locks it, a HOME tap closes it",
+                 ok && ui.home && !ui.menu && !ui.lock && !ui.layer);
     btn_down(B_FX); frame(); btn_down(B_ENV); frame(); btn_up(B_FX); frame(); btn_up(B_ENV); frame();
     bad += check("  a page button pressed with FX, let go after it: still nothing", ui.home);
     /* release-act: every page button acts when let go */
@@ -3118,7 +3200,7 @@ static int test_quick_layers(void)
 {
     static const uint8_t LB[3] = {B_GLO, B_SCL, B_EDIT};
     static const uint8_t LL[3] = {LAYER_GLO, LAYER_SCL, LAYER_EDIT};
-    static const char *const HINT[3] = {"HOLD [GLO]: SHORTCUTS", "HOLD [SCL]: SHORTCUTS", "HOLD [EDIT]: SHORTCUTS"};
+    static const char *const HINT[3] = {"HOLD [GLO]: SHORTCUTS", "HOLD [SEL]: SHORTCUTS", "HOLD [EDIT]: SHORTCUTS"};
     int bad = 0, ok, flash, hint;
     uint32_t i, k, a, b2, mo;
     track_t before;
@@ -3166,18 +3248,18 @@ static int test_quick_layers(void)
     ok = trk[1].p[P_MUTE] == 1 && ui.layer == LAYER_GLO && !gates() && mo_w == mo;
     a = leds_at(0); b2 = leds_at(250);
     ok &= ((a & b2) >> black(0)) & 1u && !(((a | b2) >> black(1)) & 1u);           /* T1 sounding lit, T2 muted dark */
-    ok &= ((a ^ b2) >> white(0)) & 1u && ((a ^ b2) >> white(7)) & 1u && ((a ^ b2) >> white(5)) & 1u &&
-          ((a ^ b2) >> white(6)) & 1u;          /* (Skiff: D4 is FILL, (phase 6) E4 SOLO T5: they breathe) */
+    ok &= ((a ^ b2) >> white(0)) & 1u && ((a ^ b2) >> white(8)) & 1u && ((a ^ b2) >> white(7)) & 1u &&
+          ((a ^ b2) >> white(4)) & 1u;          /* (Skiff: (#11) F4 is FILL, C4 SOLO T5, G4 TAP: they breathe) */
     key_up(black(1)); btn_up(B_GLO); frame();
     bad += check("GLO + black key 2: T2 MUTE latched (SET), silent, no MIDI; LEDs: sounding lit, muted dark", ok &&
                  trk[1].p[P_MUTE] == 1 && !ui.layer);
     lay_combo(B_GLO, black(1)); key_up(black(1)); frame();
-    key_down(white(4)); key_up(white(4)); frame();
+    key_down(white(6)); key_up(white(6)); frame();
     lay_combo(B_GLO, black(2)); key_up(black(2)); frame();
     ok = trk[1].p[P_MUTE] == 0 && trk[2].p[P_MUTE] == 1;
-    key_down(white(4)); frame(); key_up(white(4)); frame();
+    key_down(white(6)); frame(); key_up(white(6)); frame();
     btn_up(B_GLO); frame();
-    bad += check("  again: unmuted; C4: UNMUTE ALL", ok && !trk[2].p[P_MUTE] && !trk[1].p[P_MUTE]);
+    bad += check("  again: unmuted; (#11) E4: UNMUTE ALL", ok && !trk[2].p[P_MUTE] && !trk[1].p[P_MUTE]);
     lay_combo(B_GLO, white(2));
     perf_begin(CTL);
     ok = perf_solo == 4u && ((perf_act >> PF_M1) & 15u) == 0xBu;   /* T3 solo: T1 T2 T4 muted */
@@ -3190,14 +3272,14 @@ static int test_quick_layers(void)
                  ok && !perf_solo && !((perf_act >> PF_M1) & 15u) && !trk[0].p[P_MUTE] && !ui.layer);
     song.g[G_BPM] = 100;
     btn_down(B_GLO); frame();
-    for (i = 0; i < 3u; i++) { key_down(white(7)); frame(); key_up(white(7)); frames(480); }
+    for (i = 0; i < 3u; i++) { key_down(white(8)); frame(); key_up(white(8)); frames(480); }
     ok = song.g[G_BPM] == 120;
     btn_up(B_GLO); frame();
     song.g[G_CLOCK] = 1;
-    lay_combo(B_GLO, white(7)); key_up(white(7)); frame();
+    lay_combo(B_GLO, white(8)); key_up(white(8)); frame();
     ok &= msg_is("TAP: CLOCK IS EXTERNAL") && song.g[G_BPM] == 120;
     btn_up(B_GLO); frame(); song.g[G_CLOCK] = 0;
-    bad += check("GLO + F4 x3 at 0.5 s: TAP 120 BPM; with CLK EXT: dimmed, it says why", ok);
+    bad += check("GLO + G4 x3 at 0.5 s: TAP 120 BPM; with CLK EXT: dimmed, it says why", ok);
     {
         int16_t l2 = trk[2].p[P_LEVEL], atk = TSEL->p[P_ATK];
         go_title("ENV");
@@ -3584,7 +3666,7 @@ static int test_chord_page(void)
     t->p[P_VOICE] = V_POLY;
     go_home(); frame();
     press(B_SCL); frames(400);
-    ok = str_eq(cur_page()->title, "SCL");
+    ok = str_eq(cur_page()->title, "SCALE");
     press(B_SCL); frames(400);
     ok &= str_eq(cur_page()->title, "CHORD") && cur_page()->graph == GR_CHORD && cur_page()->fam == FAM_SCL;
     bad += check("SCL tapped again: the CHORD page (CHRD VOIC, the chord graph)", ok && cur_page()->id[0] == P_CHRD &&
@@ -5709,6 +5791,24 @@ static int test_layer_lock(void)
     }
     bad += check("(U2) SHIFT + FX GLO SCL EDIT: the map stays open with no button held, over the page as it is, no MENU", ok);
     bad += check("  a tap of the button closes it, no page opens", okk);
+    ok = 1;
+    for (i = 0; i < 4u; i++) {                          /* (#13) the button held first, then HOME: locked as well */
+        ui_power_on();
+        go_title("ENV"); frame();
+        pg = ui.page;
+        btn_down(LB[i]); frame();
+        press(B_HOME);
+        btn_up(LB[i]); frame();
+        frames(500);
+        ok &= ui.lock == LL[i] && ui.layer == LL[i] && !ui.home && ui.page == pg && !ui.menu && !ui.shift;
+    }
+    ui_power_on();                                      /* REC + HOME: no lock (REC arms on its press), no menu */
+    go_title("ENV"); frame();
+    btn_down(B_REC); frame();
+    press(B_HOME);
+    btn_up(B_REC); frames(100);
+    bad += check("(#13) FX GLO SCL EDIT held, then HOME: locked open over the page; REC + HOME: no lock",
+                 ok && !ui.lock && !ui.layer && !ui.menu);
     /* the keys and KNOB 1..4 act as held */
     ui_power_on();
     go_title("ENV"); frame();
@@ -6527,7 +6627,7 @@ static int test_usb_serial(void)
 
 /* #58 MENU > BPM LOCK: OFF by default (and in every older setting): SELECT sets the tempo on every page. ON: SELECT
  * leaves it on the pages ("BPM LOCKED" once per turn burst); GLO > GLOBAL's BPM knob, GLO + SELECT (a combo: the map
- * opens, no GLO page; OCT- puts it back) and GLO's F4 TAP still set it; the menu never takes SELECT as the tempo */
+ * opens, no GLO page; OCT- puts it back) and GLO's G4 TAP still set it; the menu never takes SELECT as the tempo */
 static int test_bpm_lock(void)
 {
     int bad = 0, ok;
@@ -6586,7 +6686,7 @@ static int test_bpm_lock(void)
     ok = str_eq(cur_page()->title, "GLOBAL") && cur_page()->id[0] == G_BPM && song.g[G_BPM] == b0 + 1;
     bad += check("#58 BPM LOCK ON: GLO > GLOBAL KNOB 1 still sets the tempo", ok);
 
-    /* ON: GLO + SELECT (a quick turn: a combo, no GLO page), OCT- puts it back, F4 TAP */
+    /* ON: GLO + SELECT (a quick turn: a combo, no GLO page), OCT- puts it back, G4 TAP */
     go_title("ENV"); frame();
     page = ui.page;
     b0 = song.g[G_BPM];
@@ -6606,10 +6706,10 @@ static int test_bpm_lock(void)
                  ok && ui.page == page);
     song.g[G_BPM] = 100;
     btn_down(B_GLO); frame();
-    for (i = 0; i < 3u; i++) { key_down(white(7)); frame(); key_up(white(7)); frames(480); }
+    for (i = 0; i < 3u; i++) { key_down(white(8)); frame(); key_up(white(8)); frames(480); }
     ok = song.g[G_BPM] == 120;
     btn_up(B_GLO); frame();
-    bad += check("#58 BPM LOCK ON: GLO + F4 TAP still sets the tempo", ok);
+    bad += check("#58 BPM LOCK ON: GLO + G4 TAP still sets the tempo", ok);
 
     {   /* saved with the settings; settings from before it: OFF (and so again: idempotent) */
         persist_t p, q;
@@ -6796,6 +6896,20 @@ static int test_u4(void)
         page_pos(ti);
         bad += check("U4 L5: the header names the page (EDIT 1 on ANALOG: OSC), the footer only where (1/4, ENV 1/3)",
                      ok && str_eq(page_head(), "ENV") && str_eq(ti, "1/3"));   /* ((phase 9) ENV ENV DEST ENV 2) */
+        set_engine_of(TSEL, ENGI_FM6);                  /* (#7) a sheet counts as any page (was SELECT: ROWS) */
+        TSEL->engine = TSEL->eng_req;
+        go_page(GR_FMOP); frame();
+        page_pos(ti);
+        ok = str_eq(ti, "3/6");
+        go_page(GR_FMALL); frame();
+        page_pos(ti);
+        ok &= str_eq(ti, "4/6");
+        set_engine_of(TSEL, ENGI_DRUMX);
+        TSEL->engine = TSEL->eng_req;
+        go_page(GR_DXSND); frame();
+        page_pos(ti);
+        bad += check("#7 the sheets show where they are: FM6 OPERATOR 3/6, ALL OPS 4/6, DRUM-X SOUND 3/3",
+                     ok && str_eq(ti, "3/3"));
     }
     ui_power_on();                                      /* F7: no silent dead ends */
     ui_prefs |= PREF_BPM_LOCK;                          /* (SELECT: the pages) */
@@ -6810,7 +6924,7 @@ static int test_u4(void)
     btn_down(B_GLO); frames(800);
     press(B_FX);
     ok &= msg_is("ONE LAYER AT A TIME") && ui.layer == LAYER_GLO;
-    key_down(white(7)); frame(); key_up(white(7)); frame();   /* (F4: TAP) */
+    key_down(white(8)); frame(); key_up(white(8)); frame();   /* (G4: TAP) */
     ok &= msg_is("TAP 2 MORE");
     btn_up(B_GLO); frame();
     ui_prefs = 0;
@@ -6931,7 +7045,7 @@ static int test_u3(void)
     press(B_ENV);
     ok = ui.home && msg_is("NO ENV ON DRUM");
     press(B_SCL); frames(320);
-    ok &= ui.home && msg_is("NO SCL ON DRUM");
+    ok &= ui.home && msg_is("NO SCALE ON DRUM");
     go_title("LFO DEST"); frame();
     ok &= card_dead(cur_page(), 0) && card_dead(cur_page(), 1) && card_dead(cur_page(), 2) && !card_dead(cur_page(), 3);
     go_title("STEP"); frame();
@@ -7079,10 +7193,72 @@ static int test_u2c(void)
     song.g[G_SLOT] = 1;
     frame();
     turn(EN_K2, 1);
-    ok = act_col() == 2u && str_eq(act_name(1), "NAME");
-    turn(EN_K2, -1);
+    ok = act_col() == 2u && str_eq(act_name(1), "DELETE");
+    turn(EN_K2, 1);
+    ok &= act_col() == 2u && str_eq(act_name(1), "NAME") && ui.act2;
+    turn(EN_K2, -2);
     ok &= !act_col();
-    bad += check("U2c: PROJECT KNOB 2: NAME (picked right, dropped left)", ok);
+    bad += check("(#6) PROJECT KNOB 2: DELETE, one further NAME, back to none", ok);
+    {   /* (#6) DELETE: the dialog, then the slot empty in flash and RAM; the music stays, on no slot, changed */
+        step_t s0;
+        ui_power_on();
+        trk[0].step[0].time = ST_NOTE; trk[0].step[0].n = 1;
+        project_save(1);
+        ok = project_used(1) && proj_cur == 1u;
+        s0 = trk[0].step[0];
+        go_page(GR_SLOTS);
+        song.g[G_SLOT] = 2;
+        frame();
+        turn(EN_K2, 1);
+        press(B_OCTUP);
+        ok &= ui.confirm == CF_ERASE_PROJ && ui.confirm_trk == 1u;
+        {
+            char a[24], b[40];
+            confirm_text(a, b);
+            ok &= str_eq(a, "DELETE PROJECT B?");
+        }
+        press(B_OCTDN);
+        ok &= !ui.confirm && project_used(1);
+        turn(EN_K2, 1);
+        press(B_OCTUP);
+        press(B_OCTUP);
+        ok &= !ui.confirm && !project_used(1) && proj_cur == PROJ_NO_SLOT && project_changed() &&
+              !memcmp(&trk[0].step[0], &s0, sizeof s0) && msg_is("DELETED UNTIL POWER OFF");   /* (flash: persistence_test) */
+        turn(EN_K2, 1);
+        press(B_OCTUP);
+        bad += check("(#6) DELETE PROJECT B?: OCT- keeps it, OCT+ empties the slot, the music stays (on no slot, changed); "
+                     "an empty slot: no dialog", ok && !ui.confirm && msg_is("EMPTY SLOT"));
+    }
+    {   /* (#6) NEW on an empty slot: KNOB 3 says NEW; over changed music the dialog first; the power-on project, the
+         * unit's CLOCK MIDI IN TUNE kept, unnamed, on no slot, clean */
+        ui_power_on();
+        song.g[G_TUNE] = 5;
+        song.g[G_BPM] = 140;
+        trk[0].step[0].time = ST_NOTE; trk[0].step[0].n = 1;
+        trk[2].p[P_LEVEL] = 11;
+        str_cpy(proj_name, "OLD", sizeof proj_name);
+        go_page(GR_SLOTS);
+        song.g[G_SLOT] = 4;
+        frame();
+        turn(EN_K3, 1);
+        ok = str_eq(act_name(2), "NEW") && act_ready();
+        press(B_OCTUP);
+        ok &= ui.confirm == CF_NEW_PROJ;
+        press(B_OCTDN);
+        ok &= !ui.confirm && trk[2].p[P_LEVEL] == 11;
+        turn(EN_K3, 1);
+        press(B_OCTUP);
+        press(B_OCTUP);
+        frames(100);
+        ok &= !ui.confirm && trk[0].step[0].time == ST_REST && trk[2].p[P_LEVEL] == TP[P_LEVEL].def &&
+              song.g[G_BPM] == GP[G_BPM].def && song.g[G_TUNE] == 5 && song.g[G_SLOT] == 4 && !proj_name[0] &&
+              proj_cur == PROJ_NO_SLOT && !project_changed() && trk[1].eng_req == TRK_DEF[1][0] &&
+              msg_is("NEW PROJECT") && !project_used(3);
+        turn(EN_K3, 1);
+        press(B_OCTUP);
+        bad += check("(#6) NEW on an empty slot: asks over changed music; the power-on project, TUNE and the slot kept; "
+                     "unchanged: at once", ok && !ui.confirm && msg_is("NEW PROJECT"));
+    }
     ui_power_on();
     return bad;
 }
@@ -7676,6 +7852,12 @@ static int test_song_page(void)
     turn(EN_K4, 1);
     ok &= sg.entry == 2u && lists.ent[song.sel][2][1] == 1u && lists.song;
     bad += check("SONG: KNOB 1 the entry, 3 its repeats, 4 SONG; OCT+ plays the entry (stopped: at once)", ok);
+    turn(EN_K1, -1);                                 /* ((1.2.1, #12) B, empty between A and C: a rest, its REPS too) */
+    turn(EN_K3, 2);
+    ok = sg.entry == 1u && ent_pat(song.sel, 1) == PAT_NONE && lists.ent[song.sel][1][1] == 2u;
+    turn(EN_K3, -2);
+    turn(EN_K1, 1);
+    bad += check("  (#12) KNOB 3 sets an empty entry's repeats too (a rest's length)", ok && sg.entry == 2u);
     turn(EN_K2, -1);                                 /* C's 02 -> 01: OCT+ puts A's pattern into C too */
     ok = song_pick() == a + 1u && str_eq(song_act_name(), "SET 01");
     press(B_OCTUP);
@@ -7866,7 +8048,7 @@ static int test_undo_levels(void)
     return bad;
 }
 
-/* (Skiff phase 6) six tracks on the layers: GLO's SOLO T5 and T6 on E4 and G4 and their MUTEs on D#4 and F#4; T5
+/* (Skiff phase 6) six tracks on the layers: GLO's SOLO T5 and T6 on C4 and D4 (#11) and their MUTEs on D#4 and F#4; T5
  * selected, KNOB 4 its LEVEL (the four shown: T2 .. T5), OCT- every track's mute and level back; PERFORM's black keys 5
  * and 6; EDIT on T5: PHYS's key says why, KNOB 1 never lands on PHYS or GRAIN */
 static int test_six_tracks(void)
@@ -7875,16 +8057,16 @@ static int test_six_tracks(void)
     uint32_t i, p, n = 0, e0;
     int16_t lv[NTRK];
     ui_power_on();
-    lay_combo(B_GLO, white(6));                       /* E4 held */
+    lay_combo(B_GLO, white(4));                       /* C4 held */
     perf_begin(CTL);
     ok = perf_solo == 1u << 4 && ((perf_act >> PF_M1) & 63u) == 0x2Fu;
-    key_up(white(6)); frame();
-    key_down(white(8)); frame();                      /* G4 */
+    key_up(white(4)); frame();
+    key_down(white(5)); frame();                      /* D4 */
     perf_begin(CTL);
     ok &= perf_solo == 1u << 5;
-    key_up(white(8)); btn_up(B_GLO); frame();
+    key_up(white(5)); btn_up(B_GLO); frame();
     perf_begin(CTL);
-    bad += check("(phase 6) GLO + E4 held: SOLO T5 (the five others muted); G4: SOLO T6", ok && !perf_solo);
+    bad += check("(#11) GLO + C4 held: SOLO T5 (the five others muted); D4: SOLO T6", ok && !perf_solo);
     lay_combo(B_GLO, black(5)); key_up(black(5)); frame();
     ok = trk[5].p[P_MUTE] == 1 && !trk[4].p[P_MUTE];
     key_down(black(4)); frame(); key_up(black(4)); frame();
@@ -7953,6 +8135,8 @@ int main(void)
     bad += test_tracks();
     bad += test_grid();
     bad += test_home_footer();
+    bad += test_grid_rows();
+    bad += test_mixer_no_flash();
     bad += test_screen();
     bad += test_favorites();
     bad += test_preset_tags();

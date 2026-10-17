@@ -621,6 +621,18 @@ int main(void)
     project_save(2);
     bad += check("failed first project save leaves slot empty", !project_used(2));
     erase_error = 0;
+    {   /* (1.2.1, #6) SAVE > PROJECT's DELETE: an empty record in flash and the RAM copy cleared, so the slot reads
+         * empty after a fetch from flash too (a warm reset keeps .noinit RAM); a failed write keeps the slot */
+        project_save(3);
+        ok = project_used(3);
+        erase_error = 1;
+        ok &= project_erase(3) == 2 && project_used(3) && !strcmp(ui.msg, "DELETE ERROR");
+        erase_error = 0;
+        ok &= project_erase(3) == 0 && !project_used(3) && !strcmp(ui.msg, "PROJECT DELETED");
+        proj_fetch(3);
+        ok &= !project_used(3) && st_load(OBJ_PROJECT0 + 3u, &got, sizeof got) == 0;
+        bad += check("(#6) DELETE: the project slot empty in RAM and flash; a failed write keeps it", ok);
+    }
     {   /* names: a project's through flash; a failed rename keeps the old one in RAM and flash */
         char n[16];
         project_store_t keep;

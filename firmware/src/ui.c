@@ -22,6 +22,8 @@ static void up_ui_named(uint32_t op, uint32_t k, const char *name);
 static int project_save_as(uint32_t slot, const char *name);
 static int project_name(uint32_t slot, char *b);
 static int project_rename(uint32_t slot, const char *name);
+static int project_erase(uint32_t slot);   /* (1.2.1, #6) SAVE > PROJECT: DELETE, NEW (project.c) */
+static void project_new(void);
 static int step_page(uint32_t g) { return g == GR_ROLL || g == GR_TILES; }   /* (Skiff) STEP's tiles, ROLL: one page's ways */
 #define BANK_SLOTS 16u                         /* Skiff: the pattern bank (bank.c): A..P a track */
 static int bank_used(uint32_t k, uint32_t s);
@@ -234,7 +236,7 @@ static struct {
 
 enum { CF_NONE, CF_CLEAR_SEQ, CF_OVR_PROJ, CF_OVR_USER,
        CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER,
-       CF_ERASE_BANK, CF_CLEAR_ENTRY, CF_LOAD_PROJ, CF_STORE_SCENE, CF_RESET_SET, CF_COUNT };   /* ui.confirm: TOOLS' clears; SAVE over a used
+       CF_ERASE_BANK, CF_CLEAR_ENTRY, CF_LOAD_PROJ, CF_STORE_SCENE, CF_RESET_SET, CF_ERASE_PROJ, CF_NEW_PROJ, CF_COUNT };   /* ui.confirm: TOOLS' clears; SAVE over a used
                                    * slot; USER ERASE; (Skiff phase 5) SAVE > PATTERNS: CLEAR an unused pattern; SONG:
                                    * CLEAR the entry; (Skiff U1) PROJECT LOAD over the session */
 /* ((Skiff U2) here: bank.c opens one too) the OCT- / OCT+ dialog (ui_draw.c draws it); trk: the track or the slot it is about */
@@ -760,7 +762,7 @@ static void note_name(char *b, uint32_t n)
     fmt_int(b + str_len(b), (int32_t)(n / 12u) - 1);
 }
 
-/* (Skiff U3, N5) a family with no page on this track's engine: its button says so ("NO SCL ON DRUM"), the page stays */
+/* (Skiff U3, N5) a family with no page on this track's engine: its button says so ("NO SCALE ON DRUM"), the page stays */
 static void page_none(const char *title)
 {
     char b[24];
@@ -1663,7 +1665,7 @@ static uint32_t act_cols(void)                   /* the columns that are actions
     if (pg->graph == GR_USER)
         return 14u;                              /* LOAD ERASE (or NAME, ui.act2) SAVE */
     if (pg->graph == GR_SLOTS)
-        return 14u;                              /* ((Skiff U2) NAME, was EDIT) LOAD SAVE */
+        return 14u;                              /* ((Skiff U2) NAME, was EDIT; (1.2.1) DELETE or NAME) LOAD (or NEW) SAVE */
     if (pg->graph == GR_BANK)
         return 8u;                               /* ((Skiff phase 5) the pool view: CLEAR, always picked: act_col) */
     if (pg->graph == GR_SLICES)
@@ -1692,7 +1694,9 @@ static const char *act_name(uint32_t c)          /* column c's action (the foote
     if (cur_page()->graph == GR_USER)
         return c == 2u && ui.act2 ? "NAME" : UP_GO[(c + 2u) % 3u];
     if (cur_page()->graph == GR_SLOTS && c == 1u)
-        return "NAME";
+        return ui.act == 2u && ui.act2 ? "NAME" : "DELETE";   /* ((1.2.1, #6) DELETE, one step further NAME) */
+    if (cur_page()->graph == GR_SLOTS && id == G_LOAD && !project_used((uint32_t)song.g[G_SLOT] - 1u))
+        return "NEW";                            /* ((1.2.1, #6) an empty slot) */
     if (cur_page()->graph == GR_BANK)
         return "CLEAR";
     if (cur_page()->graph == GR_SLICES)
@@ -1713,7 +1717,7 @@ static int act_ready(void)
                song_pick() || bank_used(s, sg.entry);
     if (cur_page()->graph == GR_USER)
         return c == 3u ? !song.playing : up_used(ui.uslot) && (c == 1u || !song.playing);
-    if (cur_page()->graph == GR_SLOTS && c == 1u)       /* ((Skiff U2) NAME) */
+    if (cur_page()->graph == GR_SLOTS && c == 1u)       /* ((Skiff U2) NAME; (1.2.1) DELETE) */
         return project_used((uint32_t)song.g[G_SLOT] - 1u) && !transport_busy();
     if (cur_page()->graph == GR_BANK)                   /* (Skiff phase 5) a pattern nothing uses, stopped */
         return pool_used(ui.bslot % NPAT) && !pool_refs(ui.bslot % NPAT) && !transport_busy();
@@ -1722,7 +1726,7 @@ static int act_ready(void)
         return slice_act_ready(c);
 #endif
     id = cur_page()->id[c & 3u];
-    if (id == G_LOAD)
-        return project_used((uint32_t)song.g[G_SLOT] - 1u);
+    if (id == G_LOAD)                                   /* ((1.2.1, #6) an empty slot: NEW, always) */
+        return 1;
     return !song.playing;                               /* (G_SAVE) */
 }

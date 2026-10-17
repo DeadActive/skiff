@@ -985,7 +985,7 @@ static void setup(int s)
     case S_FX: go_title("FX"); break;
     case S_SLICER: TSEL->p[P_SLCR] = 1; go_title("SLICER"); break;
     case S_DLY: go_title("DELAY"); break;   /* ((U3, N4) GLO's, was FX > DLY) */
-    case S_SCL: TSEL->p[P_SCALE] = 2; go_title("SCL"); break;
+    case S_SCL: TSEL->p[P_SCALE] = 2; go_title("SCALE"); break;
     case S_CHORD:                                    /* A minor DIA7, the last chord on B: Bm7b5 */
     case S_CHORD_WIDE: {                             /* A harmonic minor DIA7 +OCT on G#: G#dim7 over three octaves */
         uint8_t out[CHORD_MAX];

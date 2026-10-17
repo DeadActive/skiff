@@ -928,31 +928,37 @@ static int song_test(void)
     t->step[1].note[0] = 55;                      /* (an edit on B as it plays) */
     sg_steps(1);
     ok = heard(0, 55);
+    sg_steps(1);                                  /* ((1.2.1, #12) C, empty between B and D: a rest, B's LEN 2 x1) */
+    ok &= !trk[0].seq_n;
+    sg_steps(1);                                  /* (its frame took the swap in: on C, on no pattern, D staged) */
+    ok &= !trk[0].seq_n && lists.cur[0] == 2u && !trk_pid[0] && bank_next(0) == 3u;
     sg_steps(1);
     ok &= heard(0, 70);
     sg_steps(8);                                  /* D x3 */
     ok &= heard(0, 72);
     sg_steps(1);
-    ok &= heard(0, 30) && !launch_q[2].armed && heard(2, 60 + 19u % 4u);
-    bad += check("  .. C (empty) passed over, D x3, then A (the list loops); T3's one entry: never a swap", ok);
+    ok &= heard(0, 30) && !launch_q[2].armed && heard(2, 60 + 21u % 4u);
+    bad += check("  .. C (empty, between B and D) rests B's length, D x3, then A (the list loops); T3's one entry: never a swap", ok);
     sg_steps(8);                                  /* A x2 */
     ok = heard(0, 50);
     sg_steps(1);
     ok &= heard(0, 55);
     bad += check("  B again: its edit there (kept when it went out)", ok);
-    ok = !stage_cancel() && launch_q[0].armed;    /* (D staged: the song's) */
+    ok = !stage_cancel() && launch_q[0].armed;    /* (C staged: the song's rest) */
     lists.song = 0;
     sg_frame();
     ok &= !launch_q[0].armed;
     lists.song = 1;
     sg_frame();
-    ok &= launch_q[0].armed && bank_next(0) == 3u;
+    ok &= launch_q[0].armed && bank_next(0) == 2u;
     bad += check("  OCT- leaves the song's next (none of the user's); SONG off drops it, on stages it again", ok);
     sg_stop();
     ok = !launch_q[0].armed && bank_cur(0) == 1u && heard(0, 55) == 0;
     sg_play();                                    /* PLAY: on B, the entry it is on, from its start */
     sg_steps(1);
     ok &= heard(0, 55);
+    sg_steps(2);                                  /* (C's rest) */
+    ok &= !trk[0].seq_n;
     sg_steps(1);
     ok &= heard(0, 70);
     bad += check("  STOP: the song's next dropped; PLAY: on from the entry each track is on", ok);
@@ -960,8 +966,10 @@ static int song_test(void)
     sg_steps(3);
     ok &= heard(0, 50);
     sg_steps(2);
+    ok &= !trk[0].seq_n;                          /* (C's rest) */
+    sg_steps(2);
     ok &= heard(0, 70);
-    bad += check("  a launch moves the song: B at D's pass end, then on from B (D next)", ok);
+    bad += check("  a launch moves the song: B at D's pass end, then on from B (C's rest, D)", ok);
     sg_steps(1);
     song_top();                                   /* GLO + PLAY: each track's first entry, from the top */
     events_block(1);

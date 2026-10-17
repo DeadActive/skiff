@@ -786,6 +786,32 @@ static void lane_tune_decay(void)
     fails += bad != 0;
 }
 
+/* (#9) the hits' LFO runs free: a hit after the last one ended does not restart it (each hit heard the same LFO
+ * value, so LFO DEST AMP did nothing a listener could hear); a synth's fresh phrase still does */
+static void lfo_free(void)
+{
+    uint32_t ph, ok = 1;
+    kit_fresh();
+    trk[0].p[P_LRATE] = 100;
+    trk_note_on(&trk[0], 36, 110);
+    trk_note_off(&trk[0], 36);                           /* (the step's GATE over: no gate open) */
+    blocks_peak(40);
+    ph = trk[0].lfo_ph;
+    ok &= ph != (uint32_t)trk[0].p[P_LPHASE] << 25;
+    trk_note_on(&trk[0], 38, 110);
+    ok &= trk[0].lfo_ph == ph;
+    trk_note_off(&trk[0], 38);
+    memset(trk[0].v, 0, sizeof trk[0].v);
+    host_preset(&trk[0], 0u, 0);                       /* (ANALOG, engine 0) */
+    trk[0].p[P_LRATE] = 100;
+    blocks_peak(40);
+    trk_note_on(&trk[0], 60, 110);
+    ok &= trk[0].lfo_ph == (uint32_t)trk[0].p[P_LPHASE] << 25;
+    printf("drum_test: #9 a hit does not restart the LFO (it runs free on DRUM); a synth's note still does: %s\n",
+           ok ? "ok" : "FAIL");
+    fails += !ok;
+}
+
 static void engine(void)
 {
     /* the 8 lanes: KICK SNARE CLAP HAT CL HAT OP TOM RIM BELL (the closed hat first: it would choke the open one) */
@@ -1420,6 +1446,7 @@ int main(int argc, char **argv)
     controls();
     safety();
     retrigger();
+    lfo_free();
     choke();
     kick_speaker();
     keys();

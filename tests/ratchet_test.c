@@ -359,8 +359,8 @@ static int screens(void)
     ui.lane = 1;
     go_page(GR_TILES); ui.cursor = 8; ui.bank = 0;   /* ((U3, N2) a drum track's grid: STEP, no ROLL) */
     memset(host_screen, 0, sizeof host_screen); ui.force = 1; ui_draw();
-    y = Y_GRAPH + (uint32_t)graph_pad() + 6u + 4u;   /* lane 0's hits: y 18 .. 21 of the panel ((U3) STEP's grid, 6 px
-                                                       * above ROLL's of before) */
+    y = Y_GRAPH + (uint32_t)graph_pad() + 18u;      /* lane 0's hits: y 18 .. 21 of the grid, the grid the panel's pad
+                                                       * down ((1.2.1, #10) on STEP as on CHANCE and PLAY) */
     x = 40u + 12u;
     bad += check("  the DRUM grid draws an x3 hit in three parts", pr_is_bar(x, y) && !pr_is_bar(x + 2u, y) &&
                  pr_is_bar(x + 3u, y) && !pr_is_bar(x + 5u, y) && pr_is_bar(x + 6u, y));

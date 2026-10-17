@@ -30,12 +30,14 @@ static int32_t lfo_wave(track_t *t, uint32_t ph)
 
 /* the S&H value of a new LFO cycle. Parts 1..3 draw it from the shared generator (rng); part 4 has its
  * own xorshift, so the shared sequence, which also seeds the engines' noise (PHYS, VOICE, ..), does not
- * depend on part 4's LFO (the golden renders rely on it) */
+ * depend on part 4's LFO (the golden renders rely on it). (#9) The hits (DRUM, DRUM-X) too: their LFO runs free
+ * across them, and its cycles must not move the shared sequence the hits' own noise draws from */
 #define LFO_SHARED_RNG 3u
-static uint32_t lfo_rand(track_t *t)
+static __attribute__((noinline)) uint32_t lfo_rand(track_t *t)   /* ((#9) noinline: a cycle's start only, and kept out of
+                                                                   * the ISR's loops, whose layout it moved (+14 %)) */
 {
     uint32_t s = t->lfo_rnd ? t->lfo_rnd : 0x9E3779B9u;
-    if ((uint32_t)(t - trk) < LFO_SHARED_RNG)
+    if ((uint32_t)(t - trk) < LFO_SHARED_RNG && !ENGINES[t->engine]->oneshot)
         return rng();
     s ^= s << 13;
     s ^= s >> 17;
@@ -342,6 +344,16 @@ static void mono_remove(track_t *t, uint32_t note)
 }
 
 static void duck_note(const track_t *t, uint32_t note);   /* (Skiff) duck.c (fx.c) */
+/* a fresh phrase restarts the LFO and its fade; (#9) not on the hits (DRUM, DRUM-X): every hit restarted it, so each
+ * heard the same LFO value; it runs free across them (noinline: off the ISR's loops, as lfo_rand) */
+static __attribute__((noinline)) void lfo_restart(track_t *t)
+{
+    if (ENGINES[t->engine]->oneshot)
+        return;
+    t->lfo_ph = (uint32_t)t->p[P_LPHASE] << 25;
+    t->lfo_fade = 0;
+    t->lfo_t = 0;
+}
 static void trk_note_on(track_t *t, uint32_t note, uint32_t vel)
 {
     uint32_t any = 0, i, mode = trk_vmode(t);
@@ -361,11 +373,8 @@ static void trk_note_on(track_t *t, uint32_t note, uint32_t vel)
     mod_note(t, note, vel);                             /* the matrix's VEL / KEY / RAND */
     for (i = 0; i < NVOICE; i++)
         any |= t->v[i].gate;
-    if (!any) {                                        /* fresh phrase: LFO retrigger and fade */
-        t->lfo_ph = (uint32_t)t->p[P_LPHASE] << 25;
-        t->lfo_fade = 0;
-        t->lfo_t = 0;
-    }
+    if (!any)                                           /* fresh phrase: LFO retrigger and fade */
+        lfo_restart(t);
     if (mode == V_POLY) {
         voice_t *v = voice_alloc(t, note);
         t->nmono = 0;                                   /* no stale mono stack after a mode change */

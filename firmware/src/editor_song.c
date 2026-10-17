@@ -70,9 +70,8 @@ static int ed_song_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
                 r = transport_busy();                      /* (bank_put: 2 the transport runs or a flash error, 3 */
                 rc = (uint32_t)song_clear_at(k, e);        /* no flash, 4 PATTERNS FULL) */
                 rc = rc == 2u ? (r ? 3u : 5u) : rc == 3u ? 5u : rc;
-            } else if (a[0] == 5u) {
-                if (ent_pat(k, e) == PAT_NONE) rc = 1;
-                else lists.ent[k][e][1] = (uint8_t)(a[3] - 1u);
+            } else if (a[0] == 5u) {                       /* ((1.2.1, #12) an empty entry's too: a rest's length) */
+                lists.ent[k][e][1] = (uint8_t)(a[3] - 1u);
             } else
                 lists.song = a[1];
             bk.gen++;

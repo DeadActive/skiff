@@ -678,7 +678,7 @@ static void bank_poll_trk(uint32_t k)
         else if (!trk_pid[k])
             trk_name(k, id);
     }
-    trk_pid[k] = (uint8_t)(q->id + 1u);
+    trk_pid[k] = (uint8_t)(q->id == PAT_NONE ? 0u : q->id + 1u);   /* ((1.2.1, #12) a rest: on no pattern) */
     trk_sig[k] = q_sig[k];
     lists.cur[k] = (uint8_t)(q->slot % NENT);
     motion_lost = (uint8_t)((motion_lost & ~(1u << k)) | (q->mlost ? 1u << k : 0u));
@@ -693,15 +693,24 @@ static void bank_poll(void)
 }
 /* playing, nothing staged for track k (q not armed): entry e staged, launch mode m; a song's (adv) after reps passes of
  * the one playing. 0 staged, 1 an empty entry, 2 .. without its automation (AUTOMATION FULL), 4 PATTERNS FULL (nowhere
- * to keep what the track has: each swap may need a waiting slot, a new pattern an id) */
+ * to keep what the track has: each swap may need a waiting slot, a new pattern an id). (1.2.1, #12) The song's on an
+ * empty entry (song_poll: a rest): silence, no automation, the track's own LEN DIV SWING GATE DIR, so the rest's REPS
+ * count passes of the length the track has; on no pattern (trk_pid 0), so nothing is kept unless it was recorded into */
 static int stage_entry(uint32_t k, uint32_t e, uint32_t m, uint32_t adv, uint32_t reps)
 {
     track_t *t = &trk[k];
     launch_t *q = &launch_q[k];
-    uint32_t id = ent_pat(k, e), full = 0;
+    uint32_t id = ent_pat(k, e), full = 0, i;
     if (pend_free() <= staged_n() || (!trk_pid[k] && !seq_is_empty(t) && pool_alloc() == NPAT))
         return 4;
-    if (id == PAT_NONE || pat_decode(t, id, q->step, q->time, &q->motion))
+    if (adv && !bank_used(k, e)) {
+        for (i = 0; i < NSTEP; i++)
+            step_clear(&q->step[i]);
+        for (i = 0; i < 5u; i++)
+            q->time[i] = motion_base_value(t, BK_TIME[i]);
+        memset(&q->motion, 0, sizeof q->motion);
+        id = PAT_NONE;
+    } else if (id == PAT_NONE || pat_decode(t, id, q->step, q->time, &q->motion))
         return 1;
     if (motion.count - motion_count(t) + q->motion.count > MOTION_MAX) {
         q->motion.count = 0;                       /* (no room: the steps come in, not the automation) */
@@ -746,8 +755,10 @@ static int bank_switch(uint32_t k, uint32_t e)
         return ent_go(k, e);
     return stage_entry(k, e, launch_mode(), 0, 0);
 }
-/* ---- (phase 5) the song (SONG on: lists.song): each track plays its list in turn, the empty entries passed over, after
- * the last the first; an entry's repeats its passes (launch.c launch_due). Each track on its own: its next comes in at
+/* ---- (phase 5) the song (SONG on: lists.song): each track plays its list in turn, after the last the first; an entry's
+ * repeats its passes (launch.c launch_due). (1.2.1, #12) An empty entry between a track's first and last pattern is a
+ * rest (silence for its REPS passes of the track's LEN); the empty ones after its last end the list (were: every empty
+ * entry passed over). Each track on its own: its next comes in at
  * its own pass end. PLAY goes on from the entry each track is on; GLO + PLAY from the first ones (song_top); a launch
  * (PERFORM, a scene) moves a track's place in it ---- */
 /* each frame (ui_input, after bank_poll): SONG on and playing, each track's next entry staged for its pass end (one
@@ -755,7 +766,7 @@ static int bank_switch(uint32_t k, uint32_t e)
  * staging dropped */
 static void song_poll(void)
 {
-    uint32_t k, n, e = 0, cur;
+    uint32_t k, e, cur, first, last;
     for (k = 0; k < NTRK; k++) {
         launch_t *q = &launch_q[k];
         if (!lists.song) {
@@ -768,12 +779,14 @@ static void song_poll(void)
         if (!song.playing || q->armed || q->done)
             continue;
         cur = lists.cur[k] % NENT;
-        for (n = 1; n < NENT; n++) {
-            e = (cur + n) % NENT;
-            if (ent_pat(k, e) != PAT_NONE && pool_used(ent_pat(k, e)))
-                break;
-        }
-        if (n < NENT)
+        for (first = 0; first < NENT && !bank_used(k, first); first++)
+            ;
+        if (first == NENT)
+            continue;
+        for (last = NENT - 1u; !bank_used(k, last); last--)
+            ;
+        e = cur >= first && cur < last ? cur + 1u : first;   /* (the entries between: a pattern or a rest) */
+        if (e != cur)
             (void)stage_entry(k, e, LAUNCH_LOOP, 1u, lists.ent[k][cur][1] + 1u);
     }
 }

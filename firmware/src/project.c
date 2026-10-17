@@ -1561,6 +1561,93 @@ static void project_mark_boot(int restored)
     }
 }
 
+/* (1.2.1, #6) SAVE > PROJECT's DELETE: the slot emptied, in flash (an empty record: st_load reads 0) and in its RAM copy
+ * (.noinit, kept over a warm reset; persist_boot and project_load read the flash only when it is empty). The music
+ * playing stays; if it was this slot's it is on no slot now, and unknown counts as changed (project_dirty: nothing is
+ * lost without a question). Patterns only it named stay in the pool, unused (PATTERNS can clear them).
+ * 0 done, 1 refused (playing, an empty slot), 2 failed (the slot as it was) */
+static int project_erase(uint32_t slot)
+{
+    slot &= 3u;
+    if (transport_busy()) {
+        ui_message("STOP TO DELETE");
+        return 1;
+    }
+    if (!project_used(slot)) {
+        ui_message("EMPTY SLOT");
+        return 1;
+    }
+#if FELUCCA_FLASH
+    if (flash_ok && st_save(OBJ_PROJECT0 + slot, &proj_wire, 0)) {
+        ui_message("DELETE ERROR");
+        return 2;
+    }
+#endif
+    memset(&proj_slot[slot], 0, sizeof proj_slot[slot]);
+    if (proj_cur == slot) {
+        proj_cur = PROJ_NO_SLOT;
+        pj_clean = autosave_sig() + 1u;
+        pj_at = 0;
+    }
+#if FELUCCA_FLASH
+    if (flash_ok) { ui_message("PROJECT DELETED"); return 0; }
+#endif
+    ui_message("DELETED UNTIL POWER OFF");
+    return 0;
+}
+
+/* (1.2.1, #6) SAVE > PROJECT's NEW (KNOB 3 on an empty slot): the power-on project (felucca_init: the tracks' default
+ * sounds, no steps, no lists, no motion, no scenes, the default DRUM-X kit), the way a load puts one in (stopped, the
+ * tracks' patterns kept first, the ISR kept out while the sequencer's state changes). The unit's CLOCK MIDI IN TUNE and
+ * SAVE's slot stay; unnamed and on no slot until SAVE writes one, with nothing to lose (clean) */
+static void project_new(void)
+{
+    uint32_t i, k;
+    transport_stop_now();
+    (void)stage_cancel();
+    if (keep_all() == 1) {
+        ui_way("PATTERNS FULL", WAY_PATTERNS);
+        return;
+    }
+    transport_req = 2;
+    panic_req = (1u << NTRK) - 1u;
+    fm1_irq_off();
+    seq_stop();
+    launch_drop();
+    transport_req = 0;
+    memset(&motion, 0, sizeof motion);
+    memset(motion_active, 0, sizeof motion_active);
+    motion_base_valid = 0;
+    motion_lost = 0;
+    lists_clear();
+    scene_forget();
+    for (i = 0; i < G_COUNT; i++)
+        if (i != G_SLOT && i != G_LOAD && i != G_SAVE && !unit_g_id(i))
+            song.g[i] = GP[i].def;
+    memcpy(dx_kit, DX_KIT_DEF, sizeof dx_kit);
+    song.sel = 0;
+    fm1_irq_on();
+    undo_clear();
+    undo_depth++;                                       /* (no undo copies of these loads) */
+    fm6_init();
+    for (k = 0; k < NTRK; k++) {                        /* (as felucca_init; the engine switch is the ISR's, faded) */
+        track_t *t = &trk[k];
+        track_defaults(t);
+        t->user = 0;
+        set_engine_of(t, TRK_DEF[k][0]);
+        apply_preset_to(t, TRK_DEF[k][1]);
+        track_defaults_steps(t);
+    }
+    undo_depth--;
+    proj_name[0] = 0;
+    proj_cur = PROJ_NO_SLOT;
+    project_clean();
+    sync_reload = 1;
+    ui.force = 1;
+    ui_message("NEW PROJECT");
+    memset(snd_said, 0, sizeof snd_said);
+}
+
 /* nothing going on that an erase (the audio stopped ~40 ms) would be heard in, or would race */
 static int autosave_quiet(void)
 {

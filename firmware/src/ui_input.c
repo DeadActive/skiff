@@ -698,9 +698,8 @@ static void song_knob(uint32_t slot, int32_t steps)
         }
         sg.pick = (uint8_t)(v == own ? 0u : v);
         sg.pick_at = (uint8_t)(1u + k * 16u + e);
-    } else if (slot == 2u) {
-        if (cur != PAT_NONE)
-            lists.ent[k][e][1] = (uint8_t)clamp((int32_t)lists.ent[k][e][1] + steps, 0, 15);
+    } else if (slot == 2u) {                              /* ((1.2.1, #12) an empty entry's too: a rest's length) */
+        lists.ent[k][e][1] = (uint8_t)clamp((int32_t)lists.ent[k][e][1] + steps, 0, 15);
     } else {
         lists.song = steps > 0;
     }
@@ -784,10 +783,12 @@ static void edit_param(uint32_t slot, int32_t steps)
         return;
     }
 #endif
-    if (pg->graph == GR_USER && slot == 2u) {             /* (Skiff U2) KNOB 3: ERASE, one step further NAME */
-        int32_t st = ui.act == 3u ? 1 + (int32_t)ui.act2 : 0;
+    if ((pg->graph == GR_USER && slot == 2u) || (pg->graph == GR_SLOTS && slot == 1u)) {   /* (Skiff U2) USER's KNOB 3:
+                                                           * ERASE, one step further NAME; (1.2.1, #6) PROJECT's KNOB 2:
+                                                           * DELETE, then NAME */
+        int32_t st = ui.act == slot + 1u ? 1 + (int32_t)ui.act2 : 0;
         st = clamp(st + steps, 0, 2);
-        ui.act = st ? 3u : ui.act == 3u ? 0u : ui.act;
+        ui.act = st ? (uint8_t)(slot + 1u) : ui.act == slot + 1u ? 0u : ui.act;
         ui.act2 = st == 2;
         return;
     }
@@ -889,8 +890,14 @@ static void act_do(void)
         return;
     }
     if (cur_page()->graph == GR_SLOTS && c == 1u) {       /* ((Skiff U2) PROJECT's NAME: was EDIT) */
-        ui.act = 0;
-        name_rename();
+        int nm = ui.act2;
+        ui.act = ui.act2 = 0;
+        if (nm)
+            name_rename();
+        else if (project_used(k) && !transport_busy())  /* ((1.2.1, #6) DELETE: the dialog first) */
+            confirm_open(CF_ERASE_PROJ, k);
+        else
+            (void)project_erase(k);                       /* (says why not: STOP TO DELETE, EMPTY SLOT) */
         return;
     }
     id = cur_page()->id[c & 3u];
@@ -899,10 +906,14 @@ static void act_do(void)
     switch (id) {
     case G_LOAD:                                          /* (Skiff U1) over the session: the dialog first ((U3, A2)
                                                            * when it changed since its last save or load) */
-        if (project_used(k) && project_changed())
+        if (!project_used(k) && project_changed())        /* ((1.2.1, #6) an empty slot: NEW, over changed music */
+            confirm_open(CF_NEW_PROJ, k);                 /* the dialog first) */
+        else if (!project_used(k))
+            project_new();
+        else if (project_changed())
             confirm_open(CF_LOAD_PROJ, k);
         else
-            project_load(k);                              /* ("EMPTY SLOT") */
+            project_load(k);
         break;
     case G_SAVE:                                          /* the NAME screen writes it */
         if (transport_busy())
@@ -1070,6 +1081,7 @@ static void layer_lock_input(uint32_t pressed);
 static void layer_shift_lock(uint32_t pressed, uint32_t now);
 static uint32_t layer_bits_all(void);
 static void layer_unlock(void);
+static void layer_home_lock(void);
 static void rec_clear_poll(void);
 static void tl_undo_take(track_t *t, const char *name);
 
@@ -1256,8 +1268,10 @@ static void ui_input(void)
         notes = 0;                                      /* (the keys are the layer's, not the grid's or a step's) */
         if (pressed & (1u << panel.btn[B_SAVE]))       /* no UNDO, no page */
             ui.save_t0 |= 2u;
-        if ((pressed & (1u << panel.btn[B_HOME])) && !ui.lock)   /* no menu, no HOME ((Skiff U2) locked: HOME as */
-            ui.home_t0 |= 2u;                          /* always, SHIFT, its tap closing the lock) */
+        if ((pressed & (1u << panel.btn[B_HOME])) && !ui.lock) {   /* no menu, no HOME ((Skiff U2) locked: HOME */
+            ui.home_t0 |= 2u;                          /* as always, SHIFT, its tap closing the lock); (#13) the layer */
+            layer_home_lock();                         /* locked, as SHIFT + its button */
+        }
         for (k = 0; k < 4u; k++)                        /* KNOB 1..4: the layer's (ui_layer.c layer_knob) */
             if ((ks[k] = panel_enc(EN_K1 + k)) != 0)
                 combo = 1;
@@ -1362,6 +1376,10 @@ static void ui_input(void)
                 undo_label = "INIT"; sound_init();   /* ((Skiff phase 7) DRUM-X: the factory kit too) */
             } else if (kind == CF_LOAD_PROJ) {
                 project_load(ui.confirm_trk & 3u);
+            } else if (kind == CF_ERASE_PROJ) {         /* ((1.2.1, #6) SAVE > PROJECT's DELETE, NEW) */
+                (void)project_erase(ui.confirm_trk & 3u);
+            } else if (kind == CF_NEW_PROJ) {
+                project_new();
             } else if (kind == CF_RESET_SET) {          /* ((Skiff U4, A3) MENU > SYSTEM > RESET SETTINGS) */
                 settings_reset();
                 ui_message("SETTINGS RESET");
@@ -1507,7 +1525,7 @@ static void ui_input(void)
         } else if (!ui.home) {
             select_turn(s);
         } else {                                        /* MENU > BPM LOCK ON (#58), on HOME (no pages): only with GLO
-                                                         * held (and on GLO > GLOBAL, GLO's F4 TAP); says so once a burst */
+                                                         * held (and on GLO > GLOBAL, GLO's G4 TAP); says so once a burst */
             if (!lock_ms || fm1_ms - lock_ms > 1000u)
                 ui_way("BPM LOCKED", "GLO + SELECT: TEMPO");   /* ((Skiff U4) and how) */
             lock_ms = fm1_ms | 1u;

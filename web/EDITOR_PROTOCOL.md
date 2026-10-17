@@ -133,7 +133,7 @@ The defaults change nothing: the sound is the same as before the parameters exis
 (ids 1..4) shapes the whole voice; these shape each operator on top of it. Other engines ignore them, and the
 device shows the pages for DIGITAL only. Descriptors are the same for every engine.
 
-The chord keys (SCL > CHORD on the device, `firmware/src/chord.c`) are two track parameters at ids 81, 82:
+The chord keys (SEL > CHORD on the device, `firmware/src/chord.c`) are two track parameters at ids 81, 82:
 
 | id | label | values |
 | --- | --- | --- |
@@ -142,7 +142,7 @@ The chord keys (SCL > CHORD on the device, `firmware/src/chord.c`) are two track
 
 With CHRD on, a key, a MIDI note of that track and so the arp's held notes play the chord (at most 4 notes),
 and live recording writes it into one step; MONO / LEGATO / UNISON play its root; a kit (DRUM, SLICE)
-ignores it. Both defaults are 0: nothing changes until CHRD is set. They are the track's, like ARP and SCL: a
+ignores it. Both defaults are 0: nothing changes until CHRD is set. They are the track's, like ARP and SCALE: a
 sound load (a factory preset, `UP_LOAD`, an audition) keeps them, and motion never records them.
 
 The DRUM lane levels (EDIT > LANES on the device (Skiff U3: one page, KNOB 1 the lane), `firmware/src/eng_drum.c`) are eight track parameters at
@@ -458,7 +458,7 @@ grid lives in the steps themselves, so every engine has it:
 - **Sound loads and undo.** A load that changes a track's sound (`PRESET`, `SET` of `G_ENGSEL`, `UP_LOAD`,
   and the same on the device) changes the sound only: the engine and the parameters of the sound. It
   never changes the steps, nor the track's own parameters: `P_LEVEL`, `P_PAN`, `P_MUTE` (0, 39, 40), the
-  ARP pages, SCL and LEN / DIV / SWING / GATE (17..32), the SLICER (45..48). It does drop the track's recorded
+  ARP pages, SCALE and LEN / DIV / SWING / GATE (17..32), the SLICER (45..48). It does drop the track's recorded
   motion (the device's SAVE held brings it back). (Before 1.0 a preset also
   set the arp and replaced the steps with its pattern; a factory preset turned the SLICER off.) The byte
   layout of every command is unchanged. Patterns are loaded on the device (SAVE > PATTERNS, PERFORM) or
@@ -865,7 +865,7 @@ empty) and 0..63 elsewhere. Don't resend a change that timed out (a COPY sent tw
 | cmd | Request args | Reply args |
 | --- | --- | --- |
 | 78 POOL | none (the pool), or 1, pattern 0..63: CLEAR it (only one nothing uses, only stopped; it can't be undone) | op, rc (0 cleared, 1 nothing to clear, 2 in use, 3 playing, 4 failed), then for each of the 64 patterns: its LEN (0: empty), how many use it (the entries naming it in the lists and the saved projects, and a track on it that no entry names; at most 127) |
-| 79 LIST | none (the lists), or op, track, entry 0..15 [, value]: 1 SET (value: a kept pattern 1..64; the track on that entry: it comes in as a launch), 2 COPY (a new pattern, a copy of the entry's; a track on it goes on with the copy), 3 PLAY (the track to the entry: at once stopped, at the LAUNCH point playing), 4 CLEAR (only stopped; its pattern is erased when nothing else names it; a track on it goes empty), 5 REPS (value 1..16; an entry naming a pattern); or 6, on: SONG | op, rc (0 done, 1 empty: an empty entry, nothing to copy, a pattern not kept; 2 done without its automation; 3 playing; 4 PATTERNS FULL; 5 failed), SONG 0/1, then for each track: the entry it is on (127: on no entry's pattern), the entry staged (127: none), the pattern it is on (0..63, 127 none), then its 16 entries: pattern (1..64, 0 empty), REPS − 1 |
+| 79 LIST | none (the lists), or op, track, entry 0..15 [, value]: 1 SET (value: a kept pattern 1..64; the track on that entry: it comes in as a launch), 2 COPY (a new pattern, a copy of the entry's; a track on it goes on with the copy), 3 PLAY (the track to the entry: at once stopped, at the LAUNCH point playing), 4 CLEAR (only stopped; its pattern is erased when nothing else names it; a track on it goes empty), 5 REPS (value 1..16; an empty entry's too, a rest's length in the song since Skiff 1.2.1); or 6, on: SONG | op, rc (0 done, 1 empty: an empty entry, nothing to copy, a pattern not kept; 2 done without its automation; 3 playing; 4 PATTERNS FULL; 5 failed), SONG 0/1, then for each track: the entry it is on (127: on no entry's pattern), the entry staged (127: none), the pattern it is on (0..63, 127 none), then its 16 entries: pattern (1..64, 0 empty), REPS − 1 |
 | 80 PERFORM | none (the state), or op [, value]: 1 STORE (scene 0..15: the entry each track is on, its mute), 2 RECALL (scene), 3 MUTE (track: the other way, staged while playing; a staged one taken back), 4 CANCEL (all that is staged: entries, mutes; the song's next stays), 5 LAUNCH (0 LOOP, 1 BAR, 2 BEAT, 3 NOW; saved with the settings) | op, rc (RECALL: 0 done or staged, 1 empty, 2 a pattern without its automation, 4 PATTERNS FULL; LAUNCH: as UI_SET's), LAUNCH, the scene recalled or stored last (127 none), the scenes kept (16 bits, 7 a byte, low first), then for each track: muted 0/1, its mute staged (0 none, 1 to unmute, 2 to mute) |
 
 Nothing is pushed: the editor reads LIST and PERFORM again about once a second while it shows them (with TRANSPORT;

@@ -4,8 +4,8 @@
  * are its shortcuts and its map shows over the page. One table (LAYERS) drives the gesture, the keys, the knobs,
  * the LEDs and the overlay:
  *   FX   HOLD  the performance effects (perform.c) and the track mutes while held; KNOB 1..4 its macros
- *   GLO  SET   black keys F#3 G#3 A#3 C#4 D#4 F#4: T1..T6 MUTE (latched; lit = sounding); F3..B3, E4, G4 SOLO
- *              T1..T6 while held (HOLD cells, a corner triangle), C4 UNMUTE ALL, D4 FILL, F4 TAP tempo; KNOB 1..4
+ *   GLO  SET   black keys F#3 G#3 A#3 C#4 D#4 F#4: T1..T6 MUTE (latched; lit = sounding); F3..D4 SOLO
+ *              T1..T6 while held (HOLD cells, a corner triangle), E4 UNMUTE ALL, F4 FILL, G4 TAP tempo; KNOB 1..4
  *              the LEVEL of the four tracks shown (ui.c trk_top);
  *              GLO + PLAY: from the top without stopping
  *   SCL  SET   any key: its note name is ROOT; KNOB 1..4 ROOT SCL CHRD VOIC (LY_SCL: the SCL page's first two,
@@ -37,7 +37,8 @@
  * NAME or the UPDATE MODE countdown. After a tap, until the layer has been opened once: "HOLD [GLO] QUICK"
  * (the seen bits are kept with the settings, favorites.c spare byte).
  * The lock ((Skiff U2, the review's G2; it was a double tap, #83, which two quick page taps set off): SHIFT (HOME
- * held) + a layer's button opens its map and keeps it open with no button held (ui.lock), over the page as it is:
+ * held) + a layer's button, or (#13) the button held + HOME, opens its map and keeps it open with no button held
+ * (ui.lock), over the page as it is:
  * ly_down() counts the lock as the button held, so the keys (seq.c keyboard_block: kb_lock), KNOB 1..4, OCT-, PLAY act
  * exactly as held. A locked FX layer latches (perf_latch_on: an effect key toggles; it was MENU > FX LATCH). A tap of
  * its button closes it (the press hands it back to the button: held on, a peek; let go, closed; never a tap), so does
@@ -53,7 +54,7 @@ static const layer_t LAYERS[LAYER_N] = {
     {0, 0, 0, "", {{0, 0}, {0, 0}, {0, 0}}},
     {B_FX, LK_HOLD, FAM_HOME, "[FX] HOLD", {{KC_KEYS, "EFFECTS"}, {KC_K14, "MACROS"}, {0, 0}}},   /* (LET GO: the header's HOLD) */
     {B_GLO, LK_SET, FAM_HOME, "[GLO] SET", {{KC_PLAY, "RESTART"}, {KC_OCTDN, "UNDO"}, {KC_GLO, "DONE"}}},
-    {B_SCL, LK_SET, FAM_SCL, "[SCL] SET", {{KC_KEYS, "ROOT"}, {KC_OCTDN, "UNDO"}, {KC_SCL, "DONE"}}},
+    {B_SCL, LK_SET, FAM_SCL, "[SEL] SET", {{KC_KEYS, "ROOT"}, {KC_OCTDN, "UNDO"}, {KC_SCL, "DONE"}}},
     {B_EDIT, LK_SET, FAM_HOME, "[EDIT] SET", {{KC_KEYS, "ENGINE"}, {KC_OCTDN, "UNDO"}, {KC_EDIT, "DONE"}}},
     {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] TOOLS", {{KC_KEYS, "TOOLS"}, {KC_OCTDN, "UNDO"}, {KC_SEQ, "DONE"}}},
     {B_REC, LK_SET, FAM_HOME, "[REC] SET", {{KC_KEYS, "RECORDING"}, {KC_OCTDN, "UNDO"}, {KC_REC, "DONE"}}},
@@ -63,7 +64,7 @@ static const layer_t LAYERS[LAYER_N] = {
 };
 static const uint8_t LY_KC[LAYER_N] = {0, KC_FX, KC_GLO, KC_SCL, KC_EDIT, KC_SEQ, KC_REC, KC_ARP};
 /* SCL's knobs: the key and its chord (cur_page() while the layer edits or draws them: page_over) */
-static const page_t LY_SCL = {"SCL", FAM_SCL, SC_TRACK, GR_SCALE, {P_ROOT, P_SCALE, P_CHRD, P_VOIC}};
+static const page_t LY_SCL = {"SCALE", FAM_SCL, SC_TRACK, GR_SCALE, {P_ROOT, P_SCALE, P_CHRD, P_VOIC}};
 /* SEQ TOOLS' knobs: the PATTERN page's (the length the tools work in) */
 static const page_t LY_SEQ = {"PATTERN", FAM_SEQ, SC_TRACK, GR_STEPS, {P_SLEN, P_SDIV, P_SSWING, P_SGATE}};
 static const page_t *ly_page(uint32_t l) { return l == LAYER_SCL ? &LY_SCL : l == LAYER_SEQ ? &LY_SEQ : 0; }
@@ -214,6 +215,16 @@ static void layer_shift_lock(uint32_t pressed, uint32_t now)
     layer_opened(l);
 }
 static void layer_unlock(void) { if (ui.lock) layer_let_go(1); }   /* (HOME tapped: ui_input) */
+/* (#13) a layer's button held, then HOME: locked, as SHIFT + the button (the press is a combo: the map opens this pass,
+ * its snapshot kept if it was open). REC never: it is never armed held (ly_avail); a dead one never */
+static void layer_home_lock(void)
+{
+    if (ui.ly && !(ui.ly_t0 & LY_DEAD)) {
+        ui.lock = ui.ly;
+        ui.entry_open = 0;
+        ui.force = 1;
+    }
+}
 /* every layer's button (SHIFT + one locks it), REC's and SEQ's on every page */
 static uint32_t layer_bits_all(void)
 {
@@ -469,10 +480,11 @@ static void perf_slot_key(uint32_t k, uint32_t p)
     entry_ui(p);
 }
 
-/* GLO's white keys F3 .. G4 (the keys, their LEDs, the solo bits): SOLO T1..T4, C4 ALL, D4 FILL, (Skiff phase 6) E4
- * SOLO T5, F4 TAP, G4 SOLO T6; a track's number, or GW_*. The black keys F#3 .. F#4: MUTE T1..T6 */
+/* GLO's white keys F3 .. G4 (the keys, their LEDs, the solo bits): SOLO T1..T6 on F3..D4, then E4 ALL, F4 FILL,
+ * G4 TAP, in the screen's order (#11; 1.2 had T5/T6 on E4/G4 between them); a track's number, or GW_*. The black
+ * keys F#3 .. F#4: MUTE T1..T6 */
 enum { GW_ALL = 8, GW_FILL, GW_TAP, GW_NONE };
-static const uint8_t GLO_W[9] = {0, 1, 2, 3, GW_ALL, GW_FILL, 4, GW_TAP, 5};
+static const uint8_t GLO_W[9] = {0, 1, 2, 3, 4, 5, GW_ALL, GW_FILL, GW_TAP};
 _Static_assert(NTRK <= 6u, "GLO: a SOLO key for every track");
 static uint32_t glo_white(uint32_t k)
 {
@@ -693,7 +705,7 @@ static uint32_t layer_leds(uint32_t *br)
             can = e < PF_N && ((ok >> e) & 1u);
             on = can && ((held >> e) & 1u);
         } else if (l == LAYER_GLO) {                    /* sounding lit; SOLO held lit, the others, C4, F4 breathe; */
-            e = glo_white(k);                           /* (Skiff) D4 FILL too */
+            e = glo_white(k);                           /* (Skiff) F4 FILL too */
             on = b ? p < NTRK && glo_sounding(p) : (e < NTRK && ((lys.solo >> k) & 1u)) || (e == GW_FILL && seq_fill);
             can = !b && (e < NTRK || e == GW_ALL || e == GW_FILL || (e == GW_TAP && !song.g[G_CLOCK]));
         } else if (l == LAYER_SCL) {                    /* the root lit, the scale's notes breathe */
@@ -897,13 +909,13 @@ static void layer_fx(void)
 static void layer_glo(void)
 {
     uint32_t e;
-    for (e = 0; e < NTRK; e++) {                        /* (Skiff phase 6) SOLO 1..6 while held: F G A B, E G (GLO_W); */
+    for (e = 0; e < NTRK; e++) {                        /* (Skiff phase 6) SOLO 1..6 while held: F G A B C D (GLO_W); */
         l6_solo(e, (perf_solo >> e) & 1u ? LS_HELD : LS_OFF);   /* MUTE 1..6, latched: F# G# A# C# D# F# */
         l6_mute(e, trk[e].p[P_MUTE] ? LS_MUTE : LS_OFF, ICON_MUTE);
     }
-    l6_wide(0, "C", ICON_MUTE, "ALL", LS_OFF);          /* (unmute all) */
-    l6_wide(1, "D", ICON_DRUM, "FILL", seq_fill ? LS_HELD : LS_OFF);
-    l6_wide(2, "F", ICON_TEMPO, "TAP", song.g[G_CLOCK] ? LS_DIM : LS_OFF);
+    l6_wide(0, "E", ICON_MUTE, "ALL", LS_OFF);          /* (unmute all) */
+    l6_wide(1, "F", ICON_DRUM, "FILL", seq_fill ? LS_HELD : LS_OFF);
+    l6_wide(2, "G", ICON_TEMPO, "TAP", song.g[G_CLOCK] ? LS_DIM : LS_OFF);
 }
 static void layer_scl(void)                             /* KNOB 2's scales, 4 x 4, the one now selected */
 {

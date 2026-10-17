@@ -14,8 +14,9 @@ synths and drums, patterns and songs, live performance, and a screen that shows 
   <img src="https://img.shields.io/badge/hardware-M--VAVE%20FM--1-555" alt="Hardware: M-VAVE FM-1">
 </p>
 
-<p align="center"><b>New in 1.2:</b> more sounds, a list by type, and new ways to shape them ·
-<a href="https://github.com/illuminus5/skiff/releases/tag/v1.2">the release notes</a></p>
+<p align="center"><b>New in 1.2.1:</b> fixes and wishes from your issues: rests in a song, NEW and DELETE for projects,
+the GLO keys in order, the battery always shown ·
+<a href="https://github.com/illuminus5/skiff/releases/tag/v1.2.1">the release notes</a></p>
 
 ![Skiff on the FM-1's screen: HOME, a step page, PERFORM, the MIXER, DELAY and the SHIFT map](docs/skiff.png)
 
@@ -39,12 +40,12 @@ Custom firmware, at your own risk; the way back to the official firmware is belo
 connect the FM-1 by USB and follow it. The same page takes the FM-1 back to the official V15 firmware, saving a
 complete backup of your music first.
 
-**With Python 3:** download `skiff-1.2.fwsc` from the [latest release](https://github.com/illuminus5/skiff/releases/latest)
+**With Python 3:** download `skiff-1.2.1.fwsc` from the [latest release](https://github.com/illuminus5/skiff/releases/latest)
 and, with this repository's `tools/` folder,
 
 ```
 pip install mido python-rtmidi
-python tools/fm1_install.py skiff-1.2.fwsc
+python tools/fm1_install.py skiff-1.2.1.fwsc
 ```
 
 It takes about two minutes and the FM-1 restarts on Skiff.
@@ -233,7 +234,7 @@ FM6 patches from `.syx` files and saves complete backups.
 - **Six tracks**, each its own engine and sound; 8 voices shared between them. T5 and T6 play every engine but
   PHYS and GRAIN. ALGORITHM selects the track on every page; HOME, PERFORM, SONG and the MIXER show all six
 - **Fourteen engines** (below), DRUM-X among them, each with at least 8 factory presets, 143 in all
-- **Sounds by type:** every factory sound is a BASS, LEAD, PAD, KEYS, PLUCK, DRUM or FX sound; SAVE › PRESETS'
+- **Sounds by type** (1.2): every factory sound is a BASS, LEAD, PAD, KEYS, PLUCK, DRUM or FX sound; SAVE › PRESETS'
   LIST (KNOB 4) shows one type across every engine, and the PRESETS knob then steps through it on every page
   ([Find a sound by type](#find-a-sound-by-type))
 - **FM6 from scratch** (1.1): every value of an FM6 patch on the unit (EDIT › OPERATOR and ALL OPS), INIT a bare
@@ -264,18 +265,20 @@ FM6 patches from `.syx` files and saves complete backups.
 - **DUCK** (FX › DUCK): a track dips under another track's hits, the sidechain pump
 - **Effects:** per track DIST, in four types on FX › DRIVE (SOFT, HARD, FOLD, BITS) with a TONE, and the SLICER;
   the buses on GLO: chorus (CHORUS, FLANGER or PHASER, with FEEDBACK), delay and reverb (ROOM, SPRING or HALL); the
-  FX layer (hold FX): fourteen effects on the white keys and cuts on the black ([the keys](#the-fx-layers-keys))
-- **Quick layers:** hold FX, GLO, SCL, EDIT, ARP or SEQ for its map on the keys and knobs; SHIFT + the button
-  keeps it open. The GLO layer: solos, mutes, FILL, tap tempo
+  FX layer (hold FX): fourteen effects on the white keys and cuts on the black ([the keys](#the-fx-layers-keys));
+  new in 1.2: DRIVE's types and TONE, the chorus's modes, HALL, and GATE, DUB, FLANGE and VINYL on the FX layer
+- **Quick layers:** hold FX, GLO, SEL, EDIT, ARP or SEQ for its map on the keys and knobs; SHIFT + the button,
+  or the button held + HOME (1.2.1), keeps it open. The GLO layer: solos, mutes, FILL, tap tempo
 - **DRUM-X** (from [JIANT FM](https://github.com/juanjiant-bit/JIANT)): a synthesized kit of 8 sounds, each
   with an A and a B patch and MORPH between them, one kit per project, edited a sound at a time on EDIT › SOUND;
-  eight kits come as presets, each loading its own (FACTORY, DEEP, CLICK, INDUSTRIAL, SOFT, GLITCH, TRIBAL, LASER)
+  eight kits come as presets (1.2), each loading its own (FACTORY, DEEP, CLICK, INDUSTRIAL, SOFT, GLITCH, TRIBAL, LASER)
 - **Chord keys, arpeggiator, scales:** in-key chords with voicings; an arpeggiator with 14 modes, CHANCE,
   SWING and HOLD; 16 scales with a white-key mode; MONO, LEGATO, UNISON and glide
-- **Modulation matrix:** 4 slots a track; the sources the LFO, ENV and a second envelope of its own (ENV › ENV 2),
+- **Modulation matrix:** 4 slots a track; the sources the LFO, ENV and a second envelope of its own (ENV › ENV 2, 1.2),
   velocity, the key, a random value and MIDI controllers
-- **Presets and projects:** factory presets, 32 user sounds and 4 projects, named on the device; the music
-  comes back at power-on (RESTORE LAST, an autosave of its own)
+- **Presets and projects:** factory presets, 32 user sounds and 4 projects, named on the device; SAVE › PROJECT
+  loads, saves, renames and deletes them, and NEW on an empty slot starts a blank project (1.2.1); the music comes back at
+  power-on (RESTORE LAST, an autosave of its own)
 - **Screen and LEDs:** the BLOCKS look in Barlow Condensed with Fukiai icons; six themes; MENU › LARGE for tall
   cards; messages say the way out; idle buttons glow, what can be pressed breathes, never blinks
 - **USB and MIDI:** class-compliant MIDI in and out, TRS MIDI in, a stereo USB audio input to record the
@@ -296,8 +299,10 @@ The notes live in **patterns**, and a project says which ones each track plays:
 - **Playing an entry** (SEQ › SONG's OCT+, a PERFORM key, a scene, or a double-click in the editor) switches at once
   when stopped, and when playing at the **LAUNCH** point: the track's pass end (LOOP), the next BAR, BEAT, or NOW.
 - **SONG ON:** while playing, each track moves to its next entry once the current one's REPS are played, at its own
-  pass end; empty entries are skipped, and after the last comes the first. Tracks of different lengths move on at
-  different times. **SONG OFF:** each track loops its entry. GLO + PLAY starts every track from its first entry.
+  pass end; an empty entry between two patterns is a **rest**, silent for its REPS passes of the track's length
+  (1.2.1); the empty ones after the last end the list, and after the last comes the first. Tracks of different
+  lengths move on at different times. **SONG OFF:** each track loops its entry. GLO + PLAY starts every track from
+  its first entry.
 - **Scenes** (16, in the project) keep the entry each track is on and every mute; SAVE held + a key stores one, a key
   recalls it, staged so that it all lands together.
 
@@ -311,7 +316,7 @@ by the keys, with what each key is in Skiff.
 - Tap a page button for its pages (again, or SELECT, for the next one); every family reopens the page you left
 - **HOME** goes home. **Held**, it is SHIFT: its map shows what every control does on the page; let go alone,
   the MENU opens
-- Hold FX, GLO, SCL, EDIT, ARP or SEQ for its layer; **SHIFT + the button** keeps it open (the header says
+- Hold FX, GLO, SEL, EDIT, ARP or SEQ for its layer; **SHIFT + the button** (or the button held, then HOME) keeps it open (the header says
   LOCKED), the button closes it. A locked FX layer latches its effects
 - **SAVE** tapped: its pages (PRESETS, USER, PATTERNS, PROJECT); **held**: undo. **SHIFT + SAVE**: TAKE
 - **REC** arms or disarms the selected track the moment it is pressed. **SHIFT + REC** opens the REC layer:
@@ -440,7 +445,7 @@ every setting back as a new unit has it. The web editor's Settings tab reads and
 - **KNOB ACCEL:** OFF (one step per click) or ON: a fast, steady turn of a wide value moves 2 to 4 steps
   per click, up to 8 on values of more than 64 steps, the FX and GLO layers' knobs included; lists never
   jump. ON or OFF, every click of a fast turn counts
-- **BPM LOCK:** ON (default), SELECT turns the pages of a family; hold GLO and turn SELECT, tap F4 in the GLO
+- **BPM LOCK:** ON (default), SELECT turns the pages of a family; hold GLO and turn SELECT, tap G4 in the GLO
   layer or use GLO › GLOBAL for the tempo. OFF, SELECT is the tempo everywhere, Felucca's way. Skiff turns it
   ON once on a unit coming from Felucca; DRUM-X's SOUND sheet and FM6's OPERATOR and ALL OPS move their rows with
   SELECT either way
@@ -475,7 +480,7 @@ every setting back as a new unit has it. The web editor's Settings tab reads and
 
 ## Scale keyboard
 
-On the **SCL** page, set **QNT** to WHITE to play the selected scale using only the white keys (SNAP keeps every key
+On the **SCALE** page (the **SEL** button), set **QNT** to WHITE to play the selected scale using only the white keys (SNAP keeps every key
 and rounds it down to the scale). C4 plays **ROOT**; consecutive white keys play consecutive scale notes above and
 below it. Black keys are silent, including during live recording and step entry. **TRN** transposes the resulting
 notes; the octave buttons shift them by full octaves. Set QNT to OFF for the normal chromatic keyboard. QNT SEQ snaps
@@ -486,7 +491,7 @@ Scales: chromatic (CHR), major (MAJ), natural minor (MIN), Dorian (DOR), Mixolyd
 minor pentatonic (MPEN), harmonic minor (HARM), Phrygian (PHRY), Lydian (LYD), Locrian (LOC), ascending melodic minor
 (MEL), minor blues (BLUES), whole tone (WHOLE), half-whole diminished (DIMHW) and whole-half diminished (DIMWH). Scales
 with other than seven notes continue across the white keys without repeating notes. Drum kits and incoming MIDI keep
-their own note mapping. Press **SCL** again for the **CHORD** page: CHRD picks the chord keys (OFF, the scale's triads
+their own note mapping. Press **SEL** again for the **CHORD** page: CHRD picks the chord keys (OFF, the scale's triads
 or sevenths, or a fixed shape) and VOIC the voicing.
 
 ## Build from source

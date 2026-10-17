@@ -459,12 +459,14 @@ static void draw_act_column(uint32_t c, const char *label, uint16_t vc, uint32_t
 }
 
 /* (Skiff U3, N5) a card of a page that is there but does nothing on the track's engine: dimmed. On the hits (DRUM,
- * DRUM-X) LFO DEST's PIT FLT SHP (AMP does); DRUM's KICK on a model kit (80 10 66 55 77: every lane its kit's own) */
+ * DRUM-X) LFO DEST's PIT FLT SHP (AMP does), and (#9) LFO's PHASE and FADE (no retrigger: it runs free across the
+ * hits); DRUM's KICK on a model kit (80 10 66 55 77: every lane its kit's own) */
 static int card_dead(const page_t *pg, uint32_t c)
 {
     const track_t *t = TSEL;
     uint32_t id = pg->id[c & 3u];
-    if (ENGINES[t->eng_req % NENGINES]->oneshot && (id == P_LD_PIT || id == P_LD_FLT || id == P_LD_SHP))
+    if (ENGINES[t->eng_req % NENGINES]->oneshot &&
+        (id == P_LD_PIT || id == P_LD_FLT || id == P_LD_SHP || id == P_LPHASE || id == P_LFADE))
         return 1;
     return pg->scope == SC_ENGINE && t->eng_req % NENGINES == ENGI_DRUM && id == P_E6 &&
            drum_kit_plays(t->p[P_E0]) != DK_STD;
@@ -519,7 +521,7 @@ static void draw_foot(void)
     if (ui.home)
         ti[0] = 0;                                     /* ((Skiff U4, L5) the header names the page: here only where it */
     else                                               /* is in its family, "2/2" (was "ENV DEST 2/2", "HOME") */
-        page_pos(ti);                                  /* (a sheet: "SELECT: ROWS") */
+        page_pos(ti);                                  /* (a sheet too, #7) */
     str_cpy(s, ename, sizeof s);
     s[str_len(s) + 1u] = 0;
     s[str_len(s)] = (char)('1' + song.sel);
@@ -802,11 +804,8 @@ static void draw_columns(void)
             str_cpy(val, "--", sizeof val);
         draw_column(1, "PATTERN", val, "", v ? VAL(1u) : T_DIM, v >= SPICK_COPY ? 1000 : v ? (int32_t)(v * 1000u / NPAT) : -1,
                     ICON_AUTO);
-        fmt_int(val, (int32_t)r);
-        if (id == PAT_NONE)
-            draw_column(2, "REPS", "--", "", T_DIM, -1, ICON_AUTO);
-        else
-            draw_column(2, "REPS", val, "x", VAL(2u), (int32_t)(r * 1000u / 16u), ICON_AUTO);
+        fmt_int(val, (int32_t)r);                        /* ((1.2.1, #12) an empty entry's too: a rest's length) */
+        draw_column(2, "REPS", val, "x", VAL(2u), (int32_t)(r * 1000u / 16u), ICON_AUTO);
         draw_column(3, "SONG", lists.song ? "ON" : "OFF", "", VAL(3u), lists.song ? 1000 : 0, ICON_AUTO);
         return;
     }
@@ -952,8 +951,13 @@ static void draw_columns(void)
     for (c = 0; c < 4u; c++) {
         int16_t *vp;
         const param_desc_t *d = page_desc(cur_page(), c, &vp);
-        if (cur_page()->graph == GR_SLOTS && c == 1u) {   /* ((Skiff U2) PROJECT: NAME, was EDIT) */
-            draw_act_column(1, "NAME", project_used((uint32_t)song.g[G_SLOT] - 1u) ? T_THEME : T_DIM, ICON_AUTO);
+        if (cur_page()->graph == GR_SLOTS && c == 1u) {   /* ((Skiff U2) PROJECT: NAME, was EDIT; (1.2.1, #6) DELETE, */
+            draw_act_column(1, ui.act == 2u && ui.act2 ? "NAME" : "DELETE",   /* one step further NAME) */
+                            project_used((uint32_t)song.g[G_SLOT] - 1u) ? T_THEME : T_DIM, ICON_AUTO);
+            continue;
+        }
+        if (cur_page()->graph == GR_SLOTS && c == 2u && !project_used((uint32_t)song.g[G_SLOT] - 1u)) {
+            draw_act_column(2, "NEW", T_THEME, ICON_AUTO);   /* ((1.2.1, #6) an empty slot: a blank project) */
             continue;
         }
         if (cur_page()->graph == GR_LANES && c == 0u)  /* (LANE: above) */
@@ -1149,6 +1153,16 @@ static void confirm_text(char *a, char *b)
         str_cpy(a, "OVERWRITE SCENE ", 24);
         fmt_int(a + 16, (int32_t)k + 1);
         str_cpy(a + str_len(a), "?", 2);
+        break;
+    case CF_ERASE_PROJ:                                 /* ((1.2.1, #6) SAVE > PROJECT's DELETE) */
+        str_cpy(a, "DELETE PROJECT A?", 24);
+        a[15] = (char)('A' + (k & 3u));
+        if (!project_name(k & 3u, b))
+            b[0] = 0;
+        break;
+    case CF_NEW_PROJ:                                   /* ((1.2.1, #6) NEW over music changed since its save) */
+        str_cpy(a, "NEW PROJECT?", 24);
+        str_cpy(b, "the music now goes", 40);
         break;
     case CF_LOAD_PROJ:                                  /* (Skiff U1) the session goes: the project's name under it */
         str_cpy(a, "LOAD PROJECT A?", 24);

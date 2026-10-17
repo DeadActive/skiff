@@ -126,12 +126,9 @@ static void draw_head_blocks(void)
         x = x + 9 > HB_MSG_X ? x + 9 : HB_MSG_X;
         head_msg(x, 236 - x);
     } else {                                           /* the page's title at the right, as the mockup's (HOME: the */
-        int32_t lvl = batt_shown(), r = 234;            /* project's name); the battery after it only when low or on */
-        char h[16];                                     /* USB, the octave or the song row before it while they matter */
-        if (lvl == 4 || lvl <= 1) {
-            draw_battery(HEAD_BAT_X);
-            r = HEAD_BAT_X - 4;
-        }
+        int32_t r = HEAD_BAT_X - 4;                     /* project's name); the battery after it, at every level (#5), */
+        char h[16];                                     /* the octave or the song row before it while they matter */
+        draw_battery(HEAD_BAT_X);
         str_cpy(h, ui.shift ? "SHIFT" : ui.home ? pn : page_head(), sizeof h);   /* ((U5) SHIFT's map) */
         x = r;
         if (h[0]) {
@@ -325,7 +322,8 @@ static void draw_confirm_blocks(void)
         [CF_INIT_SOUND] = "INITIALIZE",
         [CF_CLEAR_MOTION] = "CLEAR", [CF_ERASE_USER] = "ERASE",
         [CF_ERASE_BANK] = "CLEAR", [CF_CLEAR_ENTRY] = "CLEAR", [CF_LOAD_PROJ] = "LOAD",
-        [CF_STORE_SCENE] = "OVERWRITE"};
+        [CF_STORE_SCENE] = "OVERWRITE", [CF_RESET_SET] = "RESET",
+        [CF_ERASE_PROJ] = "DELETE", [CF_NEW_PROJ] = "NEW"};
     static const uint8_t KEY[2] = {KC_OCTDN, KC_OCTUP};
     char a[24], b[40];
     const aafont_t *tf = &AF_M;
