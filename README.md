@@ -23,6 +23,9 @@ an INSERT effect, LFO sync, SPREAD and more from Felucca 1.6.1 ·
 <p align="center"><a href="https://youtu.be/c0HFI7AvN1M"><img src="docs/img/video_1_3.jpg" alt="Skiff 1.3 on YouTube: the FM-1's second core, 12 voices, MIDI LEARN" width="640"></a><br>
 <a href="https://youtu.be/c0HFI7AvN1M">▶ Watch the 1.3 tour on YouTube (3:38)</a></p>
 
+<p align="center"><b>New to Skiff?</b> <a href="https://illuminus5.github.io/skiff/learn/">Learn Skiff</a>: the manual in chapters, each
+with a video that shows every press on the unit. Start with <a href="https://illuminus5.github.io/skiff/learn/#first-beat">your first beat</a>.</p>
+
 ![Skiff on the FM-1's screen: HOME, a step page, PERFORM, the MIXER, DELAY and the SHIFT map](docs/skiff.png)
 
 Skiff turns the FM-1 into a six-track groovebox: fourteen synth and drum engines with 148 factory sounds you can list

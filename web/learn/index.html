@@ -1,0 +1,874 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only
+     Skiff: Learn Skiff, the manual in chapters, each with a video made from the firmware itself. One page: every
+     chapter is here (Ctrl+F is the search; #chapter and #chapter/step are the links). steps.js (written from the
+     captures) gives each step its time in the video and the controls it uses. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learn Skiff</title>
+<meta name="description" content="Learn Skiff, the six-track groovebox firmware for the M-VAVE FM-1: a manual in 19 chapters, each with a video showing every press on the unit.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 rx=%223%22 fill=%22%23111%22/%3E%3Crect x=%223%22 y=%229%22 width=%223%22 height=%224%22 fill=%22%23ff5a36%22/%3E%3Crect x=%227%22 y=%226%22 width=%223%22 height=%227%22 fill=%22%2322c3b4%22/%3E%3Crect x=%2211%22 y=%223%22 width=%223%22 height=%2210%22 fill=%22%23ffbf00%22/%3E%3C/svg%3E">
+<style>
+@font-face { font-family: "Barlow Condensed"; src: url("../fonts/BarlowCondensed-Medium.ttf") format("truetype"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "Barlow Condensed"; src: url("../fonts/BarlowCondensed-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "Inter Tight"; src: url("../fonts/InterTight-Latin.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+:root {
+  --t1: #ff5a36; --t2: #22c3b4; --t3: #ffbf00; --t4: #9580ff; --t5: #ff6fae; --t6: #a3e635;
+  --bg: #f3f2ee; --fg: #121212; --dim: #66656a; --line: #d8d6cf; --tile: #e9e7e1; --raise: #ffffff; --shade: rgba(18, 18, 18, .08);
+  --acc: #ff5a36; --on-acc: #000000; --now: #fff1ec;
+  --body: #1d1d1f; --tray: #141415; --part: #2a2a2d; --edge: #3a3a3e; --label: #c9c9cd; --keycap: #0c0c0d; --slit: #3a3a3c; --lit: #fff4d6;
+  --sans: "Inter Tight", -apple-system, "Helvetica Neue", Arial, sans-serif; --cond: "Barlow Condensed", "Arial Narrow", sans-serif;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0b0b0b; --fg: #f1f1f1; --dim: #9b9a9f; --line: #262626; --tile: #161616; --raise: #1c1c1c; --shade: rgba(0, 0, 0, .5);
+          --now: #241612; }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.6 var(--sans); -webkit-text-size-adjust: 100%; }
+a { color: inherit; text-decoration-color: var(--acc); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+a:hover { color: var(--acc); }
+kbd { font: 600 .82em/1 var(--cond); letter-spacing: .06em; padding: .22em .5em .16em; border-radius: 5px; background: var(--tile);
+      border: 1px solid var(--line); box-shadow: 0 2px 0 var(--line); white-space: nowrap; cursor: default; }
+kbd:hover, kbd:focus { border-color: var(--acc); }
+h1, h2, h3 { font-family: var(--cond); font-weight: 700; line-height: 1; margin: 0; }
+.skip { position: absolute; left: -999px; }
+.skip:focus { left: 16px; top: 16px; z-index: 50; background: var(--raise); padding: 8px 12px; }
+
+/* the hero: the logo, the promise, every chapter as a tile in its group's colour */
+.hero { padding: 40px 16px 56px; border-bottom: 1px solid var(--line); }
+.wrap { max-width: 1240px; margin: 0 auto; }
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.logo { width: 220px; height: auto; display: block; }
+.logo .ink { fill: var(--fg); }
+.logo .unlit { fill: var(--line); }
+.links { display: flex; gap: 22px; font: 600 15px var(--cond); letter-spacing: .12em; text-transform: uppercase; }
+.links a { text-decoration: none; }
+.hero h1 { font-size: clamp(64px, 11vw, 136px); letter-spacing: -.01em; margin: 44px 0 14px; text-transform: uppercase; }
+.lede { max-width: 44em; font-size: 19px; color: var(--dim); margin: 0 0 26px; }
+.go { display: inline-block; font: 700 22px/1 var(--cond); letter-spacing: .08em; text-transform: uppercase; text-decoration: none;
+      background: var(--acc); color: var(--on-acc); padding: 14px 22px 11px; }
+.go:hover { color: var(--on-acc); filter: brightness(1.08); }
+.groups { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-top: 46px; }
+.group h2 { font-size: 16px; letter-spacing: .14em; color: var(--g); margin: 0 0 10px; }
+.group ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.card { display: flex; gap: 10px; align-items: stretch; text-decoration: none; background: var(--tile); min-height: 52px; }
+.card .n { flex: 0 0 46px; display: grid; place-content: center; background: var(--g); color: var(--on-acc); font: 700 24px var(--cond); }
+.card .t { padding: 7px 8px 6px 0; font: 600 18px/1.1 var(--cond); align-self: center; }
+.card .v { display: block; font: 500 12px var(--cond); letter-spacing: .1em; color: var(--dim); margin-top: 3px; text-transform: uppercase; }
+.card:hover { background: var(--raise); box-shadow: 0 0 0 2px var(--g); color: inherit; }
+[data-group="START HERE"] { --g: var(--t1); }
+[data-group="MAKE MUSIC"] { --g: var(--t2); }
+[data-group="SHAPE SOUND"] { --g: var(--t3); }
+[data-group="ARRANGE AND PERFORM"] { --g: var(--t4); }
+[data-group="YOUR SETUP"] { --g: var(--t5); }
+[data-group="PAGE"] { --g: var(--t6); }
+
+/* three columns: the chapters, the text, where on the unit */
+.layout { max-width: 1440px; margin: 0 auto; display: grid; grid-template-columns: 230px minmax(0, 1fr) 380px; gap: 40px; padding: 0 24px; }
+.toc { position: sticky; top: 0; align-self: start; max-height: 100vh; overflow: auto; padding: 32px 0; font-family: var(--cond); }
+.toc h2 { font-size: 13px; letter-spacing: .14em; color: var(--g); margin: 18px 0 4px; }
+.toc a { display: block; text-decoration: none; font-size: 17px; padding: 3px 0 2px 10px; border-left: 3px solid transparent; color: var(--dim); }
+.toc a.here { color: var(--fg); border-left-color: var(--g); font-weight: 700; }
+main { padding: 32px 0 80px; min-width: 0; }
+.where { position: sticky; top: 0; align-self: start; padding: 32px 0; }
+.where-in { background: var(--tile); padding: 16px 16px 12px; }
+.where .cap { font: 700 13px var(--cond); letter-spacing: .14em; color: var(--dim); margin: 0 0 10px; display: flex; justify-content: space-between; }
+.where .step-name { font: 700 22px/1.1 var(--cond); margin: 12px 0 2px; min-height: 1.1em; }
+.where .legend { font: 500 13px var(--cond); letter-spacing: .08em; color: var(--dim); display: flex; gap: 14px; margin-top: 8px; }
+.where .legend i { display: inline-block; width: 11px; height: 11px; margin-right: 5px; vertical-align: -1px; background: var(--acc); }
+.where .legend i.o { background: none; border: 2px solid var(--acc); border-radius: 50%; }
+.where-toggle { display: none; }
+
+/* the unit, drawn by ../panel.js: dark in both themes, the step's controls in the accent */
+.device { position: relative; width: 100%; aspect-ratio: 1000 / 624; }
+.device svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.device .face.key { fill: var(--keycap); stroke: var(--edge); stroke-width: 1.5; }
+.device .slit { fill: var(--slit); }
+.device g { transition: opacity .15s; }
+.device .on-press .face, .device .on-hold .face { fill: var(--acc); stroke: var(--lit); stroke-width: 2.5; }
+.device .on-press text, .device .on-hold text { fill: var(--on-acc); }
+.device .on-hold .face { stroke-width: 6; }
+.device .on-press .slit, .device .on-hold .slit { fill: var(--on-acc); }
+.device .on-turn .face.knob { stroke: var(--acc); stroke-width: 7; }
+.device .on-turn text { fill: var(--acc); }
+.device .on-hover .face { stroke: var(--lit); stroke-width: 5; }
+.device .screen { position: absolute; image-rendering: pixelated; background: var(--keycap); }
+
+/* a chapter */
+.chapter { padding: 56px 0 24px; border-top: 1px solid var(--line); }
+.chapter:first-of-type { border-top: 0; padding-top: 8px; }
+.ch-head { display: flex; align-items: stretch; gap: 18px; }
+.ch-head .num { flex: 0 0 auto; min-width: 84px; display: grid; place-content: center; background: var(--g); color: var(--on-acc); font: 700 54px/1 var(--cond); padding: 8px 10px 4px; }
+.ch-head .group { font: 700 14px var(--cond); letter-spacing: .14em; color: var(--g); margin: 4px 0 6px; }
+.ch-head h2 { font-size: clamp(40px, 5.4vw, 64px); text-transform: uppercase; letter-spacing: -.005em; }
+.meta { color: var(--dim); margin: 18px 0 20px; }
+.meta b { color: var(--fg); font-weight: 600; }
+.video { position: relative; aspect-ratio: 16 / 9; background: var(--tile); margin: 0 0 26px; overflow: hidden; }
+.video.active { position: sticky; top: 0; z-index: 5; box-shadow: 0 10px 30px var(--shade); }
+.video iframe, .video video, .video > div { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--keycap); }
+.video button { all: unset; position: absolute; inset: 0; cursor: pointer; display: grid; place-content: center; }
+.video button.has-poster { place-content: end; padding: 4%; }   /* (the poster's own title stays clear) */
+.video button img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.video .play, .video .soon { position: relative; font: 700 26px/1 var(--cond); letter-spacing: .08em; text-transform: uppercase; padding: 14px 22px 11px; }
+.video .play { background: var(--acc); color: var(--on-acc); }
+.video button:hover .play, .video button:focus-visible .play { filter: brightness(1.1); }
+.video .soon { color: var(--dim); }
+.video .wall { position: absolute; inset: 0; background-image: radial-gradient(circle, var(--line) 30%, transparent 32%); background-size: 22px 22px; opacity: .55; }
+.video .big { position: absolute; left: 6%; bottom: 10%; font: 700 clamp(48px, 9vw, 120px)/1 var(--cond); color: var(--g); }
+.outline { margin: 0 0 8px; padding-left: 1.1em; }
+.outline li { margin: 6px 0; }
+.soon-note { font: 600 15px var(--cond); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+
+/* the steps: numbered in the group's colour; the step playing (or read) marked */
+.steps { list-style: none; counter-reset: step; margin: 0; padding: 0; }
+.step { counter-increment: step; display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 0 18px; padding: 18px 16px 18px 0;
+        border-top: 1px solid var(--line); border-left: 5px solid transparent; transition: background .2s, border-color .2s; scroll-margin-top: 30vh; }
+.step::before { content: counter(step, decimal-leading-zero); font: 700 34px/1 var(--cond); color: var(--g); padding: 4px 0 0 10px; }
+.step h3 { font-size: 27px; text-transform: uppercase; letter-spacing: .01em; margin: 4px 0 6px; }
+.step p { margin: 0 0 8px; }
+.step .shot { grid-column: 3; grid-row: 1 / span 4; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.step .shot img { width: 180px; height: 180px; image-rendering: pixelated; display: block; background: var(--keycap); }
+.step .t { all: unset; cursor: pointer; font: 700 15px/1 var(--cond); letter-spacing: .08em; padding: 7px 10px 5px; background: var(--fg); color: var(--bg); }
+.step .t:hover, .step .t:focus-visible { background: var(--acc); color: var(--on-acc); }
+.step.reading { border-left-color: var(--line); }
+.step.now { background: var(--now); border-left-color: var(--acc); }
+.step > :not(.shot) { grid-column: 2; }
+.next { margin: 26px 0 0; font: 700 22px var(--cond); text-transform: uppercase; letter-spacing: .04em; }
+.next a { text-decoration: none; }
+.next a::after { content: " →"; color: var(--acc); }
+
+/* the reference parts */
+.plain h2 { font-size: clamp(36px, 5vw, 56px); text-transform: uppercase; margin-bottom: 18px; }
+dl.terms { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 22px; margin: 0; }
+dl.terms dt { font: 700 20px/1.3 var(--cond); text-transform: uppercase; letter-spacing: .03em; scroll-margin-top: 30vh; }
+dl.terms dd { margin: 0; }
+dl.terms dt:target, dl.terms dt:target + dd { color: var(--acc); }
+table.ctrls { width: 100%; border-collapse: collapse; font-size: 16px; }
+table.ctrls th, table.ctrls td { text-align: left; vertical-align: top; padding: 9px 12px 9px 0; border-top: 1px solid var(--line); }
+table.ctrls th { font: 700 18px var(--cond); white-space: nowrap; }
+table.ctrls td.in { font: 500 15px var(--cond); letter-spacing: .03em; }
+table.ctrls td.in a { display: inline-block; margin: 0 10px 2px 0; }
+.figs { display: flex; gap: 18px; flex-wrap: wrap; margin: 6px 0 24px; }
+.figs a { font: 700 18px var(--cond); text-transform: uppercase; letter-spacing: .05em; }
+footer { border-top: 1px solid var(--line); padding: 28px 16px 48px; color: var(--dim); font-size: 14px; }
+footer p { max-width: 1240px; margin: 6px auto; }
+
+@media (max-width: 1240px) {
+  .layout { grid-template-columns: minmax(0, 1fr) 340px; }
+  .toc { display: none; }
+  .groups { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 900px) {
+  body { font-size: 16px; }
+  .layout { grid-template-columns: minmax(0, 1fr); padding: 0 16px; }
+  .groups { grid-template-columns: repeat(2, 1fr); }
+  .where { position: fixed; left: 0; right: 0; bottom: 0; top: auto; padding: 0; z-index: 20; transform: translateY(105%); transition: transform .25s; }
+  .where-in { box-shadow: 0 -10px 30px var(--shade); padding: 12px 16px 16px; }
+  body.where-open .where { transform: none; }
+  .where-toggle { display: block; position: fixed; right: 16px; bottom: 16px; z-index: 21; font: 700 18px/1 var(--cond); letter-spacing: .08em;
+                  text-transform: uppercase; background: var(--acc); color: var(--on-acc); border: 0; padding: 12px 16px 9px; box-shadow: 0 6px 20px var(--shade); }
+  .step { grid-template-columns: 44px minmax(0, 1fr); padding-right: 0; }
+  .step::before { font-size: 28px; padding-left: 6px; }
+  .step .shot { grid-column: 2; grid-row: auto; flex-direction: row; align-items: center; margin: 4px 0 6px; }
+  .step .shot img { width: 132px; height: 132px; }
+  dl.terms { grid-template-columns: minmax(0, 1fr); gap: 2px 0; }
+  dl.terms dd { margin-bottom: 12px; }
+}
+@media (max-width: 520px) {
+  .groups { grid-template-columns: minmax(0, 1fr); }
+  .hero h1 { margin-top: 30px; }
+  .ch-head .num { min-width: 64px; font-size: 40px; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .where, .step { transition: none; } }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to the chapters</a>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <div class="bar">
+      <a href="#top" aria-label="Skiff"><svg class="logo" id="logo" viewBox="0 0 846 200" role="img" aria-label="Skiff"><rect x="0" y="176" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="0" y="154" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="0" y="132" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="0" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="22" y="176" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="22" y="154" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="22" y="132" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="22" y="110" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="44" y="176" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="44" y="154" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="44" y="132" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="44" y="110" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="66" y="176" width="18" height="18" rx="3" fill="#22c3b4"/><rect x="66" y="154" width="18" height="18" rx="3" fill="#22c3b4"/><rect x="66" y="132" width="18" height="18" rx="3" fill="#22c3b4"/><rect x="66" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="88" y="176" width="18" height="18" rx="3" fill="#22c3b4"/><rect x="88" y="154" width="18" height="18" rx="3" fill="#22c3b4"/><rect x="88" y="132" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="88" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="110" y="176" width="18" height="18" rx="3" fill="#22c3b4"/><rect x="110" y="154" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="110" y="132" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="110" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="132" y="176" width="18" height="18" rx="3" fill="#ffbf00"/><rect x="132" y="154" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="132" y="132" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="132" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="154" y="176" width="18" height="18" rx="3" fill="#ffbf00"/><rect x="154" y="154" width="18" height="18" rx="3" fill="#ffbf00"/><rect x="154" y="132" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="154" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="176" y="176" width="18" height="18" rx="3" fill="#9580ff"/><rect x="176" y="154" width="18" height="18" rx="3" fill="#9580ff"/><rect x="176" y="132" width="18" height="18" rx="3" fill="#9580ff"/><rect x="176" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="198" y="176" width="18" height="18" rx="3" fill="#9580ff"/><rect x="198" y="154" width="18" height="18" rx="3" fill="#9580ff"/><rect x="198" y="132" width="18" height="18" rx="3" fill="#9580ff"/><rect x="198" y="110" width="18" height="18" rx="3" fill="#9580ff"/><rect x="220" y="176" width="18" height="18" rx="3" fill="#9580ff"/><rect x="220" y="154" width="18" height="18" rx="3" fill="#9580ff"/><rect x="220" y="132" width="18" height="18" rx="3" fill="#9580ff"/><rect x="220" y="110" width="18" height="18" rx="3" fill="#9580ff"/><rect x="242" y="176" width="18" height="18" rx="3" fill="#ff6fae"/><rect x="242" y="154" width="18" height="18" rx="3" fill="#ff6fae"/><rect x="242" y="132" width="18" height="18" rx="3" fill="#ff6fae"/><rect x="242" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="264" y="176" width="18" height="18" rx="3" fill="#ff6fae"/><rect x="264" y="154" width="18" height="18" rx="3" fill="#ff6fae"/><rect x="264" y="132" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="264" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="286" y="176" width="18" height="18" rx="3" fill="#ff6fae"/><rect x="286" y="154" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="286" y="132" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="286" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="308" y="176" width="18" height="18" rx="3" fill="#a3e635"/><rect x="308" y="154" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="308" y="132" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="308" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="330" y="176" width="18" height="18" rx="3" fill="#a3e635"/><rect x="330" y="154" width="18" height="18" rx="3" fill="#a3e635"/><rect x="330" y="132" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="330" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="316" y="68" width="10" height="10" fill="#ffffff"/><rect x="176" y="78" width="10" height="10" fill="#ffffff"/><rect x="186" y="78" width="10" height="10" fill="#ffffff"/><rect x="196" y="78" width="10" height="10" fill="#ffffff"/><rect x="206" y="78" width="10" height="10" fill="#ffffff"/><rect x="216" y="78" width="10" height="10" fill="#ffffff"/><rect x="226" y="78" width="10" height="10" fill="#ffffff"/><rect x="236" y="78" width="10" height="10" fill="#ffffff"/><rect x="246" y="78" width="10" height="10" fill="#ffffff"/><rect x="256" y="78" width="10" height="10" fill="#ffffff"/><rect x="266" y="78" width="10" height="10" fill="#ffffff"/><rect x="276" y="78" width="10" height="10" fill="#ffffff"/><rect x="286" y="78" width="10" height="10" fill="#ffffff"/><rect x="296" y="78" width="10" height="10" fill="#ffffff"/><rect x="306" y="78" width="10" height="10" fill="#ffffff"/><rect x="186" y="88" width="10" height="10" fill="#ffffff"/><rect x="196" y="88" width="10" height="10" fill="#ffffff"/><rect x="206" y="88" width="10" height="10" fill="#ffffff"/><rect x="216" y="88" width="10" height="10" fill="#ffffff"/><rect x="226" y="88" width="10" height="10" fill="#ffffff"/><rect x="236" y="88" width="10" height="10" fill="#ffffff"/><rect x="246" y="88" width="10" height="10" fill="#ffffff"/><rect x="256" y="88" width="10" height="10" fill="#ffffff"/><rect x="266" y="88" width="10" height="10" fill="#ffffff"/><rect x="276" y="88" width="10" height="10" fill="#ffffff"/><rect x="286" y="88" width="10" height="10" fill="#ffffff"/><rect x="296" y="88" width="10" height="10" fill="#ffffff"/><rect x="196" y="98" width="10" height="10" fill="#ffffff"/><rect x="206" y="98" width="10" height="10" fill="#ffffff"/><rect x="216" y="98" width="10" height="10" fill="#ffffff"/><rect x="226" y="98" width="10" height="10" fill="#ffffff"/><rect x="236" y="98" width="10" height="10" fill="#ffffff"/><rect x="246" y="98" width="10" height="10" fill="#ffffff"/><rect x="256" y="98" width="10" height="10" fill="#ffffff"/><rect x="266" y="98" width="10" height="10" fill="#ffffff"/><rect x="276" y="98" width="10" height="10" fill="#ffffff"/><rect x="286" y="98" width="10" height="10" fill="#ffffff"/><rect x="396" y="58" width="16" height="16" fill="#ffffff"/><rect x="412" y="58" width="16" height="16" fill="#ffffff"/><rect x="428" y="58" width="16" height="16" fill="#ffffff"/><rect x="444" y="58" width="16" height="16" fill="#ffffff"/><rect x="380" y="74" width="16" height="16" fill="#ffffff"/><rect x="380" y="90" width="16" height="16" fill="#ffffff"/><rect x="396" y="106" width="16" height="16" fill="#ffffff"/><rect x="412" y="106" width="16" height="16" fill="#ffffff"/><rect x="428" y="106" width="16" height="16" fill="#ffffff"/><rect x="444" y="122" width="16" height="16" fill="#ffffff"/><rect x="444" y="138" width="16" height="16" fill="#ffffff"/><rect x="380" y="154" width="16" height="16" fill="#ffffff"/><rect x="396" y="154" width="16" height="16" fill="#ffffff"/><rect x="412" y="154" width="16" height="16" fill="#ffffff"/><rect x="428" y="154" width="16" height="16" fill="#ffffff"/><rect x="476" y="58" width="16" height="16" fill="#ffffff"/><rect x="540" y="58" width="16" height="16" fill="#ffffff"/><rect x="476" y="74" width="16" height="16" fill="#ffffff"/><rect x="524" y="74" width="16" height="16" fill="#ffffff"/><rect x="476" y="90" width="16" height="16" fill="#ffffff"/><rect x="508" y="90" width="16" height="16" fill="#ffffff"/><rect x="476" y="106" width="16" height="16" fill="#ffffff"/><rect x="492" y="106" width="16" height="16" fill="#ffffff"/><rect x="476" y="122" width="16" height="16" fill="#ffffff"/><rect x="508" y="122" width="16" height="16" fill="#ffffff"/><rect x="476" y="138" width="16" height="16" fill="#ffffff"/><rect x="524" y="138" width="16" height="16" fill="#ffffff"/><rect x="476" y="154" width="16" height="16" fill="#ffffff"/><rect x="540" y="154" width="16" height="16" fill="#ffffff"/><rect x="572" y="58" width="16" height="16" fill="#ffffff"/><rect x="588" y="58" width="16" height="16" fill="#ffffff"/><rect x="604" y="58" width="16" height="16" fill="#ffffff"/><rect x="620" y="58" width="16" height="16" fill="#ffffff"/><rect x="636" y="58" width="16" height="16" fill="#ffffff"/><rect x="604" y="74" width="16" height="16" fill="#ffffff"/><rect x="604" y="90" width="16" height="16" fill="#ffffff"/><rect x="604" y="106" width="16" height="16" fill="#ffffff"/><rect x="604" y="122" width="16" height="16" fill="#ffffff"/><rect x="604" y="138" width="16" height="16" fill="#ffffff"/><rect x="572" y="154" width="16" height="16" fill="#ffffff"/><rect x="588" y="154" width="16" height="16" fill="#ffffff"/><rect x="604" y="154" width="16" height="16" fill="#ffffff"/><rect x="620" y="154" width="16" height="16" fill="#ffffff"/><rect x="636" y="154" width="16" height="16" fill="#ffffff"/><rect x="668" y="58" width="16" height="16" fill="#ffffff"/><rect x="684" y="58" width="16" height="16" fill="#ffffff"/><rect x="700" y="58" width="16" height="16" fill="#ffffff"/><rect x="716" y="58" width="16" height="16" fill="#ffffff"/><rect x="732" y="58" width="16" height="16" fill="#ffffff"/><rect x="668" y="74" width="16" height="16" fill="#ffffff"/><rect x="668" y="90" width="16" height="16" fill="#ffffff"/><rect x="668" y="106" width="16" height="16" fill="#ffffff"/><rect x="684" y="106" width="16" height="16" fill="#ffffff"/><rect x="700" y="106" width="16" height="16" fill="#ffffff"/><rect x="716" y="106" width="16" height="16" fill="#ffffff"/><rect x="668" y="122" width="16" height="16" fill="#ffffff"/><rect x="668" y="138" width="16" height="16" fill="#ffffff"/><rect x="668" y="154" width="16" height="16" fill="#ffffff"/><rect x="764" y="58" width="16" height="16" fill="#ffffff"/><rect x="780" y="58" width="16" height="16" fill="#ffffff"/><rect x="796" y="58" width="16" height="16" fill="#ffffff"/><rect x="812" y="58" width="16" height="16" fill="#ffffff"/><rect x="828" y="58" width="16" height="16" fill="#ffffff"/><rect x="764" y="74" width="16" height="16" fill="#ffffff"/><rect x="764" y="90" width="16" height="16" fill="#ffffff"/><rect x="764" y="106" width="16" height="16" fill="#ffffff"/><rect x="780" y="106" width="16" height="16" fill="#ffffff"/><rect x="796" y="106" width="16" height="16" fill="#ffffff"/><rect x="812" y="106" width="16" height="16" fill="#ffffff"/><rect x="764" y="122" width="16" height="16" fill="#ffffff"/><rect x="764" y="138" width="16" height="16" fill="#ffffff"/><rect x="764" y="154" width="16" height="16" fill="#ffffff"/></svg></a>
+      <nav class="links" aria-label="Skiff"><a href="../webapp/installer/">Install</a><a href="../webapp/editor/">Editor</a><a href="https://github.com/illuminus5/skiff">GitHub</a></nav>
+    </div>
+    <h1>Learn Skiff</h1>
+    <p class="lede">The manual for Skiff, the six-track groovebox firmware for the M-VAVE FM-1, in 19 chapters. Each chapter has a short
+      video that shows every press, hold and turn on the unit, made from the firmware itself. Play it and the steps below
+      follow along. New to grooveboxes? Start at chapter 1 and read on. Know your way around? Jump to any chapter.</p>
+    <a class="go" href="#install">Start here</a>
+    <div class="groups" id="groups"></div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" id="toc" aria-label="Chapters"></nav>
+<main id="main">
+
+<!-- ================================================================ START HERE -->
+<section class="chapter" id="install" data-n="1" data-group="START HERE" data-video="">
+  <div class="ch-head"><span class="num">01</span><div><p class="group">START HERE</p><h2>Install Skiff</h2></div></div>
+  <p class="meta"><b>You'll need</b> an FM-1, a USB data cable, and Chrome or Edge on a computer. <b>You'll learn</b> how to put Skiff
+    on the unit, update it, and go back to the official firmware.</p>
+  <div class="video"></div>
+  <ul class="outline">
+    <li>The <a href="../webapp/installer/">Skiff installer</a> runs in the browser: connect the FM-1 by USB and follow it. It takes about two
+      minutes and the FM-1 restarts on Skiff.</li>
+    <li>No Chrome or Edge? With Python 3, <code>tools/fm1_install.py</code> from the repository installs the release's <code>.fwsc</code> file.</li>
+    <li>Later releases install the same way. Holding <kbd>OCT−</kbd> and <kbd>OCT+</kbd> together for five seconds puts the unit in update mode.</li>
+    <li>The same page takes the FM-1 back to the official V15 firmware, saving a complete backup of your music first.</li>
+  </ul>
+  <p class="soon-note">Video and step-by-step coming</p>
+</section>
+
+<section class="chapter" id="find-your-way" data-n="2" data-group="START HERE" data-video="">
+  <div class="ch-head"><span class="num">02</span><div><p class="group">START HERE</p><h2>Find your way around</h2></div></div>
+  <p class="meta"><b>You'll need</b> Skiff on the unit. <b>You'll learn</b> the pages, the four knobs, the quick layers, SHIFT and the
+    MENU: how every other chapter gets around.</p>
+  <div class="video"></div>
+  <ul class="outline">
+    <li><kbd>HOME</kbd> shows all six tracks. <kbd>ALGORITHM</kbd> picks a track on every page, <kbd>PRESETS</kbd> changes its sound, and
+      <kbd>KNOB 1</kbd>–<kbd>KNOB 4</kbd> turn the four cards across the top of the screen.</li>
+    <li>Each button opens a <a href="#g-family">family</a> of pages: tap it again, or turn <kbd>SELECT</kbd>, for the next one. A family
+      reopens on the page you left.</li>
+    <li>Hold <kbd>FX</kbd>, <kbd>GLO</kbd>, <kbd>SEL</kbd>, <kbd>EDIT</kbd>, <kbd>SEQ</kbd> or <kbd>ARP</kbd> for its
+      <a href="#g-layer">layer</a>. SHIFT and the button keep it open.</li>
+    <li>Hold <kbd>HOME</kbd> for <a href="#g-shift">SHIFT</a>: a map of what every control does on the page. Let go of it alone and the MENU opens.</li>
+    <li>In dialogs and on action pages, <kbd>OCT+</kbd> does it and <kbd>OCT−</kbd> goes back.</li>
+  </ul>
+  <p class="soon-note">Video and step-by-step coming</p>
+</section>
+
+<section class="chapter" id="first-beat" data-n="3" data-group="START HERE" data-video="nd74_jhIQEU">
+  <div class="ch-head"><span class="num">03</span><div><p class="group">START HERE</p><h2>Your first beat</h2></div></div>
+  <p class="meta"><b>You'll need</b> Skiff on the unit (<a href="#install">chapter 1</a>). <b>You'll learn</b> the drum grid, PLAY and the
+    tempo, writing a bass line step by step, changing a sound and undo: a beat in two minutes.</p>
+  <div class="video"></div>
+  <ol class="steps">
+    <li class="step" id="first-beat/new-project">
+      <h3>A new unit</h3>
+      <p>Start on HOME, the page with all six <a href="#g-track">tracks</a>. Fresh from the installer, each track has a sound and no notes:
+        1 ACID, 2 PAD, 3 PULSE LD, 4 DRUM KIT, 5 PIANO and 6 DRUM KIT. Play a few white keys: the keys play the selected track,
+        here 1, ACID.</p>
+      <p>Made music already? Start a new <a href="#g-project">project</a> instead: tap <kbd>SAVE</kbd> and turn <kbd>SELECT</kbd> to PROJECT,
+        pick an empty slot with <kbd>KNOB 1</kbd>, turn <kbd>KNOB 3</kbd> to NEW and press <kbd>OCT+</kbd>. Your other projects stay saved.</p>
+    </li>
+    <li class="step" id="first-beat/drum-track">
+      <h3>Pick the drums</h3>
+      <p>Turn <kbd>ALGORITHM</kbd>: it picks the track, on every page. Turn it three detents to track 4, DRUM KIT. Now the keys play
+        the drums: <kbd>C4</kbd> is the kick, <kbd>D4</kbd> the snare, <kbd>F♯4</kbd> the closed hat.</p>
+    </li>
+    <li class="step" id="first-beat/grid">
+      <h3>Open the grid</h3>
+      <p>Tap <kbd>SEQ</kbd>. On a drum track its STEP page is a grid: a row for each drum (BD bass drum, SD snare, CP clap, CH closed hat,
+        OH open hat, TM tom, RS rim, CB bell) and a column for each <a href="#g-step">step</a>. The 16 white keys are the 16 steps, left to
+        right. You don't need REC for this.</p>
+      <p>A black key picks a row, and plays its drum: <kbd>F♯3</kbd> the kick, <kbd>G♯3</kbd> the snare, <kbd>C♯4</kbd> the closed hat.</p>
+    </li>
+    <li class="step" id="first-beat/play">
+      <h3>Play</h3>
+      <p>Tap <kbd>PLAY</kbd>. It lights green, and a light runs along the white keys: the playhead. The keys on the beats (1, 5, 9, 13)
+        glow a little brighter, to count by.</p>
+    </li>
+    <li class="step" id="first-beat/kick">
+      <h3>Kick</h3>
+      <p><kbd>F♯3</kbd> picks the kick row again. Now tap the white keys for steps 1, 5, 9 and 13:
+        <kbd>F3</kbd> <kbd>C4</kbd> <kbd>G4</kbd> <kbd>D5</kbd>. A kick on every beat.</p>
+    </li>
+    <li class="step" id="first-beat/snare">
+      <h3>Snare</h3>
+      <p><kbd>G♯3</kbd> picks the snare row. Steps 5 and 13, <kbd>C4</kbd> and <kbd>D5</kbd>: the backbeat.</p>
+    </li>
+    <li class="step" id="first-beat/hats">
+      <h3>Hats</h3>
+      <p><kbd>C♯4</kbd> picks the closed hat. Steps 3, 7, 11 and 15, between the beats: <kbd>A3</kbd> <kbd>E4</kbd> <kbd>B4</kbd> <kbd>F5</kbd>.</p>
+      <p>A key on a step that already has a hit takes it away: tap <kbd>F5</kbd> again and the last hat goes, once more and it's back.</p>
+    </li>
+    <li class="step" id="first-beat/tempo">
+      <h3>Tempo</h3>
+      <p>Hold <kbd>GLO</kbd> and turn <kbd>SELECT</kbd>: a detent is one BPM, and the header shows the tempo. Here it goes from 120 to 110.
+        (SELECT alone turns pages; MENU › CONTROL › BPM LOCK OFF makes it the tempo knob, as on Felucca.)</p>
+    </li>
+    <li class="step" id="first-beat/bass-track">
+      <h3>A bass line</h3>
+      <p>Tap <kbd>PLAY</kbd> to stop, then turn <kbd>ALGORITHM</kbd> back to track 1. You stay on SEQ › STEP, which now shows track 1's
+        16 steps as tiles, the cursor on step 1.</p>
+    </li>
+    <li class="step" id="first-beat/write-steps">
+      <h3>Write steps</h3>
+      <p>Tap <kbd>OCT−</kbd> once, so the keys play an octave lower. Then tap <kbd>REC</kbd>: stopped, on the STEP page, the screen says
+        KEYS WRITE STEPS. Each key you play is written to the step under the cursor, the white tile, and the cursor moves on.
+        <kbd>PRESETS</kbd> moves the cursor too, so one detent leaves a step empty.</p>
+      <p>The line here: A, rest, A, rest, A an octave up, rest, A, rest, G, rest, A, rest, C, rest, E.</p>
+    </li>
+    <li class="step" id="first-beat/listen">
+      <h3>Listen</h3>
+      <p>Tap <kbd>REC</kbd> again to stop writing, then <kbd>PLAY</kbd>: drums and bass together. (Armed while playing, the keys would record
+        live instead, at the playhead: that's <a href="#recording">chapter 7</a>.)</p>
+    </li>
+    <li class="step" id="first-beat/sound">
+      <h3>Change the sound</h3>
+      <p>Tap <kbd>HOME</kbd> and turn <kbd>PRESETS</kbd>: track 1 plays the same notes with each <a href="#g-sound">sound</a> you reach, ACID,
+        SINE KEY, RAVE, SUB BASS. On the step pages PRESETS moves the cursor instead; the sound changes on HOME and the sound pages.
+        <a href="#sounds">Chapter 4</a> finds sounds by type.</p>
+    </li>
+    <li class="step" id="first-beat/undo">
+      <h3>Undo</h3>
+      <p>Hold <kbd>SAVE</kbd>: the last change is undone. A run of PRESETS turns counts as one change, so it's back to ACID. While the UNDO
+        box shows, <kbd>OCT−</kbd> goes further back and <kbd>OCT+</kbd> redoes. Eight changes are kept.</p>
+    </li>
+    <li class="step" id="first-beat/kept">
+      <h3>Nothing to save</h3>
+      <p>Patterns have no save step: what a track plays is kept as its <a href="#g-pattern">pattern</a>, written to flash at the quiet
+        autosave. Switch off and on, and with MENU › SYSTEM › RESTORE LAST on (it is, out of the box) the beat is still there.</p>
+    </li>
+  </ol>
+</section>
+
+<!-- ================================================================ MAKE MUSIC -->
+<section class="chapter" id="sounds" data-n="4" data-group="MAKE MUSIC" data-video="">
+  <div class="ch-head"><span class="num">04</span><div><p class="group">MAKE MUSIC</p><h2>Sounds and engines</h2></div></div>
+  <p class="meta"><b>You'll need</b> <a href="#first-beat">chapter 3</a>. <b>You'll learn</b> to find a sound by type, keep favourites, switch
+    engines and save a sound of your own.</p>
+  <div class="video"></div>
+  <ul class="outline">
+    <li><kbd>PRESETS</kbd> on HOME steps through the sounds. SAVE › PRESETS lists them, by type (BASS, LEAD, PAD, KEYS, PLUCK, DRUM, FX),
+      by favourite or by <a href="#g-engine">engine</a>.</li>
+    <li>Hold <kbd>EDIT</kbd>: the white keys pick one of the 14 engines, <kbd>F5</kbd> starts from INIT.</li>
+    <li>Save a sound: stop, tap <kbd>SAVE</kbd> (USER), pick a slot with <kbd>KNOB 1</kbd>, <kbd>OCT+</kbd>, name it with the keys, <kbd>OCT+</kbd>.</li>
+  </ul>
+  <p class="soon-note">Video and step-by-step coming</p>
+</section>
+
+<section class="chapter" id="keys" data-n="5" data-group="MAKE MUSIC" data-video="">
+  <div class="ch-head"><span class="num">05</span><div><p class="group">MAKE MUSIC</p><h2>Keys, scales and the arp</h2></div></div>
+  <p class="meta"><b>You'll learn</b> to play the keys in a scale, play chords from one key, and run the arpeggiator.</p>
+  <div class="video"></div>
+  <ul class="outline">
+    <li><kbd>OCT−</kbd> and <kbd>OCT+</kbd> move the keys by octaves; both together reset them.</li>
+    <li>SEL › SCALE: ROOT, SCALE (16 of them), QUANTIZE, TRANSP. Hold <kbd>SEL</kbd> and play a key to set the root.</li>
+    <li>SEL › CHORD: a chord from every key, and its VOICING.</li>
+    <li>ARP and ARP 2: MODE, RATE, OCTAVE, GATE; SWING, CHANCE, HOLD and ORDER.</li>
+  </ul>
+  <p class="soon-note">Video and step-by-step coming</p>
+</section>
+
+<section class="chapter" id="steps" data-n="6" data-group="MAKE MUSIC" data-video="">
+  <div class="ch-head"><span class="num">06</span><div><p class="group">MAKE MUSIC</p><h2>Steps</h2></div></div>
+  <p class="meta"><b>You'll learn</b> the step pages in full: notes and velocity on STEP, the piano roll, and a pattern's length, division
+    and swing.</p>
+  <div class="video"></div>
+  <ul class="outline">
+    <li>SEQ › STEP: STEP, NOTE, VELOCITY, CHANCE. On a drum track: STEP, LANE, HIT, ACC.</li>
+    <li>SEQ › ROLL, the piano roll: STEP, NOTE, TIME, FLAG.</li>
+    <li>SEQ › PATTERN: LENGTH (up to 64 steps), DIV, SWING, GATE.</li>
+    <li>With REC armed, <kbd>EDIT</kbd> clears the cursor step. MENU › CONTROL › STEP PREVIEW plays each step as the cursor reaches it.</li>
+  </ul>
+  <p class="soon-note">Video and step-by-step coming</p>
+</section>
+
+<section class="chapter" id="recording" data-n="7" data-group="MAKE MUSIC" data-video="">
+  <div class="ch-head"><span class="num">07</span><div><p class="group">MAKE MUSIC</p><h2>Recording and takes</h2></div></div>
+  <p class="meta"><b>You'll learn</b> to record live with the click and a count-in, keep the loop you just played, and undo.</p>
+  <div class="video"></div>
+  <ul class="outline">
+    <li><kbd>REC</kbd> arms the selected track the moment it's pressed; stopped, it starts the transport too. The keys record at the playhead.</li>
+    <li>SHIFT + <kbd>REC</kbd> opens the REC layer: CLICK, COUNT-IN, CLICK LEVEL, FEEL. <kbd>F3</kbd> held clears the track.</li>
+    <li>SHIFT + <kbd>SAVE</kbd> is <a href="#g-take">TAKE</a>: the loop you just played, kept, even without REC.</li>
+    <li>Hold <kbd>SAVE</kbd> to undo; <kbd>OCT−</kbd> goes further back, <kbd>OCT+</kbd> redoes.</li>
+  </ul>
+  <p class="soon-note">Video and step-by-step coming</p>
+</section>
+
+<section class="chapter" id="variation" data-n="8" data-group="MAKE MUSIC" data-video="">
+  <div class="ch-head"><span class="num">08</span><div><p class="group">MAKE MUSIC</p><h2>Variation</h2></div></div>
+  <p class="meta"><b>You'll learn</b> to make a pattern move: chance, conditions, ratchets and flams, nudges, direction, locks, automation
+    and the SEQ tools.</p>
+  <div class="video"></div>
+  <ul class="outline">
+    <li>SEQ › CHANCE: CHANCE, RATCHET (×1–4 or FLAM), COND.</li>
+    <li>SEQ › PLAY: NUDGE, DIR, GATE.</li>
+    <li>Hold a step and turn <kbd>KNOB 1</kbd>–<kbd>KNOB 4</kbd>: a <a href="#g-lock">lock</a>, that step's own value.</li>
+    <li>SEQ › AUTOMATION: knob moves, recorded step by step.</li>
+    <li>Hold <kbd>SEQ</kbd>: CLEAR, REVERSE, SHIFT, RANDOM, COOK, EUCLID, DOUBLE, HALF, and BEAT on drum tracks.</li>
+  </ul>
+  <p class="soon-note">Video and step-by-step coming</p>
+</section>
+
+<!-- ================================================================ SHAPE SOUND -->
+<section class="chapter" id="modulation" data-n="9" data-group="SHAPE SOUND" data-video="">
+  <div class="ch-head"><span class="num">09</span><div><p class="group">SHAPE SOUND</p><h2>Envelopes, LFOs, MOD</h2></div></div>
+  <p class="meta"><b>You'll learn</b> to shape a sound over time with two envelopes, two LFOs and the mod slots.</p>
+  <div class="video"></div>
+  <ul class="outline">
+    <li>ENV, ENV DEST, ENV 2.</li>
+    <li>LFO: RATE, WAVE, PHASE, FADE. LFO 2: SYNC, TRIG, POLARITY. LFO DEST.</li>
+    <li>MOD: four slots, each a SOURCE to a DEST by an AMOUNT.</li>
+    <li>Hold <kbd>LFO</kbd> for MOMENTARY: knob moves spring back when you let go; <kbd>OCT+</kbd> keeps them.</li>
+  </ul>
+  <p class="soon-note">Video and step-by-step coming</p>
+</section>
+
+<section class="chapter" id="engines" data-n="10" data-group="SHAPE SOUND" data-video="">
+  <div class="ch-head"><span class="num">10</span><div><p class="group">SHAPE SOUND</p><h2>Inside the engines</h2></div></div>
+  <p class="meta"><b>You'll learn</b> each engine's own pages, the voice settings, drum lanes and slices.</p>
+  <div class="video"></div>
+  <ul class="outline">
+    <li>EDIT 1 and EDIT 2: eight controls for each of the 14 engines.</li>
+    <li>VOICE and VOICE 2: GLIDE, PRIORITY, ALLOC, DETUNE, SPREAD.</li>
+    <li>Drums: LANES on DRUM, SOUND on DRUM-X.</li>
+    <li>SLICE: the SLICES page, the two built-in loops, and your own samples in USR1–3.</li>
+  </ul>
+  <p class="soon-note">Video and step-by-step coming</p>
+</section>
+
+<section class="chapter" id="fm6-lab" data-n="11" data-group="SHAPE SOUND" data-video="">
+  <div class="ch-head"><span class="num">11</span><div><p class="group">SHAPE SOUND</p><h2>FM6 LAB</h2></div></div>
+  <p class="meta"><b>You'll learn</b> to build a six-operator FM sound on the unit, from INIT to a saved sound.</p>
+  <div class="video"></div>
+  <ul class="outline">
+    <li>OPERATOR: <kbd>PRESETS</kbd> picks one of six operators, <kbd>SELECT</kbd> its TONE, ENV, KEYS and MORE.</li>
+    <li>ALL OPS: ALGO and FEEDBACK, PITCH, LFO, DEPTH.</li>
+    <li>Start from INIT and save the result to USER.</li>
+  </ul>
+  <p class="soon-note">Video and step-by-step coming</p>
+</section>
+
+<section class="chapter" id="track-fx" data-n="12" data-group="SHAPE SOUND" data-video="">
+  <div class="ch-head"><span class="num">12</span><div><p class="group">SHAPE SOUND</p><h2>Track effects</h2></div></div>
+  <p class="meta"><b>You'll learn</b> a track's own effects: the sends, drive, inserts, the slicer and ducking.</p>
+  <div class="video"></div>
+  <ul class="outline">
+    <li>FX: the sends to DIST, CHORUS, DELAY and REVERB.</li>
+    <li>DRIVE, INSERT and INSERT 2.</li>
+    <li>SLICER: rhythmic gates.</li>
+    <li>DUCK: a track dips under another track's kick.</li>
+  </ul>
+  <p class="soon-note">Video and step-by-step coming</p>
+</section>
+
+<!-- ================================================================ ARRANGE AND PERFORM -->
+<section class="chapter" id="mixer" data-n="13" data-group="ARRANGE AND PERFORM" data-video="">
+  <div class="ch-head"><span class="num">13</span><div><p class="group">ARRANGE AND PERFORM</p><h2>Mixer and global FX</h2></div></div>
+  <p class="meta"><b>You'll learn</b> levels and pans, the shared delay, reverb and chorus, swing, and the GLO layer.</p>
+  <div class="video"></div>
+  <ul class="outline">
+    <li>GLO › MIXER: LEVEL, PAN, REVERB, MUTE.</li>
+    <li>DELAY, REVERB, CHORUS, and GLOBAL: BPM and SWING.</li>
+    <li>Hold <kbd>GLO</kbd>: solos, mutes, FILL, tap tempo, levels. <kbd>GLO</kbd> + <kbd>PLAY</kbd> starts again from the top.</li>
+  </ul>
+  <p class="soon-note">Video and step-by-step coming</p>
+</section>
+
+<section class="chapter" id="song" data-n="14" data-group="ARRANGE AND PERFORM" data-video="">
+  <div class="ch-head"><span class="num">14</span><div><p class="group">ARRANGE AND PERFORM</p><h2>Patterns and the song</h2></div></div>
+  <p class="meta"><b>You'll learn</b> how patterns, lists and the song fit together, and how to build a song.</p>
+  <div class="video"></div>
+  <ul class="outline">
+    <li>The pool: 64 <a href="#g-pattern">patterns</a> that every project shares (SAVE › PATTERNS).</li>
+    <li>Each track's <a href="#g-list">list</a>: 16 entries, A–P, each a pattern and its REPS (SEQ › SONG).</li>
+    <li>SONG ON: each track moves through its list; an empty entry between two patterns is a rest. <kbd>GLO</kbd> + <kbd>PLAY</kbd> starts every track from the top.</li>
+    <li>Shared patterns and copies.</li>
+  </ul>
+  <p class="soon-note">Video and step-by-step coming</p>
+</section>
+
+<section class="chapter" id="perform" data-n="15" data-group="ARRANGE AND PERFORM" data-video="">
+  <div class="ch-head"><span class="num">15</span><div><p class="group">ARRANGE AND PERFORM</p><h2>Perform</h2></div></div>
+  <p class="meta"><b>You'll learn</b> to play a song live: launch entries, stage mutes, recall scenes and throw the knobs.</p>
+  <div class="video"></div>
+  <ul class="outline">
+    <li>Hold <kbd>ARP</kbd> for PERFORM: the white keys launch entries, at the LAUNCH point (LOOP, BAR, BEAT, NOW) set with <kbd>SELECT</kbd>.</li>
+    <li>The black keys stage mutes for tracks 1–6.</li>
+    <li><a href="#g-scene">Scenes</a>: <kbd>SAVE</kbd> held and a key stores one, a key recalls it.</li>
+    <li>Throws on <kbd>KNOB 1</kbd>–<kbd>KNOB 4</kbd>, and chains of entries per track.</li>
+  </ul>
+  <p class="soon-note">Video and step-by-step coming</p>
+</section>
+
+<section class="chapter" id="fx-layer" data-n="16" data-group="ARRANGE AND PERFORM" data-video="">
+  <div class="ch-head"><span class="num">16</span><div><p class="group">ARRANGE AND PERFORM</p><h2>The FX layer</h2></div></div>
+  <p class="meta"><b>You'll learn</b> the 14 performance effects on the keys, the track cuts and the four macros.</p>
+  <div class="video"></div>
+  <ul class="outline">
+    <li>Hold <kbd>FX</kbd>: the white keys are REPEAT 1/8, 1/16 and 1/32, REVERSE, LPF, HPF, TAPE STOP, FREEZE, OCT UP, OCT DN, GATE, DUB, FLANGE and VINYL.</li>
+    <li>The black keys cut tracks 1–6.</li>
+    <li><kbd>KNOB 1</kbd>–<kbd>KNOB 4</kbd>: FILTER, CRUSH, THROW, DEPTH.</li>
+    <li>SHIFT + <kbd>FX</kbd> keeps the layer open and latches the effects.</li>
+  </ul>
+  <p class="soon-note">Video and step-by-step coming</p>
+</section>
+
+<!-- ================================================================ YOUR SETUP -->
+<section class="chapter" id="projects" data-n="17" data-group="YOUR SETUP" data-video="">
+  <div class="ch-head"><span class="num">17</span><div><p class="group">YOUR SETUP</p><h2>Projects and saving</h2></div></div>
+  <p class="meta"><b>You'll learn</b> what Skiff keeps by itself, and how to save, load and back up projects.</p>
+  <div class="video"></div>
+  <ul class="outline">
+    <li>The autosave, and RESTORE LAST at power-on.</li>
+    <li>SAVE › PROJECT: four <a href="#g-project">projects</a>: SAVE, LOAD, NEW, NAME and DELETE.</li>
+    <li>Complete backups of your music with the <a href="../webapp/editor/">web editor</a>.</li>
+  </ul>
+  <p class="soon-note">Video and step-by-step coming</p>
+</section>
+
+<section class="chapter" id="settings" data-n="18" data-group="YOUR SETUP" data-video="">
+  <div class="ch-head"><span class="num">18</span><div><p class="group">YOUR SETUP</p><h2>Settings and themes</h2></div></div>
+  <p class="meta"><b>You'll learn</b> the MENU, its five tabs, and the six themes.</p>
+  <div class="video"></div>
+  <ul class="outline">
+    <li>Hold <kbd>HOME</kbd> and let go: the MENU. <kbd>ALGORITHM</kbd> changes the tab, <kbd>PRESETS</kbd> the row, <kbd>KNOB 1</kbd>–<kbd>KNOB 4</kbd> or <kbd>OCT−</kbd> <kbd>OCT+</kbd> the value.</li>
+    <li>DISPLAY: THEME (SKIFF, HI-CON, PAPER, CRYPT, NEON, QUARK), LARGE, LEDS, SCREEN OFF.</li>
+    <li>CONTROL: HOLD, KNOB ACCEL, BPM LOCK, STEP PREVIEW. AUDIO: SPEAKER EQ, CLICK, COUNT-IN, TUNE.</li>
+    <li>SYSTEM: CPU (one core or two), CPU CLOCK, CALIBRATION, ABOUT.</li>
+  </ul>
+  <p class="soon-note">Video and step-by-step coming</p>
+</section>
+
+<section class="chapter" id="midi-editor" data-n="19" data-group="YOUR SETUP" data-video="">
+  <div class="ch-head"><span class="num">19</span><div><p class="group">YOUR SETUP</p><h2>MIDI and the web editor</h2></div></div>
+  <p class="meta"><b>You'll learn</b> to play Skiff from MIDI, map controllers to its knobs, and edit it from a computer.</p>
+  <div class="video"></div>
+  <ul class="outline">
+    <li>MENU › MIDI: CLOCK (INT, USB, TRS), MIDI IN (a channel per track, or the selected track), T1–T6 CHANNEL.</li>
+    <li>MIDI LEARN: any controller's CC to any knob. The standard CCs each track answers (CC7 level, CC10 pan …) and Program Change.</li>
+    <li>The <a href="../webapp/editor/">web editor</a> (Chrome or Edge, over USB): sounds, patterns, the library, <code>.syx</code> import, backups.</li>
+  </ul>
+  <p class="soon-note">Video and step-by-step coming</p>
+</section>
+
+<!-- ================================================================ REFERENCE -->
+<section class="chapter plain" id="glossary" data-group="PAGE">
+  <h2>Glossary</h2>
+  <dl class="terms">
+    <dt id="g-track">Track</dt><dd>One of six parts, T1–T6, each with its own sound and pattern, all playing together. <kbd>ALGORITHM</kbd> picks the track you're working on.</dd>
+    <dt id="g-engine">Engine</dt><dd>How a track makes its sound. There are 14: ANALOG, FM6, PHASE, LOFI, SAMPLE, VOICE, TRIO, WHEEL, GRAIN, PHYS, NOISE, SLICE, DRUM and DRUM-X. Hold <kbd>EDIT</kbd> to switch.</dd>
+    <dt id="g-sound">Sound</dt><dd>A stored setting of an engine (a preset). <kbd>PRESETS</kbd> steps through them; your own go to SAVE › USER.</dd>
+    <dt id="g-family">Page family</dt><dd>The pages one button opens: tap it again, or turn <kbd>SELECT</kbd>, for the next. SEQ's family is STEP, ROLL, CHANCE, PLAY, PATTERN, AUTOMATION and SONG.</dd>
+    <dt id="g-layer">Layer</dt><dd>What a held button lays over the page: FX, GLO, SEL, EDIT, SEQ TOOLS, PERFORM (ARP) and REC (SHIFT + REC). Let go and it's gone; SHIFT + the button keeps it open.</dd>
+    <dt id="g-shift">SHIFT</dt><dd><kbd>HOME</kbd> held. Its map shows what every control does on the page, and it changes what some do: SHIFT + SAVE is TAKE.</dd>
+    <dt id="g-step">Step</dt><dd>A sixteenth of a bar in a pattern, up to 64 of them. On the step pages the 16 white keys are steps 1–16.</dd>
+    <dt id="g-pattern">Pattern</dt><dd>A track's notes exactly as they play: its steps, LENGTH, DIV, SWING, GATE, direction, automation and locks. Kept by itself; 64 of them in a pool every project shares.</dd>
+    <dt id="g-list">List and entry</dt><dd>Each track has a list of 16 entries, A–P. An entry names a pattern and how many times it plays (REPS). The lists are the song, and PERFORM's keys.</dd>
+    <dt id="g-lock">Lock</dt><dd>A step's own value for a control: hold the step and turn a knob.</dd>
+    <dt id="g-take">Take</dt><dd>SHIFT + SAVE keeps the loop you just played as the track's pattern, whether or not REC was on.</dd>
+    <dt id="g-scene">Scene</dt><dd>The entry every track is on and every mute, stored together (16 in a project) and recalled with one key in PERFORM.</dd>
+    <dt id="g-project">Project</dt><dd>The sounds, the lists, the scenes and the settings of a piece of music. There are four; the patterns themselves live in the pool.</dd>
+    <dt id="g-undo">Undo</dt><dd>Hold <kbd>SAVE</kbd>. Eight changes are kept; <kbd>OCT−</kbd> goes further back and <kbd>OCT+</kbd> redoes while the box shows.</dd>
+  </dl>
+</section>
+
+<section class="chapter plain" id="troubleshooting" data-group="PAGE">
+  <h2>If the FM-1 does not start</h2>
+  <p>If an update is interrupted and the FM-1 stays black, check whether a computer sees it as a USB device named <b>WL80UBOOT</b>
+    (or a USB mass-storage device with ID 4C4A:8057). That is the chip's built-in boot mode, and the FM-1 can be brought back:</p>
+  <ul class="outline">
+    <li>First try another USB data cable and close every other app that uses MIDI, then run the installer again: it finishes an
+      interrupted update.</li>
+    <li>If it stays in boot mode, <a href="https://github.com/kurogedelic/FM-1-transporter">FM-1 Transporter</a> reads and writes the FM-1's
+      flash from a Mac through a Seeed XIAO RP2040 (three wires to the FM-1's USB lines). Back up the flash first, then write the official
+      firmware.</li>
+  </ul>
+  <p>Anything else: <a href="https://github.com/illuminus5/skiff/issues">open an issue</a> on GitHub.</p>
+</section>
+
+<section class="chapter plain" id="reference" data-group="PAGE">
+  <h2>Quick reference</h2>
+  <div class="figs"><a href="https://raw.githubusercontent.com/illuminus5/skiff/main/docs/controls.jpg">The controls sheet</a>
+    <a href="https://raw.githubusercontent.com/illuminus5/skiff/main/docs/keystrip.pdf">A key strip to print</a></div>
+  <table class="ctrls" id="ctrls">
+    <thead><tr><th scope="col">Control</th><th scope="col">What it does</th><th scope="col">Shown in</th></tr></thead>
+    <tbody>
+      <tr data-ctrl="MASTER"><th scope="row"><kbd>MASTER</kbd></th><td>The volume.</td><td class="in"></td></tr>
+      <tr data-ctrl="SELECT"><th scope="row"><kbd>SELECT</kbd></th><td>The page before or after in the family. With <kbd>GLO</kbd> held: the tempo.</td><td class="in"></td></tr>
+      <tr data-ctrl="ALGORITHM"><th scope="row"><kbd>ALGORITHM</kbd></th><td>The track, T1–T6, on every page. In the MENU: the tab.</td><td class="in"></td></tr>
+      <tr data-ctrl="PRESETS"><th scope="row"><kbd>PRESETS</kbd></th><td>The track's sound. On the step pages: the cursor. In lists: the row.</td><td class="in"></td></tr>
+      <tr data-ctrl="KNOB1"><th scope="row"><kbd>KNOB 1</kbd>–<kbd>KNOB 4</kbd></th><td>The four cards across the top of the page.</td><td class="in"></td></tr>
+      <tr data-ctrl="FX"><th scope="row"><kbd>FX</kbd></th><td>Tap: the track's effects, SLICER and DUCK. Hold: the FX layer.</td><td class="in"></td></tr>
+      <tr data-ctrl="SEL"><th scope="row"><kbd>SEL</kbd></th><td>Tap: SCALE and CHORD. Hold: a key sets the root.</td><td class="in"></td></tr>
+      <tr data-ctrl="ENV"><th scope="row"><kbd>ENV</kbd></th><td>The envelopes and where they go.</td><td class="in"></td></tr>
+      <tr data-ctrl="LFO"><th scope="row"><kbd>LFO</kbd></th><td>Tap: the LFOs and MOD. Hold: MOMENTARY.</td><td class="in"></td></tr>
+      <tr data-ctrl="EDIT"><th scope="row"><kbd>EDIT</kbd></th><td>Tap: the engine's pages and the voices. Hold: the engines on the white keys.</td><td class="in"></td></tr>
+      <tr data-ctrl="GLO"><th scope="row"><kbd>GLO</kbd></th><td>Tap: MIXER, DELAY, REVERB, CHORUS, GLOBAL. Hold: solos, mutes, FILL, tap tempo.</td><td class="in"></td></tr>
+      <tr data-ctrl="HOME"><th scope="row"><kbd>HOME</kbd></th><td>Tap: HOME. Hold: SHIFT and its map. Held and let go alone: the MENU.</td><td class="in"></td></tr>
+      <tr data-ctrl="SAVE"><th scope="row"><kbd>SAVE</kbd></th><td>Tap: PRESETS, USER, PATTERNS, PROJECT. Hold: undo. SHIFT + SAVE: TAKE.</td><td class="in"></td></tr>
+      <tr data-ctrl="ARP"><th scope="row"><kbd>ARP</kbd></th><td>Tap: the arpeggiator. Hold: PERFORM.</td><td class="in"></td></tr>
+      <tr data-ctrl="SEQ"><th scope="row"><kbd>SEQ</kbd></th><td>Tap: STEP, ROLL, CHANCE, PLAY, PATTERN, AUTOMATION, SONG. Hold: SEQ TOOLS.</td><td class="in"></td></tr>
+      <tr data-ctrl="PLAY"><th scope="row"><kbd>PLAY</kbd></th><td>Start and stop; green while playing. With <kbd>GLO</kbd> held: from the top.</td><td class="in"></td></tr>
+      <tr data-ctrl="REC"><th scope="row"><kbd>REC</kbd></th><td>Arms the selected track. SHIFT + REC: the REC layer.</td><td class="in"></td></tr>
+      <tr data-ctrl="OCT-"><th scope="row"><kbd>OCT−</kbd> <kbd>OCT+</kbd></th><td>The octave; both together reset it. In dialogs: back, and do it.</td><td class="in"></td></tr>
+      <tr data-ctrl="KEYS"><th scope="row">The keys</th><td>F3–G5: notes. On the step pages the white keys are steps 1–16; on a drum grid the black keys pick the row.</td><td class="in"></td></tr>
+    </tbody>
+  </table>
+</section>
+
+</main>
+
+<aside class="where" id="where" aria-label="Where on the unit">
+  <div class="where-in">
+    <p class="cap"><span>WHERE ON THE UNIT</span><span id="where-n"></span></p>
+    <div class="device" id="device"><svg id="panel" viewBox="0 0 1000 624" aria-hidden="true"></svg></div>
+    <p class="step-name" id="where-step"></p>
+    <p class="legend"><span><i></i>TAP</span><span><i style="box-shadow: inset 0 0 0 3px var(--lit)"></i>HOLD</span><span><i class="o"></i>TURN</span></p>
+  </div>
+</aside>
+</div>
+<button class="where-toggle" id="where-toggle" type="button" aria-controls="where" aria-expanded="false">Where?</button>
+
+<footer>
+  <p>Skiff is free firmware for the M-VAVE FM-1 (<a href="https://github.com/illuminus5/skiff">source</a>, GPL-3.0), built on Felucca by
+    Leo Kuroshita, Hügelton Instruments. The videos are made from the firmware itself: every screen is Skiff's own display.</p>
+  <p>Fonts: Barlow Condensed and Inter Tight, SIL Open Font License (<a href="../fonts/OFL.txt">OFL</a>,
+    <a href="../fonts/InterTight-OFL.txt">OFL</a>). M-VAVE and FM-1 are trademarks of their respective owners; Skiff is not
+    affiliated with or endorsed by them.</p>
+</footer>
+
+<script src="../panel.js"></script>
+<script src="steps.js"></script>
+<script>
+"use strict";
+const DATA = typeof LEARN !== "undefined" ? LEARN : { chapters: {}, steps: {} };
+const LOCAL = new URLSearchParams(location.search).has("local");    // review before upload: local/<chapter>.mp4
+const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const pad = (n) => String(n).padStart(2, "0");
+const clock = (t) => `${Math.floor(t / 60)}:${pad(Math.floor(t % 60))}`;
+const chapters = $$("section.chapter[data-n]");
+
+/* ---------------------------------------------------------------- the logo (docs/logo/skiff-logo.svg, inlined): its white
+ * (the boat, the word) and its unlit grey take the theme's ink and line */
+for (const r of $$("#logo rect")) {
+  const f = (r.getAttribute("fill") || "").toLowerCase();
+  if (f === "#ffffff" || f === "#fff") r.setAttribute("class", "ink");
+  else if (f === "#2c2c2c") r.setAttribute("class", "unlit");
+}
+
+/* ---------------------------------------------------------------- the chapter list: the hero's tiles, the TOC, next links */
+(function lists() {
+  const groups = new Map();
+  for (const s of chapters) {
+    const g = s.dataset.group;
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(s);
+  }
+  const hero = $("#groups"), toc = $("#toc");
+  for (const [g, list] of groups) {
+    const col = document.createElement("div");
+    col.className = "group";
+    col.dataset.group = g;
+    col.innerHTML = `<h2>${g}</h2><ol></ol>`;
+    const tg = document.createElement("div");
+    tg.dataset.group = g;
+    tg.innerHTML = `<h2>${g}</h2>`;
+    for (const s of list) {
+      const n = Number(s.dataset.n), title = $("h2", s).textContent, has = DATA.chapters[s.id] && (s.dataset.video || LOCAL);
+      const li = document.createElement("li");
+      li.innerHTML = `<a class="card" href="#${s.id}"><span class="n">${pad(n)}</span><span class="t">${title}<span class="v">${has ? "▶ " + clock(DATA.chapters[s.id].dur) : $(".steps", s) ? "steps · video soon" : "outline"}</span></span></a>`;
+      $("ol", col).appendChild(li);
+      const a = document.createElement("a");
+      a.href = `#${s.id}`;
+      a.textContent = `${n} ${title}`;
+      a.dataset.for = s.id;
+      tg.appendChild(a);
+    }
+    hero.appendChild(col);
+    toc.appendChild(tg);
+  }
+  const ref = document.createElement("div");
+  ref.dataset.group = "PAGE";
+  ref.innerHTML = `<h2>REFERENCE</h2><a href="#glossary" data-for="glossary">Glossary</a><a href="#troubleshooting" data-for="troubleshooting">If it does not start</a><a href="#reference" data-for="reference">Quick reference</a>`;
+  toc.appendChild(ref);
+  chapters.forEach((s, i) => {
+    const nx = chapters[i + 1];
+    if (!nx) return;
+    const p = document.createElement("p");
+    p.className = "next";
+    p.innerHTML = `Next: <a href="#${nx.id}">${pad(nx.dataset.n)} ${$("h2", nx).textContent}</a>`;
+    s.appendChild(p);
+  });
+})();
+
+/* ---------------------------------------------------------------- the unit (../panel.js) and what lights on it */
+const P = window.PANEL.draw($("#panel"), "wide", { knobFont: "'Barlow Condensed', sans-serif" });
+const CTRL = new Map($$("#panel [data-ctrl]").map((g) => [g.dataset.ctrl, g]));
+const lcd = document.createElement("img");          // the step's screen, on the unit's
+lcd.className = "screen";
+lcd.alt = "";
+lcd.hidden = true;
+{ const [x, y, w] = P.screen; Object.assign(lcd.style, { left: `${x / P.L.w * 100}%`, top: `${y / P.L.h * 100}%`, width: `${w / P.L.w * 100}%`, height: `${w / P.L.h * 100}%` }); }
+$("#device").appendChild(lcd);
+let lit = [], hovered = [];
+function light(map) {                                 // map: {control: "press" | "hold" | "turn"}
+  for (const g of lit) g.classList.remove("on-press", "on-hold", "on-turn");
+  lit = [];
+  for (const [c, kind] of Object.entries(map || {})) {
+    const g = CTRL.get(c);
+    if (g) { g.classList.add("on-" + kind); lit.push(g); }
+  }
+}
+function showStep(li) {
+  const d = li && DATA.steps[li.id], sec = li && li.closest("section");
+  light(d ? d.ctrl : guessCtrl(li));
+  lcd.hidden = !d;
+  if (d) lcd.src = `img/${li.id}.png`;
+  $("#where-step").textContent = li ? $("h3", li).textContent : "";
+  $("#where-n").textContent = li ? `${pad(sec.dataset.n)}·${pad($$(".step", sec).indexOf(li) + 1)}` : "";
+}
+/* a step without capture data yet: its <kbd>s, pressed */
+function guessCtrl(li) {
+  const m = {};
+  if (li) for (const k of $$("kbd", li)) { const c = ctrlOf(k.textContent); if (c) m[c] = "press"; }
+  return m;
+}
+const PC = { C: 0, "C♯": 1, "C#": 1, D: 2, "D♯": 3, "D#": 3, E: 4, F: 5, "F♯": 6, "F#": 6, G: 7, "G♯": 8, "G#": 8, A: 9, "A♯": 10, "A#": 10, B: 11 };
+function ctrlOf(text) {                               // a <kbd>'s words -> panel.js's data-ctrl
+  const t = text.trim().replace("−", "-");
+  const m = /^([A-G][♯#]?)([2-6])$/.exec(t);
+  if (m) { const k = 12 * (Number(m[2]) + 1) + PC[m[1]] - 53; return k >= 0 && k <= 26 ? "KEY" + k : null; }
+  const n = t.toUpperCase().replace(/^KNOB (\d)$/, "KNOB$1").replace(/^SHIFT$/, "HOME");
+  return CTRL.has(n) ? n : null;
+}
+for (const k of $$("kbd")) {
+  const c = ctrlOf(k.textContent);
+  if (!c) continue;
+  k.tabIndex = 0;
+  const on = () => { const g = CTRL.get(c); g.classList.add("on-hover"); hovered.push(g); };
+  const off = () => { for (const g of hovered) g.classList.remove("on-hover"); hovered = []; };
+  k.addEventListener("mouseenter", on);
+  k.addEventListener("focus", on);
+  k.addEventListener("mouseleave", off);
+  k.addEventListener("blur", off);
+}
+
+/* ---------------------------------------------------------------- the steps: their stills and time chips */
+for (const li of $$(".step")) {
+  const d = DATA.steps[li.id], sec = li.closest("section");
+  if (!d) continue;
+  const box = document.createElement("div");
+  box.className = "shot";
+  box.innerHTML = `<img src="img/${li.id}.png" alt="The screen at this step" width="180" height="180" loading="lazy">`;
+  if (sec.dataset.video || (LOCAL && DATA.chapters[sec.id])) {
+    const b = document.createElement("button");
+    b.className = "t";
+    b.type = "button";
+    b.textContent = "▶ " + clock(d.t);
+    b.setAttribute("aria-label", `Play the video from ${clock(d.t)}`);
+    b.addEventListener("click", () => play(sec, d.t));
+    box.appendChild(b);
+  }
+  li.prepend(box);
+}
+
+/* ---------------------------------------------------------------- the videos: a facade, then YouTube (or ?local=1) */
+let ytP = null, cur = null, nowEl = null, lastUser = 0;
+const loadYT = () => ytP || (ytP = new Promise((res) => {
+  window.onYouTubeIframeAPIReady = res;
+  const s = document.createElement("script");
+  s.src = "https://www.youtube.com/iframe_api";
+  document.head.appendChild(s);
+}));
+for (const sec of chapters) {
+  const box = $(".video", sec), id = sec.dataset.video, meta = DATA.chapters[sec.id];
+  if (!box) continue;
+  if (id || (LOCAL && meta)) {
+    box.innerHTML = `<button type="button" class="${meta && meta.poster ? "has-poster" : ""}" aria-label="Play chapter ${sec.dataset.n}">${meta && meta.poster ? `<img src="img/${sec.id}/poster.jpg" alt="">` : `<span class="wall"></span><span class="big">${pad(sec.dataset.n)}</span>`}<span class="play">▶ Watch${meta ? " · " + clock(meta.dur) : ""}</span></button>`;
+    $("button", box).addEventListener("click", () => play(sec, 0));
+  } else {
+    box.innerHTML = `<span class="wall"></span><span class="big">${pad(sec.dataset.n)}</span><button type="button" disabled tabindex="-1"><span class="soon">Video coming</span></button>`;
+  }
+}
+async function play(sec, t0) {
+  if (cur && cur.sec === sec) { cur.ad.seek(t0); return; }
+  if (cur) { cur.ad.pause(); cur.box.classList.remove("active"); }
+  const box = $(".video", sec);
+  box.classList.add("active");
+  cur = { sec, box, ad: null };
+  const me = cur;
+  me.ad = await (sec.dataset.video && !LOCAL ? youtube(box, sec.dataset.video, t0) : local(box, sec.id, t0));
+  box.scrollIntoView({ block: "start", behavior: "smooth" });
+  void me;
+}
+function local(box, id, t0) {
+  const v = document.createElement("video");
+  v.src = `local/${id}.mp4`;
+  v.controls = true;
+  v.playsInline = true;
+  box.replaceChildren(v);
+  v.addEventListener("loadedmetadata", () => { v.currentTime = t0; v.play(); }, { once: true });
+  return { time: () => v.currentTime, seek: (t) => { v.currentTime = t; v.play(); }, pause: () => v.pause(), playing: () => !v.paused };
+}
+async function youtube(box, videoId, t0) {
+  await loadYT();
+  const div = document.createElement("div");
+  box.replaceChildren(div);
+  const p = await new Promise((res) => {
+    const pl = new YT.Player(div, { host: "https://www.youtube-nocookie.com", videoId, width: "100%", height: "100%",
+      playerVars: { start: Math.floor(t0), autoplay: 1, rel: 0, playsinline: 1 }, events: { onReady: () => res(pl) } });
+  });
+  p.playVideo();
+  return { time: () => p.getCurrentTime() || 0, seek: (t) => { p.seekTo(t, true); p.playVideo(); }, pause: () => p.pauseVideo(),
+           playing: () => p.getPlayerState() === 1 };
+}
+/* while a video plays: its step marked, lit on the unit, scrolled to under the video (unless you're scrolling) */
+for (const ev of ["wheel", "touchmove", "keydown"]) addEventListener(ev, () => { lastUser = Date.now(); }, { passive: true });
+setInterval(() => {
+  if (!cur || !cur.ad || !cur.ad.playing()) return;
+  const t = cur.ad.time();
+  let now = null;
+  for (const li of $$(".step", cur.sec)) if (DATA.steps[li.id] && DATA.steps[li.id].t <= t + 0.05) now = li;
+  if (now === nowEl) return;
+  if (nowEl) nowEl.classList.remove("now");
+  nowEl = now;
+  if (!now) return;
+  now.classList.add("now");
+  showStep(now);
+  if (Date.now() - lastUser > 4000) {
+    const top = now.getBoundingClientRect().top + scrollY - cur.box.offsetHeight - 24;
+    scrollTo({ top, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  }
+}, 250);
+
+/* ---------------------------------------------------------------- reading: the step and chapter in view */
+let reading = null;
+const playingHere = () => cur && cur.ad && cur.ad.playing();
+const stepSeen = new IntersectionObserver((es) => {
+  for (const e of es) {
+    if (!e.isIntersecting || playingHere()) continue;
+    if (reading) reading.classList.remove("reading");
+    reading = e.target;
+    reading.classList.add("reading");
+    showStep(reading);
+  }
+}, { rootMargin: "-30% 0px -60% 0px" });
+$$(".step").forEach((li) => stepSeen.observe(li));
+const secSeen = new IntersectionObserver((es) => {
+  for (const e of es) if (e.isIntersecting)
+    for (const a of $$("#toc a")) a.classList.toggle("here", a.dataset.for === e.target.id);
+}, { rootMargin: "-20% 0px -75% 0px" });
+$$("section.chapter").forEach((s) => secSeen.observe(s));
+
+/* ---------------------------------------------------------------- the quick reference: where each control is shown */
+for (const tr of $$("#ctrls tr[data-ctrl]")) {
+  const c = tr.dataset.ctrl, want = c === "KNOB1" ? /^KNOB\d$/ : c === "OCT-" ? /^OCT[-+]$/ : c === "KEYS" ? /^KEY\d+$/ : null;
+  const links = [];
+  for (const li of $$(".step")) {
+    const d = DATA.steps[li.id];
+    if (!d || !Object.keys(d.ctrl).some((k) => (want ? want.test(k) : k === c))) continue;
+    const sec = li.closest("section");
+    links.push(`<a href="#${li.id}">${sec.dataset.n}·${pad($$(".step", sec).indexOf(li) + 1)} ${$("h3", li).textContent}</a>`);
+  }
+  $("td.in", tr).innerHTML = links.join("") || "<span>—</span>";
+}
+
+/* ---------------------------------------------------------------- phones: the unit docked at the bottom on demand */
+$("#where-toggle").addEventListener("click", (e) => {
+  const open = document.body.classList.toggle("where-open");
+  e.currentTarget.setAttribute("aria-expanded", open);
+  e.currentTarget.textContent = open ? "Close" : "Where?";
+  e.currentTarget.style.bottom = open ? `${$("#where").offsetHeight + 12}px` : "";   // (just above the panel)
+});
+</script>
+</body>
+</html>

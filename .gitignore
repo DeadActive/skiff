@@ -4,3 +4,6 @@ __pycache__/
 *.fwsc
 design/fonts/
 design/out/
+
+# Learn Skiff: review copies of the chapter videos (?local=1), never published
+web/learn/local/

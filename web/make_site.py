@@ -8,6 +8,8 @@
                               JieLi SDK files under Apache-2.0, see LICENSING.md)
   webapp/installer/index.html index_pkg.html, self-contained (fm1pkg.js, fm1ota.js, metadata inlined)
   webapp/editor/index.html    editor.html (+ fukiai.ttf, FUKIAI-LICENSE.txt)
+  learn/                      Learn Skiff, the manual in chapters (web/learn, without its local/ review videos)
+  panel.js, fonts/            the panel's drawing and the fonts the Learn page shares, at the paths it has in web/
   src/                        not touched
 
   web/make_site.py build/skiff-X.Y.fwsc X.Y OUT_DIR
@@ -79,12 +81,17 @@ def main(pkg, version, out):
         if (HERE / f).exists():
             shutil.copy(HERE / f, ed / f)
     if (HERE / "fonts").is_dir():                   # ((Skiff 1.0) the editor's Barlow Condensed, its OFL beside it)
-        shutil.copytree(HERE / "fonts", ed / "fonts", dirs_exist_ok=True)
+        shutil.copytree(HERE / "fonts", ed / "fonts", dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns("InterTight*"))   # (the Learn page's, not the editor's)
+    shutil.rmtree(out / "learn", ignore_errors=True)  # ((Skiff) Learn Skiff: ../panel.js and ../fonts/, as in web/)
+    shutil.copytree(HERE / "learn", out / "learn", ignore=shutil.ignore_patterns("local"))
+    shutil.copy(HERE / "panel.js", out / "panel.js")
+    shutil.copytree(HERE / "fonts", out / "fonts", dirs_exist_ok=True)
     (out / "index.html").write_text(
         '<!doctype html><meta charset="utf-8"><title>Skiff</title>'
         '<meta http-equiv="refresh" content="0; url=webapp/installer/">'
         '<a href="webapp/installer/">Skiff installer</a>\n', encoding="utf-8")
-    print(f"site: {out}: webapp/installer ({len(html)} B), webapp/editor, firmware/{name} ({len(raw)} B, {product})")
+    print(f"site: {out}: webapp/installer ({len(html)} B), webapp/editor, learn, firmware/{name} ({len(raw)} B, {product})")
 
 
 if __name__ == "__main__":

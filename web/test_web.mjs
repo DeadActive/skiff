@@ -1560,6 +1560,45 @@ function editorTabs() {
     "editor: no colours beyond the black / white tokens in the new styles");
 }
 
+/* ------------------------------------------------------------ the Learn page --- */
+/* web/learn/index.html (one page, every chapter) against steps.js (from the video captures) and ../panel.js */
+function learnPage() {
+  const page = readFileSync(join(HERE, "learn/index.html"), "utf8");
+  const LEARN = vm.runInNewContext(readFileSync(join(HERE, "learn/steps.js"), "utf8") + ";LEARN");
+  const win = {};
+  vm.runInNewContext(readFileSync(join(HERE, "panel.js"), "utf8"), { window: win });
+  const P = win.PANEL;
+  const steps = [...page.matchAll(/<li class="step" id="([^"]+)"/g)].map((m) => m[1]);
+  const ids = new Set([...page.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
+  const sections = [...page.matchAll(/<section class="chapter[^"]*" id="([^"]+)"/g)].map((m) => m[1]);
+  ok(steps.length === new Set(steps).size && steps.every((id) => sections.includes(id.split("/")[0])),
+    `learn: ${steps.length} step ids, unique, each "<chapter>/<step>" of its section`);
+  const stray = Object.keys(LEARN.steps).filter((k) => !steps.includes(k));
+  ok(!stray.length, `learn: every step in steps.js is on the page${stray.length ? " (not: " + stray + ")" : ""}`);
+  const part = Object.keys(LEARN.chapters).filter((c) => steps.some((s) => s.startsWith(c + "/") && !LEARN.steps[s]));
+  ok(!part.length, `learn: a chapter with video data has all its steps' data${part.length ? " (not: " + part + ")" : ""}`);
+  const noImg = Object.keys(LEARN.steps).filter((k) => !existsSync(join(HERE, "learn/img", k + ".png")));
+  ok(!noImg.length, `learn: every step with data has its still${noImg.length ? " (missing: " + noImg + ")" : ""}`);
+  const bad = [...page.matchAll(/href="#([^"]*)"/g)].map((m) => m[1]).filter((h) => h && !h.includes("${") && !ids.has(h));   // (not the script's templates)
+  ok(!bad.length, `learn: every # link has its target${bad.length ? " (not: " + bad + ")" : ""}`);
+  const keys = new Set(Array.from({ length: 27 }, (_, k) => P.keyName(k)));
+  const known = new Set([...Object.keys(P.B), ...P.KNOBS, "SHIFT"]);
+  const kbd = [...page.matchAll(/<kbd>([^<]*)<\/kbd>/g)].map((m) => m[1].replace("−", "-"));
+  const odd = kbd.filter((k) => !known.has(k) && !keys.has(k.replace("#", "♯")));
+  ok(kbd.length && !odd.length, `learn: every <kbd> is a control of the panel (${kbd.length}${odd.length ? ", unknown: " + odd : ""})`);
+  const vids = [...page.matchAll(/data-video="([^"]*)"/g)].map((m) => m[1]);
+  ok(vids.length === sections.filter((s) => !["glossary", "troubleshooting", "reference"].includes(s)).length && vids.every((v) => v === "" || /^[\w-]{11}$/.test(v)),
+    "learn: each chapter has data-video, empty or a YouTube id");
+  const css = page.slice(page.indexOf("<style>"), page.indexOf("</style>"));
+  ok(!/#[0-9a-f]{3,6}\b/i.test(css.replace(/:root[^}]*\}/g, "")), "learn: no colours beyond the :root tokens in the styles");
+  const script = page.slice(page.lastIndexOf("<script>") + 8, page.lastIndexOf("</script>"));
+  let err = null;
+  try { new vm.Script(script); } catch (e) { err = e.message; }
+  ok(!err, "learn: page script compiles" + (err ? ` (${err})` : ""));
+  const site = readFileSync(join(HERE, "make_site.py"), "utf8");
+  ok(/"learn"/.test(site) && /panel\.js/.test(site), "learn: make_site.py ships the page and panel.js");
+}
+
 /* ------------------------------------------------- editor icons (Fukiai) --- */
 function editorIcons() {
   const blk = html.slice(html.indexOf("const GLYPH = {"), html.indexOf("};", html.indexOf("const GLYPH = {")));
@@ -1763,6 +1802,7 @@ fm6TabNoBank();
 await editorFm4();
 editorTabs();
 editorIcons();
+learnPage();
 samplesMatch();
 await packages();
 await updater();
