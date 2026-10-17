@@ -97,6 +97,19 @@ static uint32_t up_gen;                      /* bumped on every user bank change
 #define CPU2_BYTE (favorites.factory[15][5])
 #define CPU2_SET (favorites.factory[15][24] == 0xA5u && (CPU2_BYTE & 1u))
 #define PREVIEW_SET (favorites.factory[15][24] == 0xA5u && (CPU2_BYTE & 2u))   /* ((1.3) MENU > STEP PREVIEW ON) */
+/* (Skiff) MENU > SYSTEM > CPU CLOCK 320 MHZ: JieLi's rated clock instead of the boot stage's 360 (hal/fm1_clk.h), switched
+ * at boot (main.c), bit 2 of CPU2_BYTE; clear: 360, as 1.3. clk320: what this boot did about it, kept across a soft reset
+ * (which keeps the PLL), forgotten at power-on; CLK_WHY: FM1_CLK320_E*'s words (hal/fm1_clk320_probe.h) */
+#define CLK320_SET (favorites.factory[15][24] == 0xA5u && (CPU2_BYTE & 4u))
+enum { CLK_NONE, CLK_ARMED, CLK_ON, CLK_KEPT, CLK_REFUSED, CLK_TRIPPED };   /* (ARMED: switching; TRIPPED: a reset then, so
+                                                        * no switch till power-off) */
+#define CLK320_MAGIC 0x434C4B32u                       /* "CLK2" */
+struct { uint32_t magic; uint8_t state, why; uint16_t loop_mhz; } clk320 __attribute__((section(".noinit")));
+static const char *const CLK_WHY[11] = {"", "ALREADY 320", "SYS MODE", "PLL2 NOT 270", "PLL2 REF", "DIVIDERS",
+                                        "SYS NOT ON PLL", "USB ON PLL2", "SDRAM", "CACHE B9", "VERIFY"};
+#ifndef CLK_MHZ
+#define CLK_MHZ() 360u                                 /* the core clock now (felucca.c: the PLL's); the host, the browser */
+#endif
 /* (Skiff U3, R8) the unit's CLOCK, MIDI IN and TUNE (MENU > CONTROL, AUDIO; GLOBAL's and SYSTEM's before, saved in every
  * project, so a project load could switch the clock or the routing without a word): settings bytes no engine uses
  * ([15][18..20], free since phase 5; 0 = INT, CH1-6, 0 ct, the defaults, in every older setting). song.g[] holds them

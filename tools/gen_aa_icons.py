@@ -39,7 +39,9 @@ ROOT = Path(__file__).resolve().parents[1]
 LEGACY = {
     "generic": "ui_knob", "attack": "function_env_adsr_attack", "decay": "function_env_adsr_decay",
     "sustain": "function_env_adsr_sustain", "release": "function_env_adsr_release", "env": "function_env_adsr_lin",
-    "cutoff": "function_filter_lpf", "reso": "function_filter_lpf_peak", "rate": "symbol_speed",
+    "cutoff": "function_filter_hpf", "reso": "function_filter_hpf_peak", "rate": "symbol_speed",   # ((1.3.1) Fukiai's
+    # filter names are mirrored: its "hpf" glyphs draw the low-pass curve (flat, then falling), its "lpf" ones the
+    # high-pass (rising, then flat); a low-pass CUTOFF and its resonance take the low-pass drawing, FX's HPF the other)
     "lfo_wave": "waveform_sine", "wave": "waveform_variant", "pulse": "waveform_pulse_quarter",
     "shape": "waveform_variant_four", "pitch": "waveform_pitch", "tune": "symbol_tuning",
     "detune": "function_phaseout", "transpose": "control_arrow_up_down", "octave": "control_arrow_up",
@@ -82,7 +84,7 @@ EXTRA = {
     "x_doctor": "symbol_doctor", "x_bat0": "system_battery_0", "x_bat1": "system_battery_1",
     "x_bat3": "system_battery_3", "x_bat4": "system_battery_4", "x_bat_chg": "system_battery_charging",
     # the FX hold layer (ui_draw.c draw_layer, Fukiai 0.8.3) and the HOLD menu row
-    "x_knob": "ui_knob", "x_hpf": "function_filter_hpf",
+    "x_knob": "ui_knob", "x_hpf": "function_filter_lpf",   # ((1.3.1) the high-pass drawing: see "cutoff")
     "x_repeat": "control_arrow_loop", "x_reverse": "control_reverse_f", "x_tstop": "symbol_stop",
     "x_freeze": "symbol_freeze",
     # OCT UP / OCT DN (the harmonizer): stand-ins until Fukiai has a pitch-shift glyph;

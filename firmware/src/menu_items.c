@@ -8,7 +8,7 @@
  * value (MI_VALUES: the rows before them hold one). 1.0.5: in four tabs (MI_TAB). */
 enum { MI_COLOR, MI_LARGE, MI_ANIM, MI_LEDS, MI_SCROFF, MI_HINTS, MI_HOLD, MI_ACCEL, MI_BPMLOCK, MI_SCLLED, MI_PREVIEW,
        MI_LOWCUT, MI_USB, MI_CLICK, MI_CLKLVL, MI_COUNTIN, MI_TUNE, MI_CLOCK, MI_ROUTE,
-       MI_LEARN, MI_LCLEAR, MI_TCH1, MI_TCH2, MI_TCH3, MI_TCH4, MI_TCH5, MI_TCH6, MI_SERIAL, MI_RESTORE, MI_CPU, MI_PANEL,
+       MI_LEARN, MI_LCLEAR, MI_TCH1, MI_TCH2, MI_TCH3, MI_TCH4, MI_TCH5, MI_TCH6, MI_SERIAL, MI_RESTORE, MI_CPU, MI_CLK, MI_PANEL,
        MI_RESET, MI_ABOUT, MI_COUNT };   /* ((Skiff U4, A3) HINTS; RESET SETTINGS, a row with no value: its dialog) */   /* ((Skiff U3, R8, R2) CLOCK, MIDI IN, TUNE: the unit's, GLOBAL's and SYSTEM's before; CPU: read) */   /* (1.1: the metronome's rows in
                                                                                              * AUDIO; 1.2: RESTORE LAST in SYSTEM, SCALE LEDS
                                                                                              * in CONTROL) */
@@ -18,7 +18,7 @@ static const char *const MI_NAME[MI_COUNT] = {"THEME", "LARGE", "ANIM", "LEDS", 
                                               "SPEAKER EQ", "USB LEVEL", "CLICK", "CLICK LEVEL", "COUNT-IN", "TUNE",
                                               "CLOCK", "MIDI IN", "MIDI LEARN", "LEARN CLEAR",
                                               "T1 CHANNEL", "T2 CHANNEL", "T3 CHANNEL", "T4 CHANNEL", "T5 CHANNEL", "T6 CHANNEL",
-                                              "USB SERIAL", "RESTORE LAST", "CPU", "CALIBRATION", "RESET SETTINGS",
+                                              "USB SERIAL", "RESTORE LAST", "CPU", "CPU CLOCK", "CALIBRATION", "RESET SETTINGS",
                                               "ABOUT"};
 /* 1.0.5: the MENU's tabs (ui_menu.c: ALGORITHM steps between them, PRESETS among one tab's rows; the editor gets a
  * row's tab after its MENU_DESC reply). A tab's rows follow each other in MI order (tests/ui_test.c checks it); the
@@ -44,8 +44,9 @@ static const uint8_t MI_TAB[MI_COUNT] = {
                                                                              * CONTROL) */
     MTAB_MIDI, MTAB_MIDI,                                                   /* (1.3) MIDI LEARN, LEARN CLEAR */
     MTAB_MIDI, MTAB_MIDI, MTAB_MIDI, MTAB_MIDI, MTAB_MIDI, MTAB_MIDI,       /* (1.3) T1..T6 CHANNEL */
-    MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM,   /* USB SERIAL, RESTORE LAST, (Skiff U3)
-                                                                             * CPU, CALIBRATION, (U4) RESET SETTINGS, ABOUT */
+    MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM,                     /* USB SERIAL, RESTORE LAST, (Skiff U3) CPU,
+                                                                             * (Skiff) CPU CLOCK (SYSTEM's seven scroll) */
+    MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM,                                  /* CALIBRATION, (U4) RESET SETTINGS, ABOUT */
 };
 typedef char mtab_fits_ui[sizeof ui.menu_row >= MTAB_COUNT ? 1 : -1];   /* (ui.c: the row last picked per tab) */
 static uint32_t mtab_first(uint32_t t)                 /* a tab's first row */
@@ -150,6 +151,7 @@ static uint32_t menu_get(uint32_t row)
 #if FELUCCA_CPU2
     case MI_CPU: return CPU2_SET ? 1u : 0u;            /* ((Skiff 1.3) 1 CORE, 2 CORES (BETA): from the next power-on) */
 #endif
+    case MI_CLK: return CLK320_SET ? 1u : 0u;          /* ((Skiff) 360 MHZ, 320 MHZ: from the next power-on) */
     case MI_LEDS:
         while (i + 1u < LEDS_COUNT && LEDS_MENU[i] != settings_leds)
             i++;
@@ -210,6 +212,16 @@ static const char *menu_vname(uint32_t row, uint32_t v)
         str_cpy(b + str_len(b), row == MI_TUNE ? " CT" : " %", sizeof b - str_len(b));
         return b;
     }
+    case MI_CLK: {                                     /* ((Skiff) "320 MHZ"; set another way than this power-on runs, as
+                                                        * CPU's: ": RESTART" (playing ": STOP"), and 320 refused at boot
+                                                        * (main.c; its header message said why): ": REFUSED" */
+        static char m[20] __attribute__((section(".pool")));
+        str_cpy(m, v ? "320 MHZ" : "360 MHZ", sizeof m);
+        if (CLK_MHZ() != (v ? 320u : 360u))
+            str_cpy(m + str_len(m), transport_busy() ? ": STOP" : v && clk320.state >= CLK_REFUSED ? ": REFUSED" :
+                    ": RESTART", sizeof m - str_len(m));
+        return m;
+    }
     }
     return "";
 }
@@ -258,6 +270,11 @@ static void menu_put(uint32_t row, uint32_t v)
                                                         * at STOP, and the row says STOP till then) */
         break;
 #endif
+    case MI_CLK:                                       /* ((Skiff) the clock: switched at boot only, main.c; saved as CPU) */
+        if (favorites.factory[15][24] == 0xA5u)
+            CPU2_BYTE = (uint8_t)(v ? CPU2_BYTE | 4u : CPU2_BYTE & ~4u);
+        settings_save();
+        break;
     }
 }
 /* (Skiff U4, the review's A3) MENU > SYSTEM > RESET SETTINGS, after its dialog (ui_input.c): every MENU setting as a new
@@ -289,6 +306,7 @@ static void settings_reset(void)
 #if FELUCCA_CPU2
     menu_put(MI_CPU, 0);                               /* ((Skiff 1.3) 1 CORE) */
 #endif
+    menu_put(MI_CLK, 0);                               /* ((Skiff) 360 MHZ) */
     settings_save();
 }
 /* the menu's step, any of KNOB 1..4 or OCT+ (s > 0) / OCT- (s < 0): the next / previous value, stopping at the ends;

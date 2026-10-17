@@ -23,8 +23,9 @@ Every file in this tree that carries an `SPDX-License-Identifier: GPL-3.0-only` 
 
 Three source files are ports and keep the licence of their originals:
 `firmware/src/phys_dsp.c` (DaisySP, MIT), `firmware/src/phys_symp.c` (Rings, MIT) and
-`firmware/src/fm6_core.c` (msfa, Apache-2.0). The firmware built with them is GPL-3.0-only as
-a whole.
+`firmware/src/fm6_core.c` (msfa, Apache-2.0); two are another project's, unchanged, under its
+licence: `firmware/hal/fm1_clk320.h` and `firmware/hal/fm1_clk320_probe.h` (fm1-clk320-probe,
+MIT). The firmware built with them is GPL-3.0-only as a whole.
 
 You may use, study, change and share Skiff under the GPL. If you distribute Skiff, or
 firmware derived from it, you must also give your recipients its complete corresponding
@@ -64,6 +65,7 @@ made: `assets/breaks/ATTRIBUTION.txt`).
 | X0X by charlesvestal (<https://github.com/charlesvestal/fm1-x0x>), a Felucca fork: the design of the browser emulator (the worklet, the device clock driven by its audio, the exports); its files credit it in their headers | GPL-3.0 | `web/emu/` |
 | The second core (Skiff 1.3), as Felucca 1.6.1 has it (<https://github.com/hugelton/Felucca>, commit a53ecf4, by Leo Kuroshita and gospodindilly-ops): its start, mailbox and hold from X0X by charlesvestal (`hal/fm1_cpu1.h`, `hal/fm1_cpu1.S`, unchanged), after Melodee by Kerem Kilic (<https://github.com/keremimo/melodee>) and with Jangada's measurements and hardening by zednaked (<https://github.com/zednaked/jangada>); the render split and its host tests adapted to Skiff's six tracks | GPL-3.0-only (X0X, Melodee, Jangada: GPL-3.0) | `firmware/hal/fm1_cpu1.h`, `firmware/hal/fm1_cpu1.S`, `firmware/src/fx.c`, `tests/c1_host.h`, `tests/dualcore_test.c` |
 | DotGothic16 font by The DotGothic16 Project Authors (<https://github.com/fontworks-fonts/DotGothic16>): the browser emulator's knob labels, served with its page (cut to printable ASCII; the font declares no Reserved Font Name) | SIL OFL 1.1 | `web/emu/fonts/DotGothic16-subset.woff`, `LICENSES/OFL-DotGothic16.txt` (also `web/emu/fonts/OFL.txt`) |
+| fm1-clk320-probe by curist (<https://github.com/curist/fm1-clk320-probe>): the switch from the FM-1's 360 MHz to JieLi's rated 320 MHz behind MENU > SYSTEM > CPU CLOCK (the check of the clock registers, the switch, its reason codes and a crystal-timed clock loop), unchanged; its sequence after the JieLi AC79 SDK's `sys_clock_update` (Apache-2.0) | MIT | `firmware/hal/fm1_clk320.h`, `firmware/hal/fm1_clk320_probe.h`, `LICENSES/MIT-fm1-clk320.txt` |
 | JieLi AC79 SDK by JieLi Technology: three of its files go into every `.fwsc` package (below); none are in this tree | Apache-2.0 | `LICENSES/Apache-2.0.txt` |
 
 On the device, HOME held > ABOUT opens the information screen; turning PRESETS scrolls on into

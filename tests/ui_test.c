@@ -1465,7 +1465,7 @@ static int test_menu_tabs(void)
                  "tab gaps constant (S, LARGE)",
                  ok && MTAB_COUNT == 5u && str_eq(MTAB_NAME[0], "DISPLAY") && str_eq(MTAB_NAME[MTAB_MIDI], "MIDI") &&
                  mtab_rows(MTAB_DISPLAY) == 6u && mtab_rows(MTAB_CONTROL) == 5u && mtab_rows(MTAB_AUDIO) == 6u &&
-                 mtab_rows(MTAB_SYSTEM) == 6u && mtab_rows(MTAB_MIDI) == 10u);
+                 mtab_rows(MTAB_SYSTEM) == 7u && mtab_rows(MTAB_MIDI) == 10u);   /* ((Skiff) SYSTEM: CPU CLOCK) */
 
     ui_power_on();
     hold(B_HOME);
@@ -1580,6 +1580,28 @@ static int test_menu_tabs(void)
     song.g[G_TUNE] = 0;
     bad += check("(U3) MENU > AUDIO > TUNE steps in cents (+2 CT); SYSTEM > CPU is read only", ok);
 #endif
+    {   /* (Skiff) SYSTEM > CPU CLOCK: 360 MHZ (bit clear) / 320 MHZ, bit 2 of the CPU byte, from the next power-on (the host
+         * runs at 360: RESTART; playing STOP), REFUSED after a boot that refused it; RESET SETTINGS: 360 */
+        uint32_t s0, cpu = CPU2_BYTE & 3u;
+        favorites.factory[15][24] = 0xA5u;
+        ui.menu_sel = MI_CLK;
+        frame();
+        s0 = ui.menu_sig;
+        ok = !CLK320_SET && str_eq(menu_vname(MI_CLK, 0), "360 MHZ") && MI_TAB[MI_CLK] == MTAB_SYSTEM;
+        press(B_OCTUP);
+        ok &= CLK320_SET && (CPU2_BYTE & 3u) == cpu && str_eq(menu_vname(MI_CLK, 1), "320 MHZ: RESTART") &&
+              ui.menu_sig != s0;
+        song.playing = 1;
+        ok &= str_eq(menu_vname(MI_CLK, 1), "320 MHZ: STOP");
+        song.playing = 0;
+        clk320.state = CLK_REFUSED;
+        ok &= str_eq(menu_vname(MI_CLK, 1), "320 MHZ: REFUSED");
+        clk320.state = CLK_NONE;
+        press(B_OCTDN);
+        ok &= !CLK320_SET && (CPU2_BYTE & 3u) == cpu && str_eq(menu_vname(MI_CLK, 0), "360 MHZ");
+        bad += check("(Skiff) MENU > SYSTEM > CPU CLOCK: 360 / 320 MHZ, a bit of its own (RESTART, STOP while playing, "
+                     "REFUSED)", ok);
+    }
     {   /* (1.2.1) a step of TUNE, CLOCK, MIDI IN draws the row again at once, and the CPU row follows the load (their
          * values were not in the menu's signature: they stayed as drawn until the cursor moved) */
         static const uint8_t RW[] = {MI_TUNE, MI_CLOCK, MI_ROUTE};
@@ -7016,6 +7038,9 @@ static int test_u4(void)
     ok = ui_hints_off && !msg_is("HOLD [EDIT]: SHORTCUTS");
     menu_put(MI_TUNE, 60);
     menu_put(MI_LEDS, 0);
+    favorites.factory[15][24] = 0xA5u;                  /* ((Skiff) CPU CLOCK 320 MHZ: a bit of a byte bank.c freed) */
+    menu_put(MI_CLK, 1);
+    ok &= CLK320_SET;
     hold(B_HOME);
     for (i = 0; i < 12u && ui.menu_sel != MI_RESET; i++) {
         turn(EN_ALGO, 1);
@@ -7025,8 +7050,9 @@ static int test_u4(void)
     press(B_OCTUP);
     ok &= !ui.menu && ui.confirm == CF_RESET_SET;
     press(B_OCTUP);
-    bad += check("U4 A3: HINTS OFF hides the layer's first-tap hint; RESET SETTINGS asks, then the MENU's defaults (TUNE 0, LEDS DIM HI, HINTS ON)",
-                 ok && !ui_hints_off && song.g[G_TUNE] == 0 && settings_leds == LEDS_DIM && msg_is("SETTINGS RESET"));
+    bad += check("U4 A3: HINTS OFF hides the layer's first-tap hint; RESET SETTINGS asks, then the MENU's defaults (TUNE 0, LEDS DIM HI, HINTS ON, "
+                 "(Skiff) CPU CLOCK 360 MHZ)",
+                 ok && !ui_hints_off && song.g[G_TUNE] == 0 && settings_leds == LEDS_DIM && !CLK320_SET && msg_is("SETTINGS RESET"));
     ui_power_on();
     return bad;
 }

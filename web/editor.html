@@ -103,10 +103,12 @@
   .fm6ops td, .fm6ops th { padding: 0 2px; }
   input.fm6n { width: 3.2em; }
   #steps tr.off td { color: var(--dim); }
-  .stepcols { columns: 470px; column-gap: 24px; }
-  .stepcols table { break-inside: avoid; }
+  .stepcols { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px 24px; }   /* ((1.3.1) the 16-step tables
+                                                    side by side where they fit, else one under another: CSS columns of
+                                                    470 px overlapped tables grown to ~790 px with FLAM, COND, NUDGE) */
+  .stepcols table { flex: none; }
   @media (max-width: 600px) {
-    .stepcols { columns: auto; overflow-x: auto; }
+    .stepcols { overflow-x: auto; }
     #steps input[type=text] { width: 84px; }
     #steps input[type=number] { width: 42px; }
     #steps th, #steps td { padding-right: 3px; }
@@ -3076,7 +3078,7 @@ const GLYPH = {
   control_arrow_loop: 0xEAD6, note_eight: 0xEAEF, symbol_waves: 0xEAE6, function_env_adsr_exp: 0xEA12,
   ui_knob: 0xEA70, symbol_keyboard: 0xEABC, symbol_effector: 0xEAB7, symbol_echo: 0xEAB5, symbol_spring: 0xEAD1,
   symbol_tuning: 0xEAA7, control_arrow_up_down: 0xEACF, symbol_grid: 0xEABA, symbol_cog: 0xEA46,
-  function_filter_lpf_peak: 0xEAA0, ui_slider_vertical: 0xEA73, symbol_books: 0xEADC, control_rec_f: 0xEA09, control_stop_f: 0xEA0F, control_play_f: 0xEA07,
+  function_filter_hpf_peak: 0xEA9E, ui_slider_vertical: 0xEA73, symbol_books: 0xEADC, control_rec_f: 0xEA09, control_stop_f: 0xEA0F, control_play_f: 0xEA07,
   symbol_pan: 0xEA53, control_speaker_mute: 0xEAEB,
   waveform_sine: 0xEA85, waveform_triangle_ac: 0xEA89, waveform_sawtooth_ac: 0xEA81, waveform_square: 0xEA87,
   waveform_pulse_quarter: 0xEA7F, waveform_pulse_eighth: 0xEA7B, waveform_noise_step: 0xEA79,
@@ -3086,7 +3088,8 @@ const GLYPH = {
 const HEAD_IC = { ENV: "function_env_adsr_exp", LFO: "waveform_sine", MOD: "symbol_waves", EDIT: "ui_knob", VOICE: "symbol_keyboard",
   FX: "symbol_effector", SCALE: "symbol_tuning", ARP: "control_arrow_up_down", "SEQ PATTERN": "symbol_grid",
   GLOBAL: "symbol_cog", INSTRUMENT: "symbol_keyboard" };
-const PAGE_IC = { FLT: "function_filter_lpf_peak", FILT: "function_filter_lpf_peak", DLY: "symbol_echo", REVERB: "symbol_spring", CHORUS: "symbol_waves",
+/* ((1.3.1) Fukiai's filter names are mirrored: its "hpf_peak" glyph draws a low-pass with its resonance peak) */
+const PAGE_IC = { FLT: "function_filter_hpf_peak", FILT: "function_filter_hpf_peak", DLY: "symbol_echo", REVERB: "symbol_spring", CHORUS: "symbol_waves",
   SLICER: "symbol_grid", CHORD: "symbol_keyboard" };
 /* WAVE / WAVE2 choices; phase-distortion shapes without a close glyph (SPLS, RSAW, RTRI, RTRP) get none */
 const WAVE_IC = { SIN: "waveform_sine", TRI: "waveform_triangle_ac", SAW: "waveform_sawtooth_ac", SQR: "waveform_square",

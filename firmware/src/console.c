@@ -209,6 +209,18 @@ static void con_status(void)
     con_kv("cpu2_wait_max_us", (int32_t)(fm1_c1_wait_max / 24u));
     con_kv("cpu2_stack", (int32_t)fm1_cpu1_stack_used());
 #endif
+    {   /* (Skiff) the core clock now, from the PLL (hal/fm1_clk.h); MENU > CPU CLOCK; what this boot's switch did (main.c),
+         * and the clock after it by the crystal-timed loop (0: none this boot) */
+        static const char *const N[6] = {"-", "ARMED", "SWITCHED", "KEPT", "REFUSED ", "TRIPPED"};
+        con_kv("cpu_mhz", (int32_t)CLK_MHZ());
+        con_kv("clk320_set", CLK320_SET);
+        con_puts("clk320 ");
+        con_puts(N[clk320.state % 6u]);
+        con_puts(clk320.state == CLK_REFUSED ? CLK_WHY[clk320.why % NELEM(CLK_WHY)] : "");
+        con_puts("\r\n");
+        con_kv("clk320_loop_mhz", clk320.loop_mhz);
+        con_kv("sfc_mhz", (int32_t)(CLK_MHZ() / 2u / (fm1_sfc_baud() + 1u)));   /* the flash (XIP): HSB (SYS / 2) / (n + 1) */
+    }
     con_kv("voices_given_up", (int32_t)voice_kills);
     con_kv("track", (int32_t)song.sel + 1);
     con_kv("batt_raw", song.batt_raw);

@@ -173,6 +173,21 @@ static void fm1_main(void)
     felucca_dbg.prev_home = felucca_dbg.home;
     felucca_dbg.prev_frames = felucca_dbg.ui_frames;
     felucca_dbg.prev_rst = fm1_boot.p3_rst;
+    if (CLK320_SET && !bootguard.failed && clk320.state != CLK_TRIPPED) {
+        /* (Skiff) MENU > CPU CLOCK 320 MHZ: from the boot stage's 360 to JieLi's rated 320 (hal/fm1_clk.h, curist's
+         * switch), the screen up, on one core, before the scan, the second core, the audio and USB. Not after a failed
+         * boot, nor again before a power-off after a reset during it (fm1_cstart: TRIPPED); a soft reset that kept 320
+         * is not switched again (the check: EALREADY). Any other register not as expected: refused, said (below) */
+        uint32_t t[2];
+        lcd_sync();                                     /* (no LCD DMA through it) */
+        clk320.state = CLK_ARMED;
+        fm1_wdt_feed();
+        clk320.why = (uint8_t)fm1_clk320_go(t);
+        fm1_wdt_feed();
+        clk320.state = !clk320.why ? CLK_ON : clk320.why == FM1_CLK320_EALREADY ? CLK_KEPT : CLK_REFUSED;
+        if (t[1])                                       /* (the loop timed before and after: the clock it runs at) */
+            clk320.loop_mhz = (uint16_t)((360u * t[0] + t[1] / 2u) / t[1]);
+    }
     fm1_input_init();
     fm1_adc_init();
     panel_init();
@@ -220,6 +235,10 @@ static void fm1_main(void)
     kb_boot_hold = 0;
     lcd_fill(0, 0, 240, 240, T_BG);
     scrn.idle = fm1_ms;                        /* (MENU > SCREEN OFF: from here) */
+    if (clk320.state == CLK_REFUSED)           /* (Skiff) MENU > CPU CLOCK 320 MHZ not switched, then why */
+        ui_way("NO 320 MHZ", CLK_WHY[clk320.why % NELEM(CLK_WHY)]);
+    else if (clk320.state == CLK_TRIPPED && CLK320_SET)
+        ui_way("NO 320 MHZ", "RESET IN SWITCH");
 
     for (;;) {
         uint32_t m = fm1_ms;
@@ -343,6 +362,16 @@ void fm1_cstart(void)
         bootguard.failed = 0;
         bootguard.pending = 0;
     }
+    if (((p3 & 1u) && !(p3 & 0x44u)) || clk320.magic != CLK320_MAGIC)   /* ((Skiff) a power-on, no watchdog or soft
+                                                                         * reset: the boot stage's 360 MHz again) */
+        clk320.state = CLK_NONE;
+    clk320.magic = CLK320_MAGIC;
+    if (clk320.state == CLK_ARMED)              /* a reset during the 320 MHz switch (fm1_main): not a failed boot, and
+                                                 * no switch till power-off (curist's probe does the same) */
+        bootguard.pending = 0;
+    clk320.state = clk320.state == CLK_ARMED || clk320.state == CLK_TRIPPED ? CLK_TRIPPED : CLK_NONE;
+    clk320.why = 0;
+    clk320.loop_mhz = 0;
     if (bootguard.pending)
         bootguard.failed++;
     bootguard.pending = 1;

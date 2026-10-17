@@ -14,7 +14,9 @@ synths and drums, patterns and songs, live performance, and a screen that shows 
   <img src="https://img.shields.io/badge/hardware-M--VAVE%20FM--1-555" alt="Hardware: M-VAVE FM-1">
 </p>
 
-<p align="center"><b>New in 1.3:</b> the FM-1's second core (BETA: 12 voices), MIDI LEARN and a channel per track,
+<p align="center"><b>New in 1.3.1:</b> a 320 MHz CPU CLOCK to choose (the chip's rated clock), and fixes from your
+comments · <a href="https://github.com/illuminus5/skiff/releases/tag/v1.3.1">the release notes</a><br>
+<b>New in 1.3:</b> the FM-1's second core (BETA: 12 voices), MIDI LEARN and a channel per track,
 an INSERT effect, LFO sync, SPREAD and more from Felucca 1.6.1 ·
 <a href="https://github.com/illuminus5/skiff/releases/tag/v1.3">the release notes</a></p>
 
@@ -43,12 +45,12 @@ Custom firmware, at your own risk; the way back to the official firmware is belo
 connect the FM-1 by USB and follow it. The same page takes the FM-1 back to the official V15 firmware, saving a
 complete backup of your music first.
 
-**With Python 3:** download `skiff-1.3.fwsc` from the [latest release](https://github.com/illuminus5/skiff/releases/latest)
+**With Python 3:** download `skiff-1.3.1.fwsc` from the [latest release](https://github.com/illuminus5/skiff/releases/latest)
 and, with this repository's `tools/` folder,
 
 ```
 pip install mido python-rtmidi
-python tools/fm1_install.py skiff-1.3.fwsc
+python tools/fm1_install.py skiff-1.3.1.fwsc
 ```
 
 It takes about two minutes and the FM-1 restarts on Skiff.
@@ -308,7 +310,10 @@ FM6 patches from `.syx` files and saves complete backups.
   master on a computer; channels 1–6 play tracks 1–6 (MENU › MIDI IN CH1-6), and (1.3) each track can listen on a
   channel of its own (MENU › MIDI › T1–T6 CHANNEL); clock from internal, USB or TRS. **MIDI LEARN** (1.3): MENU › MIDI
   › MIDI LEARN, turn a knob, send a CC: the controller sets that parameter, up to 10 of them; **Program Change** (1.3)
-  loads the track's nth preset
+  loads the track's nth preset. **Standard CCs**, each on the track its channel plays (recorded as automation while it's
+  armed): CC7 LEVEL, CC10 PAN, CC5 GLIDE, CC73 ATTACK, CC75 DECAY, CC72 RELEASE, CC74 the engine's brightness (ANALOG's
+  CUTOFF ..), CC71 its resonance, CC91 REVERB, CC93 CHORUS, CC94 DELAY; CC1 mod wheel and CC11 expression (MOD sources),
+  CC64 sustain
 
 ### Patterns, lists and the song
 
@@ -498,6 +503,10 @@ every setting back as a new unit has it. The web editor's Settings tab reads and
   every block, the sound bit for bit the same, and up to 12 voices sound at once instead of 8. If the second core
   misreads or stops answering (some units do), the FM-1 goes on with one core, says CORE 2 FAILED and sets the row
   back to 1 CORE
+- **CPU CLOCK** (SYSTEM, 1.3.1): **360 MHZ** (default: what the FM-1's boot sets) or **320 MHZ**, the clock JieLi rates
+  the chip for (curist's switch, no voltage changed). It takes effect at the next power-on, as CPU does (STOP, then
+  RESTART). 320 is about 11 % slower: the same music shows a higher CPU. A unit whose clock is set up differently
+  refuses it and says why (NO 320 MHZ: ...). ABOUT shows the clock the FM-1 runs at
 - **HINTS** (DISPLAY): ON or OFF; OFF drops the one line of hint (HOLD HOME: SHIFT, KEYS: STEPS, a layer's
   first HOLD [X]: SHORTCUTS) and SHIFT's map; what OCT+ and OCT- do on an action page stays
 - **RESET SETTINGS** (SYSTEM): OCT+ asks, then puts every MENU setting back as a new unit has it (the channels too, and
@@ -595,6 +604,8 @@ Skiff stands on Felucca. If it is useful to you, support Felucca's author:
   after [Melodee](https://github.com/keremimo/melodee) by [keremimo](https://github.com/keremimo) and with
   [Jangada](https://github.com/zednaked/jangada)'s measurements and hardening by [zednaked](https://github.com/zednaked) (all GPL-3.0);
   its host tests by gospodindilly-ops
+- 320 MHz (MENU › SYSTEM › CPU CLOCK): the switch from [fm1-clk320-probe](https://github.com/curist/fm1-clk320-probe)
+  by [curist](https://github.com/curist) ([MIT](LICENSES/MIT-fm1-clk320.txt)), after the JieLi AC79 SDK's clock code (Apache-2.0)
 - Package format and boot files: [JieLi AC79 SDK](https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK) ([Apache-2.0](LICENSES/Apache-2.0.txt); three of its files are in every package, none in this tree)
 - Contributions to Felucca: [keremimo](https://github.com/keremimo) (white-key scales, #2), [ChanceTheMaker](https://github.com/ChanceTheMaker)
   (TRS MIDI, bend, sustain and clock, palettes, favourites, editor display settings: #8, #10, #11, #12),

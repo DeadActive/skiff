@@ -66,6 +66,10 @@ static const menu_credit_t MENU_CREDITS[] = {
     {"Emilie Gillet / MIT", MC_TEXT},
     {"https://github.com/pichenettes/eurorack", MC_URL},
     {"", MC_TEXT},
+    {"FM1-CLK320-PROBE", MC_TITLE},              /* (Skiff) MENU > CPU CLOCK 320 MHZ (hal/fm1_clk320.h) */
+    {"curist: the 320 MHz switch / MIT, after the JieLi AC79 SDK (Apache-2.0)", MC_TEXT},
+    {"https://github.com/curist/fm1-clk320-probe", MC_URL},
+    {"", MC_TEXT},
     {"BARLOW CONDENSED", MC_TITLE},              /* (Skiff U1) the face on the screen (Inter Tight: not in the build) */
     {"The Barlow Project Authors", MC_TEXT},
     {"SIL Open Font License 1.1", MC_TEXT},
@@ -125,6 +129,13 @@ static int32_t menu_document(int32_t y, int draw)
         cv_text(6, y + 38, &AF_S, "Groovebox on Felucca", T_TEXT);
         cv_text(6, y + 58, &AF_M, FELUCCA_VERSION, T_THEME);
         cv_text_r(232, y + 61, &AF_S, __DATE__, T_MID, T_BG);
+        {   /* (Skiff) the core clock now, from the PLL (hal/fm1_clk.h; MENU > SYSTEM > CPU CLOCK) */
+            char c[16] = "CPU ?";
+            if (CLK_MHZ())
+                fmt_int(c + 4, (int32_t)CLK_MHZ());
+            str_cpy(c + str_len(c), " MHZ", sizeof c - str_len(c));
+            cv_text_r(232, y + 82, &AF_S, c, T_MID, T_BG);
+        }
         cv_text(6, y + 82, &AF_S, "Skiff: illuminus5", T_TEXT);   /* (Skiff 1.0) its source (the QR), Felucca's */
         cv_text(6, y + 100, &AF_S, "Felucca (C) 2026", T_TEXT);      /* credit; GPL-3.0-only */
         cv_text(6, y + 118, &AF_S, "Leo Kuroshita, H\xFCgelton", T_TEXT);
@@ -413,7 +424,8 @@ static void draw_menu(void)
           ui_hints_off * 3079u + menu_get(MI_CPU) * 18451u + song.cpu_q8 * 100u / 256u * 12289u +
           ml_count() * 2741u + ui.ml.on * 3463u + (uint32_t)(ui_mch(0) + ui_mch(1) * 3u + ui_mch(2) * 7u + ui_mch(3) * 11u +
           ui_mch(4) * 13u + ui_mch(5) * 17u) * 5101u +   /* ((1.3) LEARN's count, the tracks' channels) */
-          (uint32_t)transport_busy() * 40503u;          /* ((Skiff 1.3) CPU's STOP / RESTART) */
+          (uint32_t)transport_busy() * 40503u +         /* ((Skiff 1.3) CPU's STOP / RESTART) */
+          menu_get(MI_CLK) * 30011u;                    /* ((Skiff) CPU CLOCK) */
     if (!ui.force && sig == ui.menu_sig) {
         if (ui.menu == 1 && mt.pos != pos0) {          /* only the tabs slid: their strip */
             cv_begin(240, MP_Y - H_HEAD, T_BG);

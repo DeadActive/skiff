@@ -233,6 +233,9 @@ static void fm1_cpu1_halt(void) {}
 static int fm1_cpu1_start(void) { return -1; }
 static void fm1_guard_pc_open(void) {}
 #endif
+/* (Skiff) MENU > CPU CLOCK 320 MHZ (hal/fm1_clk.h): no PLL here; refused, as on a unit whose clock is not as expected */
+enum { FM1_CLK320_EALREADY = 1, FM1_CLK320_EMODE };
+static int fm1_clk320_go(uint32_t *t) { t[0] = t[1] = 0; return FM1_CLK320_EMODE; }
 #if FELUCCA_CDC
 static void cdc_task(void) {}
 #endif
