@@ -2639,7 +2639,7 @@ function makeMockDevice(opt = {}) {
         break;
       }
       case CMD.INFO:
-        s(opt.legacy ? "FELUCCA 0.4 BETA (MOCK)" : "SKIFF v1.0 (MOCK)"); b(ENG.length); b(P_COUNT); b(G_COUNT); b(NSTEP); b(P_E0);
+        s(opt.legacy ? "FELUCCA 0.4 BETA (MOCK)" : "SKIFF (MOCK)"); b(ENG.length); b(P_COUNT); b(G_COUNT); b(NSTEP); b(P_E0);
         ENG.forEach((e) => s(e.name));
         if (!opt.legacy) b(NTRK);
         if (!opt.legacy && !opt.v3 && !opt.v5) {
@@ -3050,7 +3050,7 @@ const GLYPH = {
 };
 /* section headings (LAYOUT titles) and page titles */
 const HEAD_IC = { ENV: "function_env_adsr_exp", LFO: "waveform_sine", MOD: "symbol_waves", EDIT: "ui_knob", VOICE: "symbol_keyboard",
-  FX: "symbol_effector", SCL: "symbol_tuning", ARP: "control_arrow_up_down", "SEQ PATTERN": "symbol_grid",
+  FX: "symbol_effector", SCALE: "symbol_tuning", ARP: "control_arrow_up_down", "SEQ PATTERN": "symbol_grid",
   GLOBAL: "symbol_cog", INSTRUMENT: "symbol_keyboard" };
 const PAGE_IC = { FLT: "function_filter_lpf_peak", FILT: "function_filter_lpf_peak", DLY: "symbol_echo", REVERB: "symbol_spring", CHORUS: "symbol_waves",
   SLICER: "symbol_grid", CHORD: "symbol_keyboard" };
@@ -3514,7 +3514,7 @@ function renderEntry(L, Q) {
   const kept = Q ? Q.pats.map((p, i) => (p.len ? i + 1 : 0)).filter(Boolean) : [];
   const sel = el("select", { "aria-label": t("sgPattern") }, ...kept.map((i) => el("option", { value: i, text: pat2(i) })));
   if (en.pat) sel.value = String(en.pat);
-  const reps = el("input", { type: "number", min: 1, max: 16, value: en.reps, disabled: !en.pat, "aria-label": "REPS", style: "width:4em" });
+  const reps = el("input", { type: "number", min: 1, max: 16, value: en.reps, "aria-label": "REPS", style: "width:4em" });   /* (1.2.1, #12: an empty entry's is a rest's length) */
   reps.addEventListener("change", () => songOp(req.list(5, k, e, Math.max(1, Math.min(16, +reps.value | 0))), "list"));
   const what = () => {
     const r = Q && Q.pats[en.pat - 1];
@@ -3617,7 +3617,7 @@ const LAYOUT = (pe0) => [
   { t: "VOICE", pages: [["LEVEL", 0, [0]], ["VOICE", 0, [37, 38, 41, 42]], ["VOICE 2", 0, [43, 44, 39, 40]]] },
   { t: "FX", pages: [["FX", 0, [33, 34, 35, 36]], ...(pe0 >= 117 ? [["DRIVE", 0, [33, ...P_DRIVE]]] : []),
     ["SLICER", 0, [45, 46, 47, 48]], ...(pe0 >= 95 ? [["DUCK", 0, P_DUCK]] : []), ["DLY", 1, [4, 5, 6, 7]], ["REVERB", 1, [24, 8, 9]], ["CHORUS", 1, pe0 >= 117 ? [10, 11, 25, 26] : [10, 11]]] },   /* G_RTYPE 24: ROOM / SPRING */
-  { t: "SCL", pages: [["SCL", 0, [25, 26, 27, 28]], ...(pe0 >= 83 ? [["CHORD", 0, P_CHORD]] : [])] },   /* CHRD VOIC 81, 82 */
+  { t: "SCALE", pages: [["SCALE", 0, [25, 26, 27, 28]], ...(pe0 >= 83 ? [["CHORD", 0, P_CHORD]] : [])] },   /* CHRD VOIC 81, 82 */
   { t: "ARP", pages: [["ARP", 0, [17, 18, 19, 20]], ["ARP 2", 0, [21, 22, 23, 24]]] },
   { t: "SEQ PATTERN", tab: "seqgroups", pages: [["PATTERN", 0, [29, 30, 31, 32]], ...(pe0 >= 92 ? [["PLAY", 0, [P_DIR]]] : [])] },
   { t: "GLOBAL", tab: "setgroups", pages: [["GLOBAL", 1, [0, 1, 2, 3]], ["SYSTEM", 1, [14]]] },   /* G_ROUTE: MIDI IN */
