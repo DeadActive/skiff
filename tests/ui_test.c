@@ -1433,7 +1433,7 @@ static void wdt_ms(void) { fm1_ms++; }
 static void wdt_key(void) { fm1_ms++; if (fm1_ms % 50u == 0u) fm1_in.notes = 1u; }   /* a key pressed after a moment */
 static int test_menu_tabs(void)
 {
-    int bad = 0, ok = 1;
+    int bad = 0, ok = 1, drawn;
     uint32_t t, i, n;
     for (t = 0; t < MTAB_COUNT; t++) {
         uint32_t f = mtab_first(t);
@@ -1496,11 +1496,12 @@ static int test_menu_tabs(void)
     turn(EN_K2, -1); ok &= !(ui_prefs & PREF_USB_FIXED) && !fx_usb_fixed;
     bad += check("MENU: any of KNOB 1..4 changes the selected row's value in any tab, the menu stays", ok && ui.menu == 1);
 
-    /* OCT+ / OCT-: the next / previous value on every kind of row (as the knobs: stopping at the ends; COLOR wraps) */
-    ok = 1;
+    /* OCT+ / OCT-: the next / previous value on every kind of row (as the knobs: stopping at the ends; COLOR wraps); each
+     * new value draws the menu again (drawn: the value in the menu's signature) */
+    ok = drawn = 1;
     favorites.factory[15][24] = 0xA5u;                  /* ((1.3) STEP PREVIEW's bit: a byte bank.c freed, as on a unit) */
     for (i = 0; i < MI_VALUES; i++) {
-        uint32_t n = menu_n(i), v, j, seen, want;
+        uint32_t n = menu_n(i), v, j, seen, want, s0;
         if (i == MI_TUNE || i == MI_CPU || menu_act(i))   /* ((U3) TUNE's 101 values: below; CPU: below; (1.3) MIDI
                                                         * LEARN, LEARN CLEAR: actions, test_midi_learn) */
             continue;
@@ -1510,15 +1511,21 @@ static int test_menu_tabs(void)
         seen = 1u << menu_get(i);
         for (j = 0; j <= n; j++) {                     /* up through every value */
             want = menu_step(i, 1);
+            v = menu_get(i);
+            s0 = ui.menu_sig;
             press(B_OCTUP);
             ok &= menu_get(i) == want && ui.menu == 1;
+            drawn &= menu_get(i) == v || ui.menu_sig != s0;
             seen |= 1u << menu_get(i);
         }
         ok &= seen == (1u << n) - 1u;
         for (j = 0; j <= n; j++) {                     /* and down again */
             want = menu_step(i, -1);
+            v = menu_get(i);
+            s0 = ui.menu_sig;
             press(B_OCTDN);
             ok &= menu_get(i) == want && ui.menu == 1;
+            drawn &= menu_get(i) == v || ui.menu_sig != s0;
         }
         v = menu_get(i);                               /* the ends: COLOR wraps, the rest stop */
         if (i == MI_COLOR) {
@@ -1539,6 +1546,8 @@ static int test_menu_tabs(void)
     menu_put(MI_PREVIEW, 0);
     memset(&favorites.factory[15][6], 0, 6);            /* ((1.3) T1..T6 on channels 1..6 again) */
     bad += check("MENU: OCT+ / OCT- step every value row up / down (THEME wraps, the rest stop), the menu stays", ok);
+    bad += check("MENU: every value row's new value draws the menu again (its value in the signature; 1.3.1's STEP "
+                 "PREVIEW and SCREEN OFF stayed as drawn)", drawn);
     ui.menu_sel = MI_TUNE;                              /* ((Skiff U3, R8) TUNE: cents, the unit's) */
     press(B_OCTUP); press(B_OCTUP);
     ok = song.g[G_TUNE] == 2 && str_eq(menu_vname(MI_TUNE, menu_get(MI_TUNE)), "+2 CT") &&

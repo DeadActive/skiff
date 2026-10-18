@@ -12,7 +12,8 @@
  *    channel the selected track).
  * 4. cost: instructions per sample (kernel-counted) of the heaviest PHYS preset and of a 4-part mix with every
  *    slot of every part active, against the same with the matrix off; fails above MOD_COST_MAX.
- * 5. demos: LFO -> CUT, VEL -> AMP, MODW -> VIB, LFO -> TRIO PW, AT -> WHEEL DRV as WAVs in DEMO_DIR. */
+ * 5. demos: LFO -> CUT, VEL -> AMP, MODW -> VIB, LFO -> TRIO PW, AT -> WHEEL DRV as WAVs in DEMO_DIR.
+ * 6. (Skiff 1.3.2) LFO DEST PITCH squared (voice.c lfo_pitch): its depths, its sign, a smooth wobble. */
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
@@ -656,6 +657,37 @@ static void test_env2(void)
     check("  no slot of it: not run (ENV 2 stays 0)", !t->v[t->m_vi].env2 && t->v[t->m_vi].stage2 == 1u);
 }
 
+/* (Skiff 1.3.2) LFO DEST PITCH's curve (voice.c lfo_pitch): squared, 63 the +-11.8 semitones it always reached, 8 the
+ * +-19 cents that 1 was up to 1.3.1, 1 under a cent; deeper with every step, its sign kept; and smooth: across a
+ * cycle the pitch moves by less than half a cent at a time (whole 1/16 semitones alone moved in 6.25-cent stairs) */
+static double lfo_cents(int32_t lfo, int32_t d)
+{
+    int32_t p16, fine;
+    lfo_pitch(lfo, d, &p16, &fine);
+    return p16 * 6.25 + fine / 2.367;
+}
+static void test_vibrato(void)
+{
+    char what[200];
+    double c63 = lfo_cents(32767, 63), c8 = lfo_cents(32767, 8), c1 = lfo_cents(32767, 1), cm8 = lfo_cents(32767, -8);
+    double prev = 0, jump = 0;
+    int32_t d, i, up = 1;
+    for (d = 1; d <= 63; d++) {
+        up &= lfo_cents(32767, d) > prev;
+        prev = lfo_cents(32767, d);
+    }
+    prev = lfo_cents(-32767, 4);
+    for (i = -32767; i <= 32767; i += 256) {
+        double c = lfo_cents(i, 4);
+        jump = fabs(c - prev) > jump ? fabs(c - prev) : jump;
+        prev = c;
+    }
+    snprintf(what, sizeof what, "LFO DEST PITCH squared: 63 %.0f ct, 8 %.1f, 1 %.2f, -8 %.1f; every step deeper; "
+             "steps of %.2f ct at 4", c63, c8, c1, cm8, jump);
+    check(what, c63 > 1170 && c63 < 1190 && c8 > 18 && c8 < 20 && c1 > 0 && c1 < 1 && cm8 < -18 && cm8 > -20.5 &&
+          up && jump < 0.5);
+}
+
 int main(int argc, char **argv)
 {
     test_off();
@@ -663,6 +695,7 @@ int main(int argc, char **argv)
     test_midi();
     test_cost();
     test_env2();
+    test_vibrato();
     if (argc > 1)
         check("demos written", demos(argv[1]));
     printf("%s\n", bad ? "MOD MATRIX TEST FAILED" : "mod matrix test passed");

@@ -9,6 +9,7 @@
   webapp/installer/index.html index_pkg.html, self-contained (fm1pkg.js, fm1ota.js, metadata inlined)
   webapp/editor/index.html    editor.html (+ fukiai.ttf, FUKIAI-LICENSE.txt)
   learn/                      Learn Skiff, the manual in chapters (web/learn, without its local/ review videos)
+  try/                        the browser emulator (build/emu from web/emu/build.sh, EMU_PREVIEW=0)
   panel.js, fonts/            the panel's drawing and the fonts the Learn page shares, at the paths it has in web/
   src/                        not touched
 
@@ -87,11 +88,18 @@ def main(pkg, version, out):
     shutil.copytree(HERE / "learn", out / "learn", ignore=shutil.ignore_patterns("local"))
     shutil.copy(HERE / "panel.js", out / "panel.js")
     shutil.copytree(HERE / "fonts", out / "fonts", dirs_exist_ok=True)
+    emu = HERE.parent / "build" / "emu"             # ((Skiff #18) the browser emulator: web/emu/build.sh's, ../panel.js)
+    page = (emu / "index.html").read_text(encoding="utf-8") if (emu / "index.html").exists() else ""
+    if f">v{version}<" not in page:
+        raise SystemExit(f"{emu}: no browser build of v{version} without the preview mark "
+                         "(EMU_PREVIEW=0 sh web/emu/build.sh, after the release build)")
+    shutil.rmtree(out / "try", ignore_errors=True)
+    shutil.copytree(emu, out / "try")
     (out / "index.html").write_text(
         '<!doctype html><meta charset="utf-8"><title>Skiff</title>'
         '<meta http-equiv="refresh" content="0; url=webapp/installer/">'
         '<a href="webapp/installer/">Skiff installer</a>\n', encoding="utf-8")
-    print(f"site: {out}: webapp/installer ({len(html)} B), webapp/editor, learn, firmware/{name} ({len(raw)} B, {product})")
+    print(f"site: {out}: webapp/installer ({len(html)} B), webapp/editor, learn, try, firmware/{name} ({len(raw)} B, {product})")
 
 
 if __name__ == "__main__":

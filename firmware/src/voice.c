@@ -678,6 +678,17 @@ static __attribute__((noinline)) void spread_sum(int32_t *out, const int32_t *sb
     for (i = 0; i < n; i++)
         out[i] += sb[i];
 }
+/* (Skiff 1.3.2) LFO DEST PITCH: depth d (-64..63) squared, so its low values are a fine vibrato: at a full LFO
+ * d|d| x 0.762 / 16 semitone, d 63 the +-11.8 semitones it always reached, 8 +-19 cents (1 up to 1.3.1: one step was
+ * +-19 cents, a clear vibrato at "1 %"). In 1/4096 semitone, then whole 1/16 semitones and the rest as TUNE's fine
+ * factor: a smooth wobble, no 6-cent stairs */
+static void lfo_pitch(int32_t lfo, int32_t d, int32_t *p16, int32_t *fine)
+{
+    int32_t o = (lfo * ((d * (d < 0 ? -d : d) * 780) >> 6)) >> 15;   /* (|lfo| x 49920 < 2^31) */
+    *p16 = o >> 8;
+    *fine = ((o & 255) * 3787 + 32768) >> 16;       /* 1/4096 semitone -> 1/4096 of the rate (1 ct = 2.367), to the
+                                                     * nearest (1 is then 0.42 ct, not 0) */
+}
 static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
 {
     const engine_t *e = ENGINES[t->engine];
@@ -700,6 +711,7 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
     bend16 = bend >> 4;                                 /* (floor(bend / 16), as it was written with a divide: ((1.3) a
                                                          * shift, no slow path for the ISR budget's static count) */
     bend_fine = (bend - bend16 * 16) * 2367 / 2560;
+    int32_t lpit, lfine;                                /* (Skiff 1.3.2) LFO DEST PITCH: lfo_pitch */
     uint32_t nr = 0, fade = t->xf_on && t->xf;
     int16_t pe_new[8];
     int32_t *sb = SPREAD_BUF(t);
@@ -719,6 +731,7 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
 #endif
     if (MOD(t).on && MOD(t).ldep < 32767)               /* ((1.3) the matrix's DEPTH, mod.c) */
         lfo = mulq15(lfo, MOD(t).ldep);
+    lfo_pitch(lfo, p[P_LD_PIT], &lpit, &lfine);         /* ((Skiff 1.3.2) the vibrato: one for every voice) */
     esync_coef(t);                                      /* ((1.3) this block's envelope steps for env_tick: ENV SYNC) */
     if (e->block)                                       /* the engine's per-part work (WHEEL: bars, rotor) */
         e->block(t);
@@ -760,12 +773,12 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
         }
         if (!env && !m.amp0 && v->stage == 2 && !e->sampled)
             continue;                                   /* held at a silent sustain (SUS 0): nothing to render */
-        pitch = v->pitch_cur + tune + bend16 + ((lfo * p[P_LD_PIT] * 3) >> 15) + ((m.envq15 * p[P_ED_PIT] * 3) >> 15);
+        pitch = v->pitch_cur + tune + bend16 + lpit + ((m.envq15 * p[P_ED_PIT] * 3) >> 15);
         m.pitch16 = clamp(pitch, 0, 2047);
         m.inc = pitch_inc(m.pitch16);
-        m.fine = v->fine + tune_fine + bend_fine;
-        if (v->fine + tune_fine + bend_fine)             /* residual below 1/16 semitone */
-            m.inc += (uint32_t)((int32_t)(m.inc >> 12) * (v->fine + tune_fine + bend_fine));
+        m.fine = v->fine + tune_fine + bend_fine + lfine;
+        if (m.fine)                                     /* residual below 1/16 semitone */
+            m.inc += (uint32_t)((int32_t)(m.inc >> 12) * m.fine);
         m.cutoff = ((lfo * p[P_LD_FLT]) >> 7) + ((m.envq15 * p[P_ED_FLT]) >> 7);
         if (v->vel > 110)                               /* accent opens the filter with the env */
             m.cutoff += (m.envq15 * 24) >> 7;

@@ -75,10 +75,10 @@ ENV = {"wave":(5, 80, 100, 50), "kit": (0, 127, 127, 60), "multi": (0, 85, 0, 75
        "oneshot": (0, 127, 127, 70), "sus": (12, 80, 120, 60)}
 SET_TAG = {"PIANO": "PT_KEYS", "FLUTE": "PT_LEAD", "SAX": "PT_LEAD"}   # (Skiff phase 9) core.h PT_*: PRESETS' LIST
 SET_VARIANTS = [   # (Skiff phase 9) SAMPLE's presets after PERC's slot: (name, e, env, mono, fx, tag[, more]), apply9.py
-    ("LOFI PIANO", [0, 0, 110, 1, 30, 0, 30, 0], [0, 127, 127, 70], 0, [40, 10, 20, 40], "PT_KEYS", [("P_DTYPE", 3), ("P_LRATE", 40), ("P_LD_PIT", 1)]),
+    ("LOFI PIANO", [0, 0, 110, 1, 30, 0, 30, 0], [0, 127, 127, 70], 0, [40, 10, 20, 40], "PT_KEYS", [("P_DTYPE", 3), ("P_LRATE", 40), ("P_LD_PIT", 8)]),
     ("MUSIC BOX", [0, 24, 0, 0, 110, 0, 0, 0], [0, 90, 0, 80], 0, [0, 30, 40, 60], "PT_PLUCK"),
     ("FLUTE PAD", [2, 0, 0, 1, 90, 0, 0, 0], [80, 90, 120, 100], 0, [0, 60, 25, 90], "PT_PAD"),
-    ("DARK SAX", [3, -12, 0, 1, 26, 0, 48, 0], [22, 80, 120, 55], 1, [0, 15, 20, 60], "PT_LEAD", [("P_LD_PIT", 1), ("P_LRATE", 84), ("P_LFADE", 100)]),
+    ("DARK SAX", [3, -12, 0, 1, 26, 0, 48, 0], [22, 80, 120, 55], 1, [0, 15, 20, 60], "PT_LEAD", [("P_LD_PIT", 8), ("P_LRATE", 84), ("P_LFADE", 100)]),
     ("KOTO", [0, 12, 0, 0, 120, 0, 22, 0], [0, 72, 0, 50], 0, [0, 0, 25, 30], "PT_PLUCK", [("P_ED_PIT", 2)]),
 ]
 

@@ -14,8 +14,9 @@ synths and drums, patterns and songs, live performance, and a screen that shows 
   <img src="https://img.shields.io/badge/hardware-M--VAVE%20FM--1-555" alt="Hardware: M-VAVE FM-1">
 </p>
 
-<p align="center"><b>New in 1.3.1:</b> a 320 MHz CPU CLOCK to choose (the chip's rated clock), and fixes from your
-comments · <a href="https://github.com/illuminus5/skiff/releases/tag/v1.3.1">the release notes</a><br>
+<p align="center"><b>New in 1.3.2:</b> a stereo HALL reverb, <a href="https://illuminus5.github.io/skiff/try/">Skiff in
+your browser</a>, update mode on the screen and a finer vibrato ·
+<a href="https://github.com/illuminus5/skiff/releases/tag/v1.3.2">the release notes</a><br>
 <b>New in 1.3:</b> the FM-1's second core (BETA: 12 voices), MIDI LEARN and a channel per track,
 an INSERT effect, LFO sync, SPREAD and more from Felucca 1.6.1 ·
 <a href="https://github.com/illuminus5/skiff/releases/tag/v1.3">the release notes</a></p>
@@ -24,7 +25,9 @@ an INSERT effect, LFO sync, SPREAD and more from Felucca 1.6.1 ·
 <a href="https://youtu.be/c0HFI7AvN1M">▶ Watch the 1.3 tour on YouTube (3:38)</a></p>
 
 <p align="center"><b>New to Skiff?</b> <a href="https://illuminus5.github.io/skiff/learn/">Learn Skiff</a>: the manual in chapters, each
-with a video that shows every press on the unit. Start with <a href="https://illuminus5.github.io/skiff/learn/#first-beat">your first beat</a>.</p>
+with a video that shows every press on the unit. Start with <a href="https://illuminus5.github.io/skiff/learn/#first-beat">your first beat</a>.<br>
+<b>Try it first:</b> <a href="https://illuminus5.github.io/skiff/try/">Skiff in your browser</a>, the firmware itself on a
+drawn FM-1, played with the mouse, a touch screen or the computer keyboard.</p>
 
 ![Skiff on the FM-1's screen: HOME, a step page, PERFORM, the MIXER, DELAY and the SHIFT map](docs/skiff.png)
 
@@ -48,12 +51,12 @@ Custom firmware, at your own risk; the way back to the official firmware is belo
 connect the FM-1 by USB and follow it. The same page takes the FM-1 back to the official V15 firmware, saving a
 complete backup of your music first.
 
-**With Python 3:** download `skiff-1.3.1.fwsc` from the [latest release](https://github.com/illuminus5/skiff/releases/latest)
+**With Python 3:** download `skiff-1.3.2.fwsc` from the [latest release](https://github.com/illuminus5/skiff/releases/latest)
 and, with this repository's `tools/` folder,
 
 ```
 pip install mido python-rtmidi
-python tools/fm1_install.py skiff-1.3.1.fwsc
+python tools/fm1_install.py skiff-1.3.2.fwsc
 ```
 
 It takes about two minutes and the FM-1 restarts on Skiff.
@@ -74,7 +77,7 @@ Edge, over USB MIDI).
 | **Patterns and songs** | a pool of 64 patterns shared by every project; each track a list of 16 entries (A–P), each a pattern played 1–16 times; SONG walks each track down its list |
 | **Performance** | PERFORM: launch any track's entries and stage mutes on LOOP, BAR, BEAT or NOW; 16 scenes; throws (CUTOFF, REVERB, DELAY, DIST) that glide back; the FX layer: repeat, reverse, filter sweeps, tape stop, freeze, harmonizer, gate, dub echo, flanger, vinyl, cuts |
 | **Sound** | per track: an envelope (in milliseconds or note values) and a second one for modulation (ENV 2), an LFO with depths per destination (free or synced to the tempo), a 4-slot modulation matrix, DIST in four types (SOFT, HARD, FOLD, BITS) with a TONE, an INSERT (drives, a bitcrusher, phaser, flanger, chorus) with MIX, the SLICER (16 patterns), DUCK (sidechain), SPREAD (the voices across the stereo field); a drum kit's lanes tuned and their decay set one by one; arpeggiator (14 modes), chord keys (9 chords, 5 voicings), 16 scales; MONO, LEGATO, UNISON, glide |
-| **Effects** | chorus (CHORUS, FLANGER or PHASER, with FEEDBACK), delay and reverb (ROOM, SPRING or HALL) as sends |
+| **Effects** | chorus (CHORUS, FLANGER or PHASER, with FEEDBACK), delay and reverb (ROOM, SPRING or a stereo HALL) as sends |
 | **Memory** | 4 projects, 32 user sounds, 3 user sample slots; the music comes back at power-on (RESTORE LAST); 8 levels of undo |
 | **Screen** | 240 × 240 colour; a graph on every page; HOME held shows every control's job; 6 themes; LARGE mode with tall cards |
 | **MIDI and USB** | USB MIDI in and out, TRS MIDI in; clock from inside, USB or TRS; each track its own channel (1–6 by default); MIDI LEARN for any knob; Program Change; a stereo USB audio input to record the master on a computer |
@@ -95,7 +98,7 @@ a bass, list the basses and step through them, across every engine, until one fi
 
 1. **Pick the track** with ALGORITHM, say track 2.
 2. **Tap SAVE** for SAVE › PRESETS (turn SELECT to it if another SAVE page opens) and turn **KNOB 4, LIST,** to
-   **BASS**. The list now holds only the basses: 18 of them, from eight engines.
+   **BASS**. The list now holds only the basses: 19 of them, from eight engines.
 3. **Turn PRESETS** (or KNOB 1): each bass plays on the track as you reach it. One from another engine switches the
    track to that engine; its notes, its mix and its effects stay as they are.
 4. **Stop on the one that fits.** Gone past the sound you had? **SAVE held** brings it back: a run of PRESETS turns
@@ -113,16 +116,16 @@ engine, so you can browse from whichever page you are on. For track 3's pad: ALG
 - **FAV** lists your favourites. On SAVE › PRESETS, turn **KNOB 3, FAV,** right to mark the sound playing, left to
   unmark it. Your own sounds (SAVE › USER) are listed on ALL and FAV.
 - **KNOB 2, ENG,** jumps to the next engine's first sound, whatever the LIST.
-- Tracks 5 and 6 leave PHYS and GRAIN out of every list, since they don't play them: 17 basses there.
+- Tracks 5 and 6 leave PHYS and GRAIN out of every list, since they don't play them: 18 basses there.
 
 | Type | Sounds | From |
 | --- | ---: | --- |
-| BASS | 18 | ANALOG 6, FM6 4, LOFI 2, TRIO 2, PHASE, VOICE, WHEEL, PHYS |
-| LEAD | 23 | ANALOG 6, LOFI 4, PHASE 3, SAMPLE 3, TRIO 3, VOICE 2, FM6, WHEEL |
+| BASS | 19 | ANALOG 7, FM6 4, LOFI 2, TRIO 2, PHASE, VOICE, WHEEL, PHYS |
+| LEAD | 24 | ANALOG 7, LOFI 4, PHASE 3, SAMPLE 3, TRIO 3, VOICE 2, FM6, WHEEL |
 | PAD | 22 | ANALOG 6, GRAIN 6, VOICE 4, PHYS 2, FM6, PHASE, SAMPLE, TRIO |
 | KEYS | 23 | FM6 7, WHEEL 6, PHASE 3, PHYS 3, SAMPLE 2, ANALOG, TRIO |
 | PLUCK | 11 | PHYS 3, LOFI 2, SAMPLE 2, ANALOG, FM6, PHASE, TRIO |
-| DRUM | 31 | DRUM 10, DRUM-X 10, SLICE 8, PHYS 2, ANALOG |
+| DRUM | 34 | DRUM 13, DRUM-X 10, SLICE 8, PHYS 2, ANALOG |
 | FX | 15 | NOISE 8, ANALOG 2, GRAIN 2, VOICE, TRIO, SLICE |
 
 A DRUM-X kit preset loads its whole kit, the project's one kit for every DRUM-X track; SAVE held brings the kit back
@@ -285,8 +288,8 @@ FM6 patches from `.syx` files and saves complete backups.
 - **Lane mutes** (1.3): on a DRUM or DRUM-X track the EDIT layer's black keys 1–8 mute its lanes
 - **DUCK** (FX › DUCK): a track dips under another track's hits, the sidechain pump
 - **Effects:** per track DIST, in four types on FX › DRIVE (SOFT, HARD, FOLD, BITS) with a TONE, and the SLICER;
-  the buses on GLO: chorus (CHORUS, FLANGER or PHASER, with FEEDBACK), delay and reverb (ROOM, SPRING or HALL); the
-  FX layer (hold FX): fourteen effects on the white keys and cuts on the black ([the keys](#the-fx-layers-keys));
+  the buses on GLO: chorus (CHORUS, FLANGER or PHASER, with FEEDBACK), delay and reverb (ROOM, SPRING or a stereo
+  HALL); the FX layer (hold FX): fourteen effects on the white keys and cuts on the black ([the keys](#the-fx-layers-keys));
   new in 1.2: DRIVE's types and TONE, the chorus's modes, HALL, and GATE, DUB, FLANGE and VINYL on the FX layer;
   new in 1.3: **FX › INSERT**, a second effect per track after DRIVE (SOFT, HARD, FOLD, FUZZ, CRUSH, PHASR, FLANG or
   CHOR, its A, B and C named by the type, INSERT 2's MIX), and the delay's dotted times (1/8D, 1/16D, 1/4D)
@@ -569,15 +572,24 @@ and control behaves, rule by rule: [DESIGN.md](DESIGN.md). The editor's protocol
 
 ## If the FM-1 does not start
 
-If an update is interrupted and the FM-1 stays black, check whether a computer sees it as a USB device named
-**WL80UBOOT** (or a USB mass-storage device with ID 4C4A:8057). That is the chip's built-in boot mode, and
-the FM-1 can be brought back:
+**The screen says UPDATE MODE, or stays black while a computer sees a USB MIDI device named "Felucca
+Update":** an install was cut off, and the FM-1 waits in Skiff's update loader at every power-on. Nothing is
+lost. Connect it by USB and run the [Skiff installer](https://illuminus5.github.io/skiff/webapp/installer/) again
+(or `python tools/fm1_install.py skiff-1.3.2.fwsc`): it finishes the install. M-VAVE's own updater does not see
+the FM-1 in this state. (Since 1.3.2 the loader says UPDATE MODE on the screen; one an older Skiff left there
+keeps it black.)
+
+**A computer sees a USB device named WL80UBOOT** (or a USB mass-storage device with ID 4C4A:8057): that is the
+chip's built-in boot mode, and the FM-1 can be brought back:
 
 - First try another USB data cable, and close every other app that uses MIDI, then run `tools/fm1_install.py`
   again: it finishes an interrupted update.
 - If it stays in boot mode, [FM-1 Transporter](https://github.com/kurogedelic/FM-1-transporter) reads and
   writes the FM-1's flash from a Mac through a Seeed XIAO RP2040 (three wires to the FM-1's USB lines). Back up
   the flash first, then write the official firmware (M-VAVE's FM-1.fwsc).
+
+**A computer sees nothing at all:** try another USB cable (a charge-only cable has no data lines) and another
+port, with the FM-1 charged. FM-1 Transporter (above) reaches the chip's boot mode by itself.
 
 ## Support
 

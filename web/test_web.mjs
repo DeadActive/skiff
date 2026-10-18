@@ -137,7 +137,7 @@ async function editorMock() {
     const nl = E.parse[E.CMD.DUMP](await rq(E.req.dump()), info);
     await rq(E.req.preset(0, 0));
     const sl = E.parse[E.CMD.DUMP](await rq(E.req.dump()), info);
-    ok(nl.preset === 16 && nl.p[9] === 86 && nl.p[12] === 92 && nl.p[13] === 2 && nl.p[38] === 28 &&
+    ok(nl.preset === 16 && nl.p[9] === 86 && nl.p[12] === 92 && nl.p[13] === 11 && nl.p[38] === 28 &&
        sl.p[9] === 60 && sl.p[12] === 0 && sl.p[13] === 0 && sl.p[38] === 0,
       "editor: NEON LEAD sets its LFO and GLIDE, the next factory preset their defaults");
   }

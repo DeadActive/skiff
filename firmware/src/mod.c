@@ -18,7 +18,8 @@
  *         random line, one cycle behind S&H); bipolar. Both per track (one value for every voice)
  * Destinations:
  *   per voice (vmod_t, like the fixed routings):
- *     PITCH  AMT 63 at a full source = +-11.8 semitones (as LFO DEST PIT)
+ *     PITCH  AMT 63 at a full source = +-11.8 semitones (as LFO DEST PIT at 63; linear here, LFO DEST PIT squared
+ *            since Skiff 1.3.2: voice.c lfo_pitch)
  *     CUT    m->cutoff, SHP m->shape: AMT 63 = +-63 steps (as ENV DEST); the sums are clamped to what
  *            the fixed routings can reach, so the engines see no new range
  *     AMP    a gain <= 1: AMT > 0 the source opens it (AMT 64: silent at 0, full at 1), AMT < 0 closes it

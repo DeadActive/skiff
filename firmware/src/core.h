@@ -212,7 +212,7 @@ typedef struct {                 /* per-voice control-rate modulation, computed 
     int32_t cutoff;              /* 0..127 << 8 */
     int32_t shape;               /* 0..127 << 8 */
     int32_t envq15;              /* env value (for engines that use it as a mod source) */
-    int32_t fine;                /* the residual below 1/16 semitone in inc: unison detune, TUNE, bend (1/4096) */
+    int32_t fine;                /* the residual below 1/16 semitone in inc: unison detune, TUNE, bend, (Skiff 1.3.2) the LFO's vibrato (1/4096) */
 } vmod_t;
 
 typedef struct {

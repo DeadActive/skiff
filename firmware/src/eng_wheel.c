@@ -276,7 +276,7 @@ static const preset_t WHEEL_PRESETS[] = {
     {"CATHEDRAL", {12, 2, 0, 0, 0, 6, 0, 0}, {48, 64, 127, 72}, 0, 0, FX(0, 0, 0, 110), TAG(PT_KEYS)},
     /* (Skiff phase 9) more for every engine: basses, kits */
     {"PEDAL BASS", {14, 4, 0, -4, 0, 20, 10, 0}, {0, 64, 127, 30}, 0, 1, FX(0, 0, 0, 15), TAG(PT_BASS)},
-    {"CLARINET", {9, 0, 2, -5, 0, 0, 14, 1}, {24, 64, 120, 45}, 0, 1, FX(0, 20, 15, 40), MORE({P_LD_PIT, 1}, {P_LRATE, 89}, {P_LFADE, 70}), TAG(PT_LEAD)},
+    {"CLARINET", {9, 0, 2, -5, 0, 0, 14, 1}, {24, 64, 120, 45}, 0, 1, FX(0, 20, 15, 40), MORE({P_LD_PIT, 8}, {P_LRATE, 89}, {P_LFADE, 70}), TAG(PT_LEAD)},
 };
 
 static const engine_t ENG_WHEEL = {

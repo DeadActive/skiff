@@ -83,14 +83,15 @@ at the note's pitch instead, and the screen says NO SAMPLE.
 ```
 ./build.sh
 web/emu/build.sh
-python3 -m http.server -d build/emu 8790     # open http://localhost:8790/
+python3 -m http.server -d build 8790        # open http://localhost:8790/emu/ (the page loads ../panel.js)
 ```
 
 `web/emu/felucca_web.c` builds the firmware's sources as the host tests do, against a simulated FM-1, and
 Emscripten compiles it to WebAssembly (`build/emu/felucca.wasm`, with `index.html`, `worklet.js` and the font in `fonts/`). The page
 keeps the flash's storage sectors (projects, user presets, settings) in the browser. Not emulated: USB (audio,
-MIDI out, the editor, updates), TRS MIDI and the user sample slots. (Felucca's build of it, which runs Felucca:
-<https://hugelton.github.io/Felucca/webapp/try/>.)
+MIDI out, the editor, updates), TRS MIDI and the user sample slots. The site has it at
+<https://illuminus5.github.io/skiff/try/> (`web/make_site.py` copies `build/emu` there: build it with `EMU_PREVIEW=0` after
+the release build). It is Felucca's, after X0X's: <https://hugelton.github.io/Felucca/webapp/try/> runs Felucca.
 
 ## Tests
 

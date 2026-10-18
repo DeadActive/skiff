@@ -35,7 +35,8 @@ FUNCS = ["analog_render", "digital_render", "digital_render_legacy", "digital_re
          "throw_on", "throw_off",                         # (Skiff) throws (throw.c): while one is out
          "rev_room", "rev_spring",                # the reverb bus (fx.c): REVERB TYPE ROOM / SPRING
          "dist_hard", "dist_fold", "dist_bits",   # (Skiff phase 9) FX > DRIVE's TYPEs (fx.c), on a track that uses one
-         "rev_hall", "cho_mode",                  # (Skiff phase 9) REVERB TYPE HALL; CHORUS MODE / FEEDBACK (fx.c)
+         "rev_hall", "rev_side_mix", "cho_mode",  # REVERB TYPE HALL ((Skiff #19) Felucca's) and its stereo; (Skiff
+                                                  # phase 9) CHORUS MODE / FEEDBACK (fx.c)
          "mix_part", "mix_split",                 # (Skiff 1.3) a track's block (fx.c), on either core; the split
          "track_insert", "ins_drive", "ins_swept",   # (Skiff 1.3) FX > INSERT (fx.c), on a track that uses one
          "mix_spread", "esync_coef", "mod_depth"]   # (Skiff 1.3) SPREAD (fx.c), ENV SYNC (voice.c), MOD DEPTH (mod.c)

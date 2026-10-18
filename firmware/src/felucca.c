@@ -32,7 +32,7 @@
 #define FELUCCA_ID "FM-1_700"    /* package identity (build.py: the .fwsc marker string) */
 #endif
 #ifndef FELUCCA_VERSION
-#define FELUCCA_VERSION "v1.3.1"     /* Skiff's; shown in the menu, the console and the editor; build.py --release X.Y */
+#define FELUCCA_VERSION "v1.3.2"     /* Skiff's; shown in the menu, the console and the editor; build.py --release X.Y */
 #endif
 #if FELUCCA_OTA && !FELUCCA_FLASH
 #error "FELUCCA_OTA needs FELUCCA_FLASH"
