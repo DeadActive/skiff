@@ -984,55 +984,364 @@ footer p { max-width: 1240px; margin: 6px auto; }
   </ol>
 </section>
 
-<section class="chapter" id="fm6-lab" data-n="11" data-group="SHAPE SOUND" data-video="">
+<section class="chapter" id="fm6-lab" data-n="11" data-group="SHAPE SOUND" data-video="Uz0gjK06j8M">
   <div class="ch-head"><span class="num">11</span><div><p class="group">SHAPE SOUND</p><h2>FM6 LAB</h2></div></div>
-  <p class="meta"><b>You'll learn</b> to build a six-operator FM sound on the unit, from INIT to a saved sound.</p>
+  <p class="meta"><b>You'll learn</b> to build a six-operator FM sound on the unit, from INIT to a saved sound, and to read its graph:
+    a carrier's colour is its bite, its shape is its level.</p>
   <div class="video"></div>
-  <ul class="outline">
-    <li>OPERATOR: <kbd>PRESETS</kbd> picks one of six operators, <kbd>SELECT</kbd> its TONE, ENV, KEYS and MORE.</li>
-    <li>ALL OPS: ALGO and FEEDBACK, PITCH, LFO, DEPTH.</li>
-    <li>Start from INIT and save the result to USER.</li>
-  </ul>
-  <p class="soon-note">Video and step-by-step coming</p>
+  <ol class="steps">
+    <li class="step" id="fm6-lab/track">
+      <h3>Track 2: FM6</h3>
+      <p>The drums from <a href="#first-beat">chapter 3</a> play, a little quieter, and track 2 has a riff of long notes, so you can hear
+        how each note starts and fades. Tap <kbd>PLAY</kbd> and turn <kbd>ALGORITHM</kbd> to track 2: FM6, with its power-on sound, PAD.
+        FM6 is classic six-operator FM. Each operator is a sine wave with an envelope of its own, and an operator that modulates
+        another bends that one's sine into a brighter, richer wave.</p>
+    </li>
+    <li class="step" id="fm6-lab/init">
+      <h3>Start from a sine</h3>
+      <p>Hold <kbd>EDIT</kbd> and tap <kbd>F5</kbd>, INIT (<a href="#sounds/init">chapter 4</a>): INITIALIZE SOUND? asks first, and
+        <kbd>OCT+</kbd> does it. On FM6, INIT is the bare sine to build from: OP1 alone, playing as an organ does (full level while the
+        key is down, gone the moment it's let go), algorithm 1, every macro at 0. HOME names it INIT VOICE, the patch's own name. SAVE held
+        would undo the INIT; the knob turns that follow aren't undone, as no knob turn is.</p>
+    </li>
+    <li class="step" id="fm6-lab/operator">
+      <h3>Operator</h3>
+      <p>Tap <kbd>EDIT</kbd> three times: EDIT 1 (OPS: the algorithm and the macros), EDIT 2 (PATCH: OWN, the track's own patch, which
+        every edit here goes into), then OPERATOR. On OPERATOR, <kbd>PRESETS</kbd> picks one of the six operators (OPERATOR 1 in the
+        header) and <kbd>SELECT</kbd> moves the knobs through its five windows: TONE, ENV 1, ENV 2, KEYS and MORE. TONE is OUTPUT,
+        RATIO, FINE and DETUNE.</p>
+      <p>The graph is a note of C4 as the engine plays it: each operator's level, from the key going down at the left, to the dotted
+        line where it's let go, then the release. Time runs on a log scale, so a 1 ms attack and a 4 s decay both show; the note's
+        length is at the right, 0.35 S. OP1 is a thick blue line: PURE SINE.</p>
+    </li>
+    <li class="step" id="fm6-lab/modulator">
+      <h3>The bite</h3>
+      <p>Turn <kbd>PRESETS</kbd>: OPERATOR 2, at OUTPUT 0, silent. In algorithm 1 OP2 modulates OP1, so it's drawn as a thin line in its
+        own colour; the thick lines are the carriers, the operators you hear. Turn <kbd>KNOB 1</kbd>, OUTPUT: at 40 OP1's line turns
+        purple, at 70 red, and the sine has an edge.</p>
+      <p>That colour is the point of the graph. Each carrier is shaded along its length by its bite: how hard its modulators bend it at
+        that moment, from cool blue (a pure sine) to red (FM at its brightest). The key under the graph runs SINE to FM, and BRIGHTEST
+        1 MS says where it bites most, with a mark under the graph.</p>
+    </li>
+    <li class="step" id="fm6-lab/fade">
+      <h3>The bite fades</h3>
+      <p><kbd>SELECT</kbd> to ENV 1 and on to ENV 2. An operator's envelope is four rates and four levels: at RATE 1 to LEVEL 1 when the key
+        goes down, on to LEVEL 2 and LEVEL 3, held there until the key is let go, then at RATE 4 to LEVEL 4. Rates run from 0, the slowest,
+        to 99, at once.</p>
+      <p><kbd>KNOB 2</kbd>, OP2's LEVEL 3, to 0: OP2 drops away straight after the attack, and OP1 is red for an instant only, a click of
+        bite. <kbd>KNOB 1</kbd>, RATE 3, to 59: OP2 falls slowly, and OP1 fades from red to blue along the note. Each note starts bright
+        and mellows into a sine, the move behind FM's plucks, basses and pianos. OP1's line keeps its shape: its level hasn't changed,
+        only its colour.</p>
+    </li>
+    <li class="step" id="fm6-lab/swell">
+      <h3>The bite comes late</h3>
+      <p><kbd>SELECT</kbd> back to ENV 1 and turn <kbd>KNOB 1</kbd>, OP2's RATE 1, down to 35: OP2 now takes its time to rise, so the bite
+        comes in late and fades again, blue, then red, then blue. BRIGHTEST 0.28 S, and the mark moves under the peak: a swell, the way
+        brass gets brighter as it's blown.</p>
+    </li>
+    <li class="step" id="fm6-lab/shape">
+      <h3>Shape is level</h3>
+      <p>Turn <kbd>PRESETS</kbd> back to OP1, the carrier, and <kbd>SELECT</kbd> to ENV 2. <kbd>KNOB 2</kbd>, LEVEL 3, to 0: the line drops
+        straight after the attack, and every note is a blip. <kbd>KNOB 1</kbd>, RATE 3, to 49: it falls slowly, and each note dies away,
+        like a struck key; the graph stretches to the note's new length, 1.9 S. This time the shape changes and the colour stays where
+        OP2 puts it: blue, red at the late bite, blue again. A carrier's shape is how loud you hear it, its colour how bright.</p>
+    </li>
+    <li class="step" id="fm6-lab/ratio">
+      <h3>Ratio</h3>
+      <p><kbd>PRESETS</kbd> to OP2, <kbd>SELECT</kbd> back to ENV 1, and <kbd>KNOB 1</kbd>, RATE 1, back to 99: the bite is at the attack
+        again. <kbd>SELECT</kbd> back to TONE and turn <kbd>KNOB 2</kbd>, RATIO, from 1 to 14, a detent at a time: each ratio puts the bite on
+        another set of overtones, and at 14 it rings like a bell, the tine of a classic FM electric piano. The colour
+        doesn't change: it shows how much a carrier bites, not which overtones. The tabs over the graph show every operator's ratio
+        (14x). RATIO runs from x0.5 to x31, then to fixed frequencies (1, 10, 100 and 1K HZ) that don't follow the keys; FINE shows the
+        ratio it makes, 14.00.</p>
+    </li>
+    <li class="step" id="fm6-lab/body">
+      <h3>Two carriers</h3>
+      <p><kbd>PRESETS</kbd> to OP3. In algorithm 1 OP3 is a carrier too, and with OP4 silent nothing modulates it. <kbd>KNOB 1</kbd>,
+        OUTPUT 80: a second thick line, blue and level all along, a plain sine under the bell, the body of the sound. Two carriers, two
+        colours: each is shaded by its own modulators only.</p>
+    </li>
+    <li class="step" id="fm6-lab/keys">
+      <h3>Across the keys</h3>
+      <p><kbd>PRESETS</kbd> back to OP2 and <kbd>SELECT</kbd> on to KEYS, past ENV 1 and ENV 2: the operator's level across the keyboard,
+        0 dB at the top and −48 dB at the bottom, BREAK a dotted line (C4 here) and C4 a dot. L DEPTH and R DEPTH turn it down below and
+        above BREAK, along L CURVE and R CURVE (−LIN, −EXP, +EXP and +LIN; the + ones turn it up). <kbd>KNOB 3</kbd>, R DEPTH 60: OP2
+        falls away above C4, to −46 dB at C7, so the riff's high notes bite less.</p>
+    </li>
+    <li class="step" id="fm6-lab/algo">
+      <h3>The algorithm</h3>
+      <p><kbd>SELECT</kbd> on, past MORE (BREAK, KEY RATE, VELOCITY and LFO AMP), to ALL OPS, the patch's own values. Its first window,
+        ALGO, draws the algorithm with the operator <kbd>PRESETS</kbd> picks lit, and says what it does: OP2 MODULATES OP1, OP3 GOES TO THE
+        OUTPUT, OP4 IS SILENT: OUTPUT 0. <kbd>KNOB 1</kbd>, ALGO, picks one of the 32; KNOB 2 is FEEDBACK
+        (one operator modulating itself, OP6 in algorithm 1) and KNOB 3 TRANSP, in semitones.</p>
+    </li>
+    <li class="step" id="fm6-lab/vibrato">
+      <h3>Vibrato</h3>
+      <p><kbd>SELECT</kbd> on through PITCH 1 and PITCH 2 (the pitch envelope's rates and levels, in semitones) and LFO, to DEPTH:
+        VIBRATO, VIB SENS and TREMOLO. <kbd>KNOB 1</kbd>, VIBRATO 30: the graph draws two seconds of it from the key going down, ±0.50
+        ST, the note's outline behind it: VIBRATO 5.8 HZ.</p>
+    </li>
+    <li class="step" id="fm6-lab/fade-in">
+      <h3>Fade in</h3>
+      <p><kbd>SELECT</kbd> back to LFO: WAVE, RATE, FADE and KEY SYNC. <kbd>KNOB 3</kbd>, FADE 60: the vibrato waits and comes in
+        gradually, IN AFTER 0.62 S. TREMOLO moves the level instead of the pitch, on the operators whose LFO AMP (MORE) is above 0.</p>
+    </li>
+    <li class="step" id="fm6-lab/save">
+      <h3>Save it</h3>
+      <p>Your sound is kept as a user sound, as in <a href="#sounds/save">chapter 4</a>, the whole patch with it. Stop first:
+        <kbd>PLAY</kbd>. Tap <kbd>SAVE</kbd>: the first time, it opens on USER, with SLOT U01 and SAVE already picked (OCT+: SAVE).
+        <kbd>OCT+</kbd> opens NAME with the automatic name, FM6 01.</p>
+    </li>
+    <li class="step" id="fm6-lab/name">
+      <h3>Name it</h3>
+      <p><kbd>C♯4</kbd> held deletes it, then the white keys type, phone style: TINE is <kbd>A4</kbd> (TU), <kbd>C4</kbd> (IJK),
+        <kbd>E4</kbd> (NO) and <kbd>A3</kbd> (EF), one tap each. <kbd>OCT+</kbd> writes it: SAVED U01, and the list says U01 TINE. The
+        name goes into the FM6 patch too, so a <code>.syx</code> of it from the web editor carries it.</p>
+    </li>
+    <li class="step" id="fm6-lab/yours">
+      <h3>Yours</h3>
+      <p><kbd>PLAY</kbd>, and <kbd>HOME</kbd>: track 2 is TINE. It's on the PRESETS lists ALL and FAV, and LOAD on SAVE › USER puts it on
+        any track. Every value of it can be changed again here, or in the <a href="../webapp/editor/">web editor</a>.</p>
+    </li>
+  </ol>
 </section>
 
-<section class="chapter" id="track-fx" data-n="12" data-group="SHAPE SOUND" data-video="">
+<section class="chapter" id="track-fx" data-n="12" data-group="SHAPE SOUND" data-video="oMCmP2GKZxM">
   <div class="ch-head"><span class="num">12</span><div><p class="group">SHAPE SOUND</p><h2>Track effects</h2></div></div>
   <p class="meta"><b>You'll learn</b> a track's own effects: the sends, drive, inserts, the slicer and ducking.</p>
   <div class="video"></div>
-  <ul class="outline">
-    <li>FX: the sends to DIST, CHORUS, DELAY and REVERB.</li>
-    <li>DRIVE, INSERT and INSERT 2.</li>
-    <li>SLICER: rhythmic gates.</li>
-    <li>DUCK: a track dips under another track's kick.</li>
-  </ul>
-  <p class="soon-note">Video and step-by-step coming</p>
+  <ol class="steps">
+    <li class="step" id="track-fx/fx">
+      <h3>The FX page</h3>
+      <p>The beat from <a href="#first-beat">chapter 3</a> plays, with two chords on track 2. Tap <kbd>PLAY</kbd>, then <kbd>FX</kbd>:
+        track 1's FX page, the first of six. (The header says HOLD FX: SHORTCUTS for a moment: held, FX is the FX layer,
+        <a href="#fx-layer">chapter 16</a>.) DIST is the track's own distortion, set on DRIVE, next. CHORUS, DELAY and REVERB are sends:
+        how much of the track goes to the three effects every track shares, which GLO sets up (<a href="#mixer">chapter 13</a>). The
+        faders draw all four. ACID sends 35 % to the delay; <kbd>KNOB 3</kbd> up to 71 %, and its echoes come forward.</p>
+    </li>
+    <li class="step" id="track-fx/drive">
+      <h3>Drive</h3>
+      <p>Tap <kbd>FX</kbd> again for DRIVE: DIST, TYPE and TONE. DIST pushes the track into the TYPE's curve, from none at 0 % (TYPE
+        and TONE then change nothing) to about nine times; the graph draws the curve with a sine going through it. <kbd>KNOB 1</kbd>, DIST,
+        from ACID's 16 % to 55 %: the bass growls.</p>
+    </li>
+    <li class="step" id="track-fx/type">
+      <h3>Four types</h3>
+      <p><kbd>KNOB 2</kbd>, TYPE: SOFT rounds the peaks off, HARD clips them flat, FOLD folds them back (the sine turns to ripples) and
+        BITS takes bits away and holds samples, a lo-fi crunch. Back to FOLD, then <kbd>KNOB 3</kbd>, TONE, to −62 %: darker. TONE moves
+        the drive's own low-pass, minus darker and plus brighter.</p>
+    </li>
+    <li class="step" id="track-fx/insert">
+      <h3>Insert</h3>
+      <p><kbd>FX</kbd> again: INSERT, a second effect on the track, after DRIVE. <kbd>KNOB 1</kbd>, TYPE, runs OFF, SOFT, HARD, FOLD,
+        FUZZ, CRUSH, PHASR, FLANG and CHOR, and the other three knobs take their names from it: DRIVE, TONE and LEVEL for the four drives,
+        BITS, RATE and LPF for CRUSH, RATE, DEPTH and FDBK for the three sweeps. Here the bass goes through each on the way to PHASR, a
+        phaser: RATE 1.45 Hz, DEPTH 76 %, FDBK 76 %, its sweep drawn.</p>
+    </li>
+    <li class="step" id="track-fx/mix">
+      <h3>Mix</h3>
+      <p><kbd>FX</kbd> again: INSERT 2, one knob, MIX: how much of the track goes through the INSERT. <kbd>KNOB 1</kbd> from 100 % down to
+        50 %: half the bass through the phaser, half as it was. At 0 % the INSERT is out of the way, as at OFF.</p>
+    </li>
+    <li class="step" id="track-fx/slicer">
+      <h3>The slicer</h3>
+      <p><kbd>ALGORITHM</kbd> to track 2, the pad. The FX pages follow the track: tap <kbd>FX</kbd> again for SLICER. <kbd>KNOB 1</kbd>,
+        SLICER, from OFF to GATE: the chords are chopped in time with the beat, the pattern drawn as 16 bars, the step playing underlined.
+        PATTERN 1 opens every other sixteenth. RATE sets the step, from 1/8 to 1/32 and their triplets; DEPTH how far a gap closes.</p>
+    </li>
+    <li class="step" id="track-fx/pattern">
+      <h3>Patterns</h3>
+      <p><kbd>KNOB 2</kbd>, PATTERN, picks one of 16: 3, a dotted rhythm (x..x..x..x..x.x.), then 6, four steps on and four off. A tall
+        bar plays, a short one is a gap.</p>
+    </li>
+    <li class="step" id="track-fx/stutter">
+      <h3>Stutter</h3>
+      <p><kbd>KNOB 1</kbd> on to STUT: a step that plays is recorded, and the steps after it that would be gaps play that recording again,
+        a stutter instead of a silence. The graph hatches them. DEPTH is then the repeat's level.</p>
+    </li>
+    <li class="step" id="track-fx/duck">
+      <h3>Duck</h3>
+      <p><kbd>KNOB 1</kbd> back to OFF, and <kbd>FX</kbd> again: DUCK, the last page. <kbd>KNOB 1</kbd>, BY, picks the track to duck under
+        (it steps over the track itself): T4, the drums. Every kick now pushes the pad down by DEPTH, 76 %, and it comes back over
+        RELEASE, 199 ms: the pump of side-chained dance music. A drum track counts its KICK lane only, so the hats move nothing. The graph
+        draws the pad's level over a bar of T4's kicks.</p>
+    </li>
+    <li class="step" id="track-fx/depth">
+      <h3>Depth and release</h3>
+      <p><kbd>KNOB 2</kbd>, DEPTH, 100 %: silent at each kick. <kbd>KNOB 3</kbd>, RELEASE, 476 ms: slower to come back, a longer swell.
+        DUCK works after the INSERT and the SLICER and before the track's LEVEL, so its sends dip with it. SLICER and DUCK belong to the
+        track and stay when you load another sound; the sends, DRIVE and INSERT come with each sound. With REC armed, turns on these pages
+        are recorded as automation, except the SLICER's and BY; held <kbd>LFO</kbd> makes them MOMENTARY (<a href="#modulation/momentary">chapter
+        9</a>).</p>
+    </li>
+  </ol>
 </section>
 
 <!-- ================================================================ ARRANGE AND PERFORM -->
-<section class="chapter" id="mixer" data-n="13" data-group="ARRANGE AND PERFORM" data-video="">
+<section class="chapter" id="mixer" data-n="13" data-group="ARRANGE AND PERFORM" data-video="Ehw8CuhfNHg">
   <div class="ch-head"><span class="num">13</span><div><p class="group">ARRANGE AND PERFORM</p><h2>Mixer and global FX</h2></div></div>
   <p class="meta"><b>You'll learn</b> levels and pans, the shared delay, reverb and chorus, swing, and the GLO layer.</p>
   <div class="video"></div>
-  <ul class="outline">
-    <li>GLO › MIXER: LEVEL, PAN, REVERB, MUTE.</li>
-    <li>DELAY, REVERB, CHORUS, and GLOBAL: BPM and SWING.</li>
-    <li>Hold <kbd>GLO</kbd>: solos, mutes, FILL, tap tempo, levels. <kbd>GLO</kbd> + <kbd>PLAY</kbd> starts again from the top.</li>
-  </ul>
-  <p class="soon-note">Video and step-by-step coming</p>
+  <ol class="steps">
+    <li class="step" id="mixer/mixer">
+      <h3>The mixer</h3>
+      <p>The beat from <a href="#first-beat">chapter 3</a> plays, with two chords on track 2 and a piano line on track 5. Tap
+        <kbd>PLAY</kbd>, then <kbd>GLO</kbd>: the MIXER, the first of GLO's five pages. A strip for each track: its number, the sound's first
+        word, a fader with the level meter beside it, the level in dB and the pan (C in the middle, L62 to the left); a muted track's strip
+        says M. The four knobs are the selected track's LEVEL, PAN, REVERB and MUTE, and <kbd>ALGORITHM</kbd> picks the track, here
+        track 1 at first.</p>
+    </li>
+    <li class="step" id="mixer/level">
+      <h3>Level</h3>
+      <p><kbd>ALGORITHM</kbd> to track 5, the piano. <kbd>KNOB 1</kbd>, LEVEL, from −4 dB, where every track starts, up to 0 dB, half a dB
+        a detent; it runs from OFF to +7.5 dB.</p>
+    </li>
+    <li class="step" id="mixer/pan">
+      <h3>Pan</h3>
+      <p><kbd>KNOB 2</kbd>, PAN, −62 %: the piano moves to the left, and its strip says L62.</p>
+    </li>
+    <li class="step" id="mixer/reverb-send">
+      <h3>Reverb send</h3>
+      <p><kbd>KNOB 3</kbd> is the track's REVERB send, the same value as on its FX page (<a href="#track-fx/fx">chapter 12</a>): how much
+        of it goes to the reverb. From the piano's own 28 % to 60 %: it sits further back.</p>
+    </li>
+    <li class="step" id="mixer/mute">
+      <h3>Mute</h3>
+      <p><kbd>KNOB 4</kbd> to the right mutes the track: ON, and M on its strip, its meter still. To the left it plays again; here the
+        piano stays muted for now. A mute isn't recorded.</p>
+    </li>
+    <li class="step" id="mixer/delay">
+      <h3>Delay</h3>
+      <p>Tap <kbd>GLO</kbd> again: DELAY, the echo every track sends to, by its DELAY send. TIME is a note value, 4BAR to 1/32 with the
+        dotted ones (1/4D, 1/8D, 1/16D) and triplets; <kbd>KNOB 1</kbd> one detent left, from 1/8 to 1/8D, the dotted eighth.
+        <kbd>KNOB 2</kbd>, FEEDBACK, from 47 % to 63 %: more echoes, each a little quieter. COLOR is their brightness, MIX their level; the
+        graph draws the dry hit and the echoes over the beats.</p>
+    </li>
+    <li class="step" id="mixer/reverb">
+      <h3>Reverb</h3>
+      <p><kbd>GLO</kbd> again: REVERB. <kbd>KNOB 1</kbd>, TYPE: ROOM, SPRING (the coil of an amp's spring), then HALL, darker and longer.
+        <kbd>KNOB 2</kbd>, SIZE, from 71 % to 87 %: a longer tail. DAMP darkens it. The graph draws the first reflections, then the
+        tail.</p>
+    </li>
+    <li class="step" id="mixer/chorus">
+      <h3>Chorus</h3>
+      <p><kbd>GLO</kbd> again: CHORUS, here mostly the pad's, which sends 47 % to it. RATE and DEPTH are its sweep; <kbd>KNOB 3</kbd>,
+        MODE: CHORUS, FLANGER or PHASER. FLANGER, and <kbd>KNOB 4</kbd>, FEEDBACK, up to 31 %: the sweep rings. The graph says what each
+        mode does, here THE DRY AND ITS COPY: A COMB, SWEPT.</p>
+    </li>
+    <li class="step" id="mixer/global">
+      <h3>Global</h3>
+      <p><kbd>GLO</kbd> again: GLOBAL, the last page: BPM, and SWING+, swing for every track on top of each pattern's own SWING
+        (<a href="#steps/pattern">chapter 6</a>). <kbd>KNOB 2</kbd> to 50 %: every off-step comes late, SWING 60:40, drawn over the bar. The
+        tempo can also be set from any page: hold <kbd>GLO</kbd> and turn <kbd>SELECT</kbd>
+        (<a href="#first-beat/tempo">chapter 3</a>).</p>
+    </li>
+    <li class="step" id="mixer/glo-layer">
+      <h3>The GLO layer</h3>
+      <p>Hold <kbd>GLO</kbd>: the GLO layer, GLO SET in the header. The white keys <kbd>F3</kbd> to <kbd>D4</kbd> solo tracks 1–6,
+        <kbd>E4</kbd> is ALL, <kbd>F4</kbd> FILL (<a href="#variation/fill-play">chapter 8</a>) and <kbd>G4</kbd> TAP; the black keys
+        <kbd>F♯3</kbd> <kbd>G♯3</kbd> <kbd>A♯3</kbd> <kbd>C♯4</kbd> <kbd>D♯4</kbd> <kbd>F♯4</kbd> mute tracks 1–6. The four knobs are the
+        levels of the four tracks around the selected one, here 2 to 5: <kbd>KNOB 1</kbd> takes the pad down to −8 dB. HOME with GLO
+        keeps the layer open (LOCKED), and <kbd>OCT−</kbd> puts the levels, the mutes and the tempo back as they were when it opened.</p>
+    </li>
+    <li class="step" id="mixer/solo">
+      <h3>Solo</h3>
+      <p>Hold <kbd>GLO</kbd>, then hold <kbd>F3</kbd> and <kbd>B3</kbd>: tracks 1 and 4, the bass and the drums, play alone, as long as
+        the keys are held, and the other tracks' cards dim. Let go and they're all back.</p>
+    </li>
+    <li class="step" id="mixer/mutes">
+      <h3>Mutes</h3>
+      <p>Hold <kbd>GLO</kbd>. A black key mutes its track, and it stays muted after you let go, until it's tapped again: <kbd>G♯3</kbd>, the
+        pad, its cell lit and its card dimmed. <kbd>D♯4</kbd>'s cell is lit already: the piano's mute from the MIXER, the same switch.</p>
+    </li>
+    <li class="step" id="mixer/all">
+      <h3>All</h3>
+      <p>Hold <kbd>GLO</kbd> and tap <kbd>E4</kbd>, ALL: every muted track plays again at once, the pad and the piano.</p>
+    </li>
+    <li class="step" id="mixer/tap">
+      <h3>Tap tempo</h3>
+      <p>Hold <kbd>GLO</kbd> and tap <kbd>G4</kbd>, TAP, in time: the header says TAP 2 MORE, TAP 1 MORE, then the tempo follows the taps,
+        here four taps half a second apart: 120 BPM. A pause of 2 s starts the count again; on an outside clock it says TAP: CLOCK IS
+        EXTERNAL.</p>
+    </li>
+    <li class="step" id="mixer/restart">
+      <h3>From the top</h3>
+      <p>Hold <kbd>GLO</kbd> and tap <kbd>PLAY</kbd> (the layer's footer says PLAY: RESTART): every track starts again from its first step
+        at once, without stopping. With SONG on it starts the song from the top (<a href="#song">chapter 14</a>).</p>
+    </li>
+  </ol>
 </section>
 
-<section class="chapter" id="song" data-n="14" data-group="ARRANGE AND PERFORM" data-video="">
+<section class="chapter" id="song" data-n="14" data-group="ARRANGE AND PERFORM" data-video="9-gFcMFauv0">
   <div class="ch-head"><span class="num">14</span><div><p class="group">ARRANGE AND PERFORM</p><h2>Patterns and the song</h2></div></div>
   <p class="meta"><b>You'll learn</b> how patterns, lists and the song fit together, and how to build a song.</p>
   <div class="video"></div>
-  <ul class="outline">
-    <li>The pool: 64 <a href="#g-pattern">patterns</a> that every project shares (SAVE › PATTERNS).</li>
-    <li>Each track's <a href="#g-list">list</a>: 16 entries, A–P, each a pattern and its REPS (SEQ › SONG).</li>
-    <li>SONG ON: each track moves through its list; an empty entry between two patterns is a rest. <kbd>GLO</kbd> + <kbd>PLAY</kbd> starts every track from the top.</li>
-    <li>Shared patterns and copies.</li>
-  </ul>
-  <p class="soon-note">Video and step-by-step coming</p>
+  <ol class="steps">
+    <li class="step" id="song/pool">
+      <h3>The pool</h3>
+      <p>This unit has patterns to arrange, made as in <a href="#first-beat">chapter 3</a>: the beat and a fill on track 4, two bass lines on
+        track 1, the chords on track 2. Tap <kbd>PLAY</kbd>, then <kbd>SAVE</kbd> (USER, the first time) and turn <kbd>SELECT</kbd> to
+        PATTERNS: the pool, 64 <a href="#g-pattern">patterns</a>, 01 to 64, shared by every project. A pattern is a track's notes exactly
+        as they play: its steps, LENGTH, DIV, SWING, GATE and direction, its automation and locks; the sound isn't part of it. 01 to 05 are
+        kept here. <kbd>KNOB 1</kbd> picks one: its LENGTH and USED, how many entries name it. <kbd>OCT+</kbd> clears one that nothing
+        uses, stopped, after asking.</p>
+    </li>
+    <li class="step" id="song/lists">
+      <h3>Each track's list</h3>
+      <p>Tap <kbd>SEQ</kbd>: STEP, whose header names the pattern being edited, A · 03. Turn <kbd>SELECT</kbd> on to SONG, the last SEQ
+        page: a row for each track, its <a href="#g-list">list</a> of 16 entries, A to P, across. An entry names a pattern and its REPS,
+        how many times it plays (1 to 16), the ticks under its tile. The entry a track is on is filled with its colour; a dot is an empty
+        entry. <kbd>KNOB 1</kbd> picks the entry, <kbd>KNOB 2</kbd> a pattern for it, <kbd>KNOB 3</kbd> its REPS, <kbd>KNOB 4</kbd>
+        SONG.</p>
+    </li>
+    <li class="step" id="song/play-entry">
+      <h3>Play an entry</h3>
+      <p><kbd>KNOB 1</kbd> to entry B, pattern 04 (the bass on F and G), and <kbd>OCT+</kbd>, as the footer says, PLAY: while playing it waits
+        for the LAUNCH point, by default the end of the track's loop: T1 B AT LOOP END, the tile outlined until it comes in. Stopped, it
+        switches at once. (PERFORM sets the LAUNCH point and launches entries from the keys: <a href="#perform">chapter 15</a>.)</p>
+    </li>
+    <li class="step" id="song/song-on">
+      <h3>Song on</h3>
+      <p><kbd>KNOB 4</kbd>, SONG ON, and the header says SONG ON too. Each track now plays an entry its REPS times and then moves on to the
+        next, at the end of its own loop; after the last, back to the first. The drums play 01 three times, then the fill once; the bass
+        04 twice, then 03. With SONG OFF each track loops the entry it's on.</p>
+    </li>
+    <li class="step" id="song/set">
+      <h3>A new entry</h3>
+      <p><kbd>ALGORITHM</kbd> to track 2: its list is one entry, A, 05, two times. <kbd>KNOB 1</kbd> to C and <kbd>KNOB 2</kbd> through
+        the kept patterns to 05: the footer says OCT+: SET 05. <kbd>OCT+</kbd>: T2 C SET 05.</p>
+    </li>
+    <li class="step" id="song/rest">
+      <h3>A rest</h3>
+      <p><kbd>KNOB 1</kbd> back to B. Empty and between two patterns, it's a rest, a dash on the row: the pad plays A twice, rests for B's
+        one pass (<kbd>KNOB 3</kbd> sets how many), plays C, and goes round. Empty entries after the last pattern end the list.</p>
+    </li>
+    <li class="step" id="song/top">
+      <h3>From the top</h3>
+      <p>Hold <kbd>GLO</kbd> and tap <kbd>PLAY</kbd>: every track goes back to its first entry and the song starts again from the top.
+        <kbd>PLAY</kbd> alone goes on from the entries the tracks are on.</p>
+    </li>
+    <li class="step" id="song/shared">
+      <h3>Shared</h3>
+      <p><kbd>SELECT</kbd> back to PATTERN: the header says A · 05 · 2x (C · 05 · 2x when the song gets there): the entry track 2 is on, its
+        pattern, and that two entries name it.
+        Entries naming the same pattern share it: an edit made while the pad plays A is heard in C too, and in any project that names
+        05.</p>
+    </li>
+    <li class="step" id="song/copy">
+      <h3>A copy of its own</h3>
+      <p><kbd>SELECT</kbd> on to SONG, <kbd>KNOB 1</kbd> to C and <kbd>KNOB 2</kbd> one detent on, past the kept patterns: COPY, and the
+        footer says OCT+: COPY 05 TO 06. <kbd>OCT+</kbd>: COPIED 05 TO 06, a new pattern copied from 05, and C names it. Now C can change
+        without touching A. KNOB 2's last choice, CLEAR, empties an entry, stopped, after asking.</p>
+    </li>
+    <li class="step" id="song/kept">
+      <h3>Nothing to save</h3>
+      <p>Tap <kbd>SAVE</kbd>: PATTERNS, as you left it, and <kbd>KNOB 1</kbd> on to 06: LENGTH 16, USED 1x. Patterns keep themselves: what
+        a track has is kept as the pattern it's on, written to flash at the quiet autosave (stopped, nothing sounding) and before a project
+        is saved or loaded. A project (<a href="#projects">chapter 17</a>) keeps the lists, the sounds and the mix; the patterns stay in the
+        pool.</p>
+    </li>
+  </ol>
 </section>
 
 <section class="chapter" id="perform" data-n="15" data-group="ARRANGE AND PERFORM" data-video="">
