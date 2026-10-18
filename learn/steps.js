@@ -1,6 +1,6 @@
 // Learn Skiff: each step's time in its chapter's video and the controls it uses, the chapters' video lengths. Written by
 // the video project's export (learn.mjs) from the firmware captures; edit the page's prose, not this file.
-const LEARN = {"chapters": {"first-beat":{"dur":146.5,"poster":true},"find-your-way":{"dur":126.87,"poster":true},"sounds":{"dur":132.83,"poster":true},"keys":{"dur":123.9,"poster":true},"steps":{"dur":140,"poster":true},"recording":{"dur":118,"poster":true},"modulation":{"dur":129.9,"poster":true},"variation":{"dur":158.2,"poster":true},"engines":{"dur":139,"poster":true},"fm6-lab":{"dur":200.5,"poster":true},"track-fx":{"dur":125.5,"poster":true},"mixer":{"dur":145.8,"poster":true},"song":{"dur":134,"poster":true},"perform":{"dur":108,"poster":true},"fx-layer":{"dur":134.5,"poster":true},"projects":{"dur":84.5,"poster":true},"settings":{"dur":123.5,"poster":true},"midi-editor":{"dur":105.2,"poster":true}}, "steps": {
+const LEARN = {"chapters": {"first-beat":{"dur":146.5,"poster":true},"find-your-way":{"dur":126.87,"poster":true},"sounds":{"dur":132.83,"poster":true},"keys":{"dur":123.9,"poster":true},"steps":{"dur":140,"poster":true},"recording":{"dur":118,"poster":true},"modulation":{"dur":129.9,"poster":true},"variation":{"dur":158.2,"poster":true},"engines":{"dur":139,"poster":true},"fm6-lab":{"dur":200.5,"poster":true},"track-fx":{"dur":125.5,"poster":true},"mixer":{"dur":145.8,"poster":true},"song":{"dur":134,"poster":true},"perform":{"dur":108,"poster":true},"fx-layer":{"dur":134.5,"poster":true},"projects":{"dur":84.5,"poster":true},"settings":{"dur":123.5,"poster":true},"midi-editor":{"dur":105.2,"poster":true},"install":{"dur":131,"poster":true}}, "steps": {
   "first-beat/new-project": {"t":4,"ctrl":{"KEY4":"press","KEY7":"press","KEY11":"press","KEY14":"press","KEY16":"press"}},
   "first-beat/drum-track": {"t":12.5,"ctrl":{"ALGORITHM":"turn","KEY7":"press","KEY13":"press","KEY9":"press"}},
   "first-beat/grid": {"t":21,"ctrl":{"SEQ":"press","KEY1":"press","KEY3":"press","KEY8":"press"}},
@@ -216,5 +216,19 @@ const LEARN = {"chapters": {"first-beat":{"dur":146.5,"poster":true},"find-your-
   "midi-editor/follow": {"t":49.7,"ctrl":{"OCT+":"press"}},
   "midi-editor/standard": {"t":59.7,"ctrl":{"GLO":"press"}},
   "midi-editor/program": {"t":70.2,"ctrl":{"HOME":"press"}},
-  "midi-editor/clear": {"t":80.2,"ctrl":{"HOME":"hold","PRESETS":"turn","OCT+":"press"}}
+  "midi-editor/clear": {"t":80.2,"ctrl":{"HOME":"hold","PRESETS":"turn","OCT+":"press"}},
+  "install/skiff": {"t":4,"ctrl":{"PLAY":"press"}},
+  "install/try": {"t":14,"ctrl":{}},
+  "install/installer": {"t":21.5,"ctrl":{}},
+  "install/connect": {"t":29,"ctrl":{}},
+  "install/install": {"t":36.5,"ctrl":{}},
+  "install/update-mode": {"t":43.5,"ctrl":{}},
+  "install/writing": {"t":51.5,"ctrl":{}},
+  "install/restart": {"t":60,"ctrl":{}},
+  "install/home": {"t":66,"ctrl":{"KEY4":"press","KEY7":"press","KEY11":"press","KEY14":"press","KEY16":"press","KEY19":"press"}},
+  "install/later": {"t":74,"ctrl":{}},
+  "install/stopped": {"t":81.5,"ctrl":{}},
+  "install/stuck": {"t":90,"ctrl":{}},
+  "install/stock": {"t":98,"ctrl":{}},
+  "install/python": {"t":107,"ctrl":{}}
 }};

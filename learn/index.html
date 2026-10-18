@@ -97,6 +97,18 @@ main { padding: 32px 0 80px; min-width: 0; }
 .device .on-turn text { fill: var(--acc); }
 .device .on-hover .face { stroke: var(--lit); stroke-width: 5; }
 .device .screen { position: absolute; image-rendering: pixelated; background: var(--keycap); }
+.where .legend i.h { box-shadow: inset 0 0 0 3px var(--lit); }
+
+/* following along on Try Skiff (../try/, the firmware in the browser): on a wide screen it docks here, in the drawing's
+ * place, its own layout for a phone held upright (the screen near 1:1); on a phone the link opens it in a tab */
+.follow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin: 14px 0 0; }
+.follow .go { font-size: 17px; padding: 10px 14px 8px; }
+.follow button { all: unset; cursor: pointer; font: 700 16px/1 var(--cond); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.follow button:hover, .follow button:focus-visible { color: var(--acc); }
+.follow-keys { font: 500 14px/1.35 var(--cond); letter-spacing: .03em; color: var(--dim); margin: 8px 0 0; }
+.emu { width: min(100%, calc((100vh - 250px) * 600 / 1070)); aspect-ratio: 600 / 1070; margin: 0 auto; border: 0; }
+.emu:not(.ready) { visibility: hidden; }
+.follow button, .follow-keys, .emu { display: none; }
 
 /* a chapter */
 .chapter { padding: 56px 0 24px; border-top: 1px solid var(--line); }
@@ -183,6 +195,17 @@ footer p { max-width: 1240px; margin: 6px auto; }
   .hero h1 { margin-top: 30px; }
   .ch-head .num { min-width: 64px; font-size: 40px; }
 }
+@media (min-width: 901px) {
+  body.following .layout { grid-template-columns: 230px minmax(0, 1fr) 460px; }
+  body.following .where { padding: 16px 0; }
+  body.following #device, body.following #follow { display: none; }
+  body.following .emu, body.following .follow-keys { display: block; }
+  body.following .follow button { display: inline-block; }
+  body.following .legend i { background: none; box-shadow: inset 0 0 0 2px var(--acc); }
+  body.following .legend i.h { box-shadow: inset 0 0 0 4px var(--acc); }
+  body.following .legend i.o { box-shadow: none; }
+}
+@media (min-width: 901px) and (max-width: 1240px) { body.following .layout { grid-template-columns: minmax(0, 1fr) 400px; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .where, .step { transition: none; } }
 </style>
 </head>
@@ -193,12 +216,14 @@ footer p { max-width: 1240px; margin: 6px auto; }
   <div class="wrap">
     <div class="bar">
       <a href="#top" aria-label="Skiff"><svg class="logo" id="logo" viewBox="0 0 846 200" role="img" aria-label="Skiff"><rect x="0" y="176" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="0" y="154" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="0" y="132" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="0" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="22" y="176" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="22" y="154" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="22" y="132" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="22" y="110" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="44" y="176" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="44" y="154" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="44" y="132" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="44" y="110" width="18" height="18" rx="3" fill="#ff5a36"/><rect x="66" y="176" width="18" height="18" rx="3" fill="#22c3b4"/><rect x="66" y="154" width="18" height="18" rx="3" fill="#22c3b4"/><rect x="66" y="132" width="18" height="18" rx="3" fill="#22c3b4"/><rect x="66" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="88" y="176" width="18" height="18" rx="3" fill="#22c3b4"/><rect x="88" y="154" width="18" height="18" rx="3" fill="#22c3b4"/><rect x="88" y="132" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="88" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="110" y="176" width="18" height="18" rx="3" fill="#22c3b4"/><rect x="110" y="154" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="110" y="132" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="110" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="132" y="176" width="18" height="18" rx="3" fill="#ffbf00"/><rect x="132" y="154" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="132" y="132" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="132" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="154" y="176" width="18" height="18" rx="3" fill="#ffbf00"/><rect x="154" y="154" width="18" height="18" rx="3" fill="#ffbf00"/><rect x="154" y="132" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="154" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="176" y="176" width="18" height="18" rx="3" fill="#9580ff"/><rect x="176" y="154" width="18" height="18" rx="3" fill="#9580ff"/><rect x="176" y="132" width="18" height="18" rx="3" fill="#9580ff"/><rect x="176" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="198" y="176" width="18" height="18" rx="3" fill="#9580ff"/><rect x="198" y="154" width="18" height="18" rx="3" fill="#9580ff"/><rect x="198" y="132" width="18" height="18" rx="3" fill="#9580ff"/><rect x="198" y="110" width="18" height="18" rx="3" fill="#9580ff"/><rect x="220" y="176" width="18" height="18" rx="3" fill="#9580ff"/><rect x="220" y="154" width="18" height="18" rx="3" fill="#9580ff"/><rect x="220" y="132" width="18" height="18" rx="3" fill="#9580ff"/><rect x="220" y="110" width="18" height="18" rx="3" fill="#9580ff"/><rect x="242" y="176" width="18" height="18" rx="3" fill="#ff6fae"/><rect x="242" y="154" width="18" height="18" rx="3" fill="#ff6fae"/><rect x="242" y="132" width="18" height="18" rx="3" fill="#ff6fae"/><rect x="242" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="264" y="176" width="18" height="18" rx="3" fill="#ff6fae"/><rect x="264" y="154" width="18" height="18" rx="3" fill="#ff6fae"/><rect x="264" y="132" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="264" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="286" y="176" width="18" height="18" rx="3" fill="#ff6fae"/><rect x="286" y="154" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="286" y="132" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="286" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="308" y="176" width="18" height="18" rx="3" fill="#a3e635"/><rect x="308" y="154" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="308" y="132" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="308" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="330" y="176" width="18" height="18" rx="3" fill="#a3e635"/><rect x="330" y="154" width="18" height="18" rx="3" fill="#a3e635"/><rect x="330" y="132" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="330" y="110" width="18" height="18" rx="3" fill="#2c2c2c"/><rect x="316" y="68" width="10" height="10" fill="#ffffff"/><rect x="176" y="78" width="10" height="10" fill="#ffffff"/><rect x="186" y="78" width="10" height="10" fill="#ffffff"/><rect x="196" y="78" width="10" height="10" fill="#ffffff"/><rect x="206" y="78" width="10" height="10" fill="#ffffff"/><rect x="216" y="78" width="10" height="10" fill="#ffffff"/><rect x="226" y="78" width="10" height="10" fill="#ffffff"/><rect x="236" y="78" width="10" height="10" fill="#ffffff"/><rect x="246" y="78" width="10" height="10" fill="#ffffff"/><rect x="256" y="78" width="10" height="10" fill="#ffffff"/><rect x="266" y="78" width="10" height="10" fill="#ffffff"/><rect x="276" y="78" width="10" height="10" fill="#ffffff"/><rect x="286" y="78" width="10" height="10" fill="#ffffff"/><rect x="296" y="78" width="10" height="10" fill="#ffffff"/><rect x="306" y="78" width="10" height="10" fill="#ffffff"/><rect x="186" y="88" width="10" height="10" fill="#ffffff"/><rect x="196" y="88" width="10" height="10" fill="#ffffff"/><rect x="206" y="88" width="10" height="10" fill="#ffffff"/><rect x="216" y="88" width="10" height="10" fill="#ffffff"/><rect x="226" y="88" width="10" height="10" fill="#ffffff"/><rect x="236" y="88" width="10" height="10" fill="#ffffff"/><rect x="246" y="88" width="10" height="10" fill="#ffffff"/><rect x="256" y="88" width="10" height="10" fill="#ffffff"/><rect x="266" y="88" width="10" height="10" fill="#ffffff"/><rect x="276" y="88" width="10" height="10" fill="#ffffff"/><rect x="286" y="88" width="10" height="10" fill="#ffffff"/><rect x="296" y="88" width="10" height="10" fill="#ffffff"/><rect x="196" y="98" width="10" height="10" fill="#ffffff"/><rect x="206" y="98" width="10" height="10" fill="#ffffff"/><rect x="216" y="98" width="10" height="10" fill="#ffffff"/><rect x="226" y="98" width="10" height="10" fill="#ffffff"/><rect x="236" y="98" width="10" height="10" fill="#ffffff"/><rect x="246" y="98" width="10" height="10" fill="#ffffff"/><rect x="256" y="98" width="10" height="10" fill="#ffffff"/><rect x="266" y="98" width="10" height="10" fill="#ffffff"/><rect x="276" y="98" width="10" height="10" fill="#ffffff"/><rect x="286" y="98" width="10" height="10" fill="#ffffff"/><rect x="396" y="58" width="16" height="16" fill="#ffffff"/><rect x="412" y="58" width="16" height="16" fill="#ffffff"/><rect x="428" y="58" width="16" height="16" fill="#ffffff"/><rect x="444" y="58" width="16" height="16" fill="#ffffff"/><rect x="380" y="74" width="16" height="16" fill="#ffffff"/><rect x="380" y="90" width="16" height="16" fill="#ffffff"/><rect x="396" y="106" width="16" height="16" fill="#ffffff"/><rect x="412" y="106" width="16" height="16" fill="#ffffff"/><rect x="428" y="106" width="16" height="16" fill="#ffffff"/><rect x="444" y="122" width="16" height="16" fill="#ffffff"/><rect x="444" y="138" width="16" height="16" fill="#ffffff"/><rect x="380" y="154" width="16" height="16" fill="#ffffff"/><rect x="396" y="154" width="16" height="16" fill="#ffffff"/><rect x="412" y="154" width="16" height="16" fill="#ffffff"/><rect x="428" y="154" width="16" height="16" fill="#ffffff"/><rect x="476" y="58" width="16" height="16" fill="#ffffff"/><rect x="540" y="58" width="16" height="16" fill="#ffffff"/><rect x="476" y="74" width="16" height="16" fill="#ffffff"/><rect x="524" y="74" width="16" height="16" fill="#ffffff"/><rect x="476" y="90" width="16" height="16" fill="#ffffff"/><rect x="508" y="90" width="16" height="16" fill="#ffffff"/><rect x="476" y="106" width="16" height="16" fill="#ffffff"/><rect x="492" y="106" width="16" height="16" fill="#ffffff"/><rect x="476" y="122" width="16" height="16" fill="#ffffff"/><rect x="508" y="122" width="16" height="16" fill="#ffffff"/><rect x="476" y="138" width="16" height="16" fill="#ffffff"/><rect x="524" y="138" width="16" height="16" fill="#ffffff"/><rect x="476" y="154" width="16" height="16" fill="#ffffff"/><rect x="540" y="154" width="16" height="16" fill="#ffffff"/><rect x="572" y="58" width="16" height="16" fill="#ffffff"/><rect x="588" y="58" width="16" height="16" fill="#ffffff"/><rect x="604" y="58" width="16" height="16" fill="#ffffff"/><rect x="620" y="58" width="16" height="16" fill="#ffffff"/><rect x="636" y="58" width="16" height="16" fill="#ffffff"/><rect x="604" y="74" width="16" height="16" fill="#ffffff"/><rect x="604" y="90" width="16" height="16" fill="#ffffff"/><rect x="604" y="106" width="16" height="16" fill="#ffffff"/><rect x="604" y="122" width="16" height="16" fill="#ffffff"/><rect x="604" y="138" width="16" height="16" fill="#ffffff"/><rect x="572" y="154" width="16" height="16" fill="#ffffff"/><rect x="588" y="154" width="16" height="16" fill="#ffffff"/><rect x="604" y="154" width="16" height="16" fill="#ffffff"/><rect x="620" y="154" width="16" height="16" fill="#ffffff"/><rect x="636" y="154" width="16" height="16" fill="#ffffff"/><rect x="668" y="58" width="16" height="16" fill="#ffffff"/><rect x="684" y="58" width="16" height="16" fill="#ffffff"/><rect x="700" y="58" width="16" height="16" fill="#ffffff"/><rect x="716" y="58" width="16" height="16" fill="#ffffff"/><rect x="732" y="58" width="16" height="16" fill="#ffffff"/><rect x="668" y="74" width="16" height="16" fill="#ffffff"/><rect x="668" y="90" width="16" height="16" fill="#ffffff"/><rect x="668" y="106" width="16" height="16" fill="#ffffff"/><rect x="684" y="106" width="16" height="16" fill="#ffffff"/><rect x="700" y="106" width="16" height="16" fill="#ffffff"/><rect x="716" y="106" width="16" height="16" fill="#ffffff"/><rect x="668" y="122" width="16" height="16" fill="#ffffff"/><rect x="668" y="138" width="16" height="16" fill="#ffffff"/><rect x="668" y="154" width="16" height="16" fill="#ffffff"/><rect x="764" y="58" width="16" height="16" fill="#ffffff"/><rect x="780" y="58" width="16" height="16" fill="#ffffff"/><rect x="796" y="58" width="16" height="16" fill="#ffffff"/><rect x="812" y="58" width="16" height="16" fill="#ffffff"/><rect x="828" y="58" width="16" height="16" fill="#ffffff"/><rect x="764" y="74" width="16" height="16" fill="#ffffff"/><rect x="764" y="90" width="16" height="16" fill="#ffffff"/><rect x="764" y="106" width="16" height="16" fill="#ffffff"/><rect x="780" y="106" width="16" height="16" fill="#ffffff"/><rect x="796" y="106" width="16" height="16" fill="#ffffff"/><rect x="812" y="106" width="16" height="16" fill="#ffffff"/><rect x="764" y="122" width="16" height="16" fill="#ffffff"/><rect x="764" y="138" width="16" height="16" fill="#ffffff"/><rect x="764" y="154" width="16" height="16" fill="#ffffff"/></svg></a>
-      <nav class="links" aria-label="Skiff"><a href="../webapp/installer/">Install</a><a href="../webapp/editor/">Editor</a><a href="https://github.com/illuminus5/skiff">GitHub</a></nav>
+      <nav class="links" aria-label="Skiff"><a href="../webapp/installer/">Install</a><a href="../webapp/editor/">Editor</a><a href="../try/">Try Skiff</a><a href="https://github.com/illuminus5/skiff">GitHub</a></nav>
     </div>
     <h1>Learn Skiff</h1>
     <p class="lede">The manual for Skiff, the six-track groovebox firmware for the M-VAVE FM-1, in 19 chapters. Each chapter has a short
       video that shows every press, hold and turn on the unit, made from the firmware itself. Play it and the steps below
-      follow along. New to grooveboxes? Start at chapter 1 and read on. Know your way around? Jump to any chapter.</p>
+      follow along. New to grooveboxes? Start at chapter 1 and read on. Know your way around? Jump to any chapter.
+      No unit at hand? <a href="../try/">Try Skiff</a> runs the same firmware in your browser, and on a wide screen
+      Follow along docks it beside the steps.</p>
     <a class="go" href="#install">Start here</a>
     <div class="groups" id="groups"></div>
   </div>
@@ -209,19 +234,113 @@ footer p { max-width: 1240px; margin: 6px auto; }
 <main id="main">
 
 <!-- ================================================================ START HERE -->
-<section class="chapter" id="install" data-n="1" data-group="START HERE" data-video="">
+<section class="chapter" id="install" data-n="1" data-group="START HERE" data-video="eW7PnfJCWbQ">
   <div class="ch-head"><span class="num">01</span><div><p class="group">START HERE</p><h2>Install Skiff</h2></div></div>
   <p class="meta"><b>You'll need</b> an FM-1, a USB data cable, and Chrome or Edge on a computer. <b>You'll learn</b> how to put Skiff
-    on the unit, update it, and go back to the official firmware.</p>
+    on the unit, update it, what to do when an install stops, and how to go back to the official firmware. <b>At your own risk:</b>
+    Skiff is custom firmware, free and without warranty.</p>
   <div class="video"></div>
-  <ul class="outline">
-    <li>The <a href="../webapp/installer/">Skiff installer</a> runs in the browser: connect the FM-1 by USB and follow it. It takes about two
-      minutes and the FM-1 restarts on Skiff.</li>
-    <li>No Chrome or Edge? With Python 3, <code>tools/fm1_install.py</code> from the repository installs the release's <code>.fwsc</code> file.</li>
-    <li>Later releases install the same way. Holding <kbd>OCT−</kbd> and <kbd>OCT+</kbd> together for five seconds puts the unit in update mode.</li>
-    <li>The same page takes the FM-1 back to the official V15 firmware, saving a complete backup of your music first.</li>
-  </ul>
-  <p class="soon-note">Video and step-by-step coming</p>
+  <ol class="steps">
+    <li class="step" id="install/skiff">
+      <h3>Skiff on the FM-1</h3>
+      <p>Skiff is free firmware for the M-VAVE FM-1 (GPL-3.0) that turns it into a six-track groovebox: synths and drums, patterns and
+        songs. Here it plays the beat you make in <a href="#first-beat">chapter 3</a>: <kbd>PLAY</kbd> starts it and stops it.</p>
+      <p>This chapter puts Skiff on your unit from the browser, and shows the way back to the official firmware, M-VAVE's V15.</p>
+    </li>
+    <li class="step" id="install/try">
+      <h3>Try it first</h3>
+      <p><a href="../try/">Try Skiff</a> runs the same firmware in the browser, on a drawn FM-1: press Switch on, then play it with the
+        mouse, a touch screen or the computer keyboard. Nothing is installed and your unit isn't touched; what you save stays in that
+        browser. USB (the editor, MIDI out, audio) and the TRS MIDI jack aren't there.</p>
+    </li>
+    <li class="step" id="install/installer">
+      <h3>The installer</h3>
+      <p>The <a href="../webapp/installer/">Skiff installer</a> is a web page, made for Chrome or Edge on a computer: they let a page
+        talk to the FM-1 over USB MIDI. In a browser without it, the page says so. The page carries the release it installs; its status
+        line says Skiff 1.3.2 when it's ready.</p>
+      <p>Read the page first. Skiff is custom firmware: the author accepts no responsibility if your FM-1 is damaged or misbehaves
+        because of it, so use it at your own risk, and report problems on <a href="https://github.com/illuminus5/skiff/issues">GitHub</a>.
+        The way back is in step 13.</p>
+    </li>
+    <li class="step" id="install/connect">
+      <h3>Connect</h3>
+      <p>Switch the FM-1 on and connect it with a USB cable from the USB-C port at its back, beside the power switch, straight into the
+        computer. It has to be a data cable: a charge-only cable has no data lines, and the page won't find the unit. Close other apps
+        that use MIDI.</p>
+    </li>
+    <li class="step" id="install/install">
+      <h3>Install</h3>
+      <p>Press <b>Install</b>. The browser asks to let the page use your MIDI devices: allow it. (Refused it? Allow MIDI in the site
+        settings, from the address bar, and press Install again.) The page says Starting, then Verifying: the firmware on the unit, the
+        official one or Skiff, reads parts of the package and gets the update loader ready. Skiff's own screen says UPDATE meanwhile.</p>
+    </li>
+    <li class="step" id="install/update-mode">
+      <h3>Update mode</h3>
+      <p>The unit restarts into update mode: Skiff's update loader, its screen saying UPDATE MODE, WAITING FOR THE SKIFF INSTALLER,
+        KEEP USB CONNECTED, while the page says Switching to update mode, then Writing. The page sends the whole package, and the
+        loader checks all of it, for this chip and for damage, before it erases anything.</p>
+      <p>The page's bar fills during that check, before the writing has begun: watch the unit's own bar, next.</p>
+    </li>
+    <li class="step" id="install/writing">
+      <h3>Writing</h3>
+      <p>Then the loader writes Skiff: WRITING, DO NOT SWITCH OFF, and its bar fills as it goes. The whole install takes about two
+        minutes (sped up in the video). Don't unplug the cable, switch the unit off or close the page until the page says Done.</p>
+    </li>
+    <li class="step" id="install/restart">
+      <h3>Skiff starts</h3>
+      <p>Written, the loader restarts the unit on the new firmware: Skiff's splash with its version, the LEDs sweep across, and HOME.
+        The page waits for the unit, checks that it answers as the firmware just installed, and says Done.</p>
+    </li>
+    <li class="step" id="install/home">
+      <h3>A new unit</h3>
+      <p>Installed over the official firmware, Skiff starts as a new unit: HOME with six tracks, a sound on each, no notes yet, track 1
+        selected. The keys play the selected track: here ACID, on track 1. <a href="#find-your-way">Chapter 2</a> shows you around and
+        <a href="#first-beat">chapter 3</a> makes the first beat.</p>
+    </li>
+    <li class="step" id="install/later">
+      <h3>Later releases</h3>
+      <p>New releases come out on <a href="https://github.com/illuminus5/skiff/releases">GitHub</a>, and the installer page then installs
+        the newest. Install it the same way, over the Skiff you have: the loader rewrites only the firmware, so your projects, sounds,
+        samples and settings stay. Which version you have: MENU › SYSTEM › ABOUT (<a href="#settings/about">chapter 18</a>).</p>
+    </li>
+    <li class="step" id="install/stopped">
+      <h3>If it stops</h3>
+      <p>An install cut off (the cable pulled, the unit switched off) or a write that fails loses nothing. A failed write says UPDATE
+        FAILED, INSTALL AGAIN WITH THE SKIFF INSTALLER; switched off in the middle, the unit starts in update mode at every power-on,
+        UPDATE MODE on its screen, until an install finishes. (A loader from before 1.3.2 keeps the screen black instead.)</p>
+      <p>Connect it and press Install again: the page finds the unit in update mode and finishes the install. M-VAVE's own updater
+        can't see the FM-1 in this state, so it has to be this page, or <code>tools/fm1_install.py</code> (step 14). Once Skiff runs, the
+        way back to V15 is open again.</p>
+    </li>
+    <li class="step" id="install/stuck">
+      <h3>Still stuck?</h3>
+      <p>If a computer sees a USB device named WL80UBOOT, the chip's own boot mode, or nothing at all, the README's
+        <a href="https://github.com/illuminus5/skiff#if-the-fm-1-does-not-start">If the FM-1 does not start</a> has the steps: another
+        USB data cable and another port, the FM-1 charged, other MIDI apps closed, then the install again; if it stays in boot mode,
+        <a href="https://github.com/kurogedelic/FM-1-transporter">FM-1 Transporter</a> reads and writes the FM-1's flash through a Seeed
+        XIAO RP2040. Anything else: <a href="https://github.com/illuminus5/skiff/issues">open an issue</a>.</p>
+      <p>Holding <kbd>OCT−</kbd> and <kbd>OCT+</kbd> together for five seconds is not the installer's update mode: it starts that boot
+        mode, which the installer doesn't use. After two seconds the screen counts down, UPDATE MODE IN 3, 2, 1: let go to cancel.</p>
+    </li>
+    <li class="step" id="install/stock">
+      <h3>Back to V15</h3>
+      <p>The same page takes the FM-1 back to the official firmware. Get FM-1 V15 from
+        <a href="https://www.m-vave.com/download">M-VAVE's downloads</a>, open <b>Return to official V15</b> and choose the unmodified
+        <code>FM-1.fwsc</code>: the page checks it in the browser and sends it nowhere. Press <b>Back up and return to official V15</b>.</p>
+      <p>It first saves a complete backup of your music to the computer (the music now, saved projects, sound banks, samples and
+        settings, as <code>Skiff-backup-<i>date</i>.json</code>), asks whether it was saved, then installs V15 the way it installs Skiff.
+        V15 can't open Skiff's music: to bring the backup back later, install Skiff again and use the <a href="../webapp/editor/">editor</a>.
+        A Skiff too old for complete backups has to be updated first. <code>tools/fm1_install.py FM-1.fwsc</code> and M-VAVE's own
+        updater go back too, without the backup.</p>
+    </li>
+    <li class="step" id="install/python">
+      <h3>With Python</h3>
+      <p>Without Chrome or Edge, or from a terminal: download <code>skiff-1.3.2.fwsc</code> from
+        <a href="https://github.com/illuminus5/skiff/releases/latest">the latest release</a> and, with the repository's <code>tools/</code>
+        folder and Python 3, run <code>pip install mido python-rtmidi</code>, then <code>python tools/fm1_install.py skiff-1.3.2.fwsc</code>.
+        It does what the page does, and finishes an install left in update mode too.</p>
+    </li>
+  </ol>
 </section>
 
 <section class="chapter" id="find-your-way" data-n="2" data-group="START HERE" data-video="WHb2YctbWFY">
@@ -1762,15 +1881,25 @@ footer p { max-width: 1240px; margin: 6px auto; }
 
 <section class="chapter plain" id="troubleshooting" data-group="PAGE">
   <h2>If the FM-1 does not start</h2>
-  <p>If an update is interrupted and the FM-1 stays black, check whether a computer sees it as a USB device named <b>WL80UBOOT</b>
-    (or a USB mass-storage device with ID 4C4A:8057). That is the chip's built-in boot mode, and the FM-1 can be brought back:</p>
+  <p><b>The screen says UPDATE MODE, WAITING FOR THE SKIFF INSTALLER, or stays black while a computer sees a USB MIDI device named
+    "Felucca Update":</b> an install was cut off, and the FM-1 waits in Skiff's update loader at every power-on. Nothing is lost.
+    Connect it by USB and press Install on the <a href="../webapp/installer/">installer</a> again (or run
+    <code>tools/fm1_install.py</code>): it finishes the install. M-VAVE's own updater does not see the FM-1 in this state. A loader
+    from before 1.3.2 keeps the screen black. <a href="#install/stopped">Chapter 1</a> shows it.</p>
+  <p><b>A computer sees a USB device named WL80UBOOT</b> (or a USB mass-storage device with ID 4C4A:8057): that is the chip's built-in
+    boot mode, and the FM-1 can be brought back:</p>
   <ul class="outline">
-    <li>First try another USB data cable and close every other app that uses MIDI, then run the installer again: it finishes an
+    <li>First try another USB data cable, and close every other app that uses MIDI, then run the install again: it finishes an
       interrupted update.</li>
     <li>If it stays in boot mode, <a href="https://github.com/kurogedelic/FM-1-transporter">FM-1 Transporter</a> reads and writes the FM-1's
       flash from a Mac through a Seeed XIAO RP2040 (three wires to the FM-1's USB lines). Back up the flash first, then write the official
-      firmware.</li>
+      firmware (M-VAVE's FM-1.fwsc).</li>
   </ul>
+  <p>Holding <kbd>OCT−</kbd> and <kbd>OCT+</kbd> together for five seconds starts that boot mode on purpose: after two seconds the screen
+    counts down, UPDATE MODE IN 3, 2, 1 (let go to cancel), then shows UPDATE MODE alone. It is not the installer's update mode, and the
+    installer doesn't use it (<a href="#install/stuck">chapter 1</a>).</p>
+  <p><b>A computer sees nothing at all:</b> try another USB cable (a charge-only cable has no data lines) and another port, with the
+    FM-1 charged. FM-1 Transporter (above) reaches the chip's boot mode by itself.</p>
   <p>Anything else: <a href="https://github.com/illuminus5/skiff/issues">open an issue</a> on GitHub.</p>
 </section>
 
@@ -1810,8 +1939,13 @@ footer p { max-width: 1240px; margin: 6px auto; }
   <div class="where-in">
     <p class="cap"><span>WHERE ON THE UNIT</span><span id="where-n"></span></p>
     <div class="device" id="device"><svg id="panel" viewBox="0 0 1000 624" aria-hidden="true"></svg></div>
+    <iframe class="emu" id="emu" title="Try Skiff: Skiff running in the browser"></iframe>
     <p class="step-name" id="where-step"></p>
-    <p class="legend"><span><i></i>TAP</span><span><i style="box-shadow: inset 0 0 0 3px var(--lit)"></i>HOLD</span><span><i class="o"></i>TURN</span></p>
+    <p class="legend"><span><i></i>TAP</span><span><i class="h"></i>HOLD</span><span><i class="o"></i>TURN</span></p>
+    <p class="follow"><a class="go" id="follow" href="../try/" target="_blank" rel="noopener">Follow along on Try Skiff</a>
+      <button type="button" id="unfollow">Hide</button><button type="button" id="fresh">New unit</button></p>
+    <p class="follow-keys">Click the unit, then play it from the keyboard too: Z to ' and Q to O are the keys, 1 to = the buttons FX
+      to REC, [ ] OCT, ↑ ↓ SELECT, ← → ALGORITHM. Shift-click a button to hold it; click it again to let go.</p>
   </div>
 </aside>
 </div>
@@ -1898,7 +2032,7 @@ lcd.alt = "";
 lcd.hidden = true;
 { const [x, y, w] = P.screen; Object.assign(lcd.style, { left: `${x / P.L.w * 100}%`, top: `${y / P.L.h * 100}%`, width: `${w / P.L.w * 100}%`, height: `${w / P.L.h * 100}%` }); }
 $("#device").appendChild(lcd);
-let lit = [], hovered = [];
+let lit = [], hovered = [], liveMap = {}, liveHover = null;
 function light(map) {                                 // map: {control: "press" | "hold" | "turn"}
   for (const g of lit) g.classList.remove("on-press", "on-hold", "on-turn");
   lit = [];
@@ -1906,6 +2040,8 @@ function light(map) {                                 // map: {control: "press" 
     const g = CTRL.get(c);
     if (g) { g.classList.add("on-" + kind); lit.push(g); }
   }
+  liveMap = map || {};
+  paintLive();
 }
 function showStep(li) {
   const d = li && DATA.steps[li.id], sec = li && li.closest("section");
@@ -1933,8 +2069,8 @@ for (const k of $$("kbd")) {
   const c = ctrlOf(k.textContent);
   if (!c) continue;
   k.tabIndex = 0;
-  const on = () => { const g = CTRL.get(c); g.classList.add("on-hover"); hovered.push(g); };
-  const off = () => { for (const g of hovered) g.classList.remove("on-hover"); hovered = []; };
+  const on = () => { const g = CTRL.get(c); g.classList.add("on-hover"); hovered.push(g); liveHover = c; paintLive(); };
+  const off = () => { for (const g of hovered) g.classList.remove("on-hover"); hovered = []; liveHover = null; paintLive(); };
   k.addEventListener("mouseenter", on);
   k.addEventListener("focus", on);
   k.addEventListener("mouseleave", off);
@@ -2060,6 +2196,53 @@ for (const tr of $$("#ctrls tr[data-ctrl]")) {
   }
   $("td.in", tr).innerHTML = links.join("") || "<span>—</span>";
 }
+
+/* ---------------------------------------------------------------- following along on Try Skiff, docked in the drawing's place:
+ * the same panel.js controls, so the step's ones are marked on it too (same origin: a style of ours in its page) */
+const emu = $("#emu");
+function paintLive() {
+  const doc = document.body.classList.contains("following") && emu.contentDocument;
+  if (!doc) return;
+  for (const g of doc.querySelectorAll("[data-ctrl]")) {
+    const k = liveMap[g.dataset.ctrl];
+    for (const kind of ["press", "hold", "turn"]) g.classList.toggle("learn-" + kind, k === kind);
+    g.classList.toggle("learn-hover", g.dataset.ctrl === liveHover);
+  }
+}
+emu.addEventListener("load", () => {
+  const doc = emu.contentDocument, panel = doc && doc.getElementById("panel");
+  if (!panel) return;                                 // (about:blank: switched off)
+  const style = doc.createElement("style");
+  style.textContent = `:root { --learn: ${getComputedStyle(document.documentElement).getPropertyValue("--acc")}; color-scheme: light dark; }
+    html, body { background: transparent; } main { max-width: none; padding: 0; } .keys, footer { display: none; }
+    [data-ctrl]:is(.learn-press, .learn-hold):not(.held, .latched) .face { stroke: var(--learn); stroke-width: 4; }
+    [data-ctrl].learn-hold:not(.held, .latched) .face { stroke-width: 8; }
+    [data-ctrl].learn-turn .face.knob { stroke: var(--learn); stroke-width: 7; }
+    [data-ctrl].learn-turn text { fill: var(--learn); }
+    [data-ctrl].learn-hover .face { stroke: var(--lit); stroke-width: 5; }`;
+  doc.head.appendChild(style);
+  new MutationObserver(paintLive).observe(panel, { childList: true });   // (it redraws the panel when its layout changes)
+  paintLive();
+  emu.classList.add("ready");
+});
+/* hidden, it stays on (and in a narrow window): the firmware saves only after 10 s stopped (project.c autosave_poll),
+ * so switching it off would lose the last minute */
+function follow(on) {
+  document.body.classList.toggle("following", on);
+  if (on && !emu.classList.contains("ready")) emu.src = "../try/";
+  paintLive();
+}
+$("#follow").addEventListener("click", (e) => { if (matchMedia("(min-width: 901px)").matches) { e.preventDefault(); follow(true); } });
+$("#unfollow").addEventListener("click", () => follow(false));
+$("#fresh").addEventListener("click", () => {
+  if (!confirm("Start again on a new unit? This erases everything Try Skiff has saved in this browser: its projects and settings.")) return;
+  emu.addEventListener("load", () => {
+    try { localStorage.removeItem("skiff-emu-flash"); } catch { /* storage off: nothing kept anyway */ }   // (try/'s STORE)
+    emu.src = "../try/";
+  }, { once: true });
+  emu.classList.remove("ready");
+  emu.src = "about:blank";                            // switched off first, or it would save the old flash back
+});
 
 /* ---------------------------------------------------------------- phones: the unit docked at the bottom on demand */
 $("#where-toggle").addEventListener("click", (e) => {
