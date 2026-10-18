@@ -637,59 +637,351 @@ footer p { max-width: 1240px; margin: 6px auto; }
   </ol>
 </section>
 
-<section class="chapter" id="recording" data-n="7" data-group="MAKE MUSIC" data-video="">
+<section class="chapter" id="recording" data-n="7" data-group="MAKE MUSIC" data-video="B-SJQxZmdgo">
   <div class="ch-head"><span class="num">07</span><div><p class="group">MAKE MUSIC</p><h2>Recording and takes</h2></div></div>
   <p class="meta"><b>You'll learn</b> to record live with the click and a count-in, keep the loop you just played, and undo.</p>
   <div class="video"></div>
-  <ul class="outline">
-    <li><kbd>REC</kbd> arms the selected track the moment it's pressed; stopped, it starts the transport too. The keys record at the playhead.</li>
-    <li>SHIFT + <kbd>REC</kbd> opens the REC layer: CLICK, COUNT-IN, CLICK LEVEL, FEEL. <kbd>F3</kbd> held clears the track.</li>
-    <li>SHIFT + <kbd>SAVE</kbd> is <a href="#g-take">TAKE</a>: the loop you just played, kept, even without REC.</li>
-    <li>Hold <kbd>SAVE</kbd> to undo; <kbd>OCT−</kbd> goes further back, <kbd>OCT+</kbd> redoes.</li>
-  </ul>
-  <p class="soon-note">Video and step-by-step coming</p>
+  <ol class="steps">
+    <li class="step" id="recording/track">
+      <h3>Pick a track</h3>
+      <p>The beat from <a href="#first-beat">chapter 3</a> plays: tap <kbd>PLAY</kbd>, and turn <kbd>ALGORITHM</kbd> to track 5, PIANO.
+        The keys play the selected track as always, and nothing is kept: track 5 has no notes, so its lane on HOME stays empty.</p>
+    </li>
+    <li class="step" id="recording/rec">
+      <h3>REC</h3>
+      <p>Tap <kbd>REC</kbd>: the selected track is armed the moment it's pressed, and the header's play mark becomes a red dot. Armed
+        and playing, the keys record at the playhead: a note goes into the step playing, or into the next one when it's played past the
+        step's middle. Here a riff of eighths, <kbd>E5</kbd> <kbd>D5</kbd> <kbd>C5</kbd> <kbd>A4</kbd> and back up, which plays back on
+        the next pass. A key held on ties into the steps after it. Stopped, REC starts the transport too; on a melodic STEP or ROLL page
+        it writes steps instead (<a href="#first-beat/write-steps">chapter 3</a>).</p>
+    </li>
+    <li class="step" id="recording/overdub">
+      <h3>Overdub</h3>
+      <p>Still armed, every pass records on top of the last: what's there stays. Here a third under four of the notes. On a POLY sound
+        like PIANO they join the step's notes as a chord, up to four; a MONO track's step takes the new note instead.</p>
+    </li>
+    <li class="step" id="recording/disarm">
+      <h3>Done</h3>
+      <p>Tap <kbd>REC</kbd> again to disarm. The riff plays on as it was recorded, kept as the track's <a href="#g-pattern">pattern</a>:
+        no save needed.</p>
+    </li>
+    <li class="step" id="recording/undo-pass">
+      <h3>One pass, one undo</h3>
+      <p>Everything recorded between arming and disarming is one <a href="#g-undo">undo</a>. Hold <kbd>SAVE</kbd>: UNDO RECORDING, the
+        riff and its overdub gone together. While the box shows, <kbd>OCT+</kbd> redoes it, and <kbd>OCT−</kbd> would go further
+        back.</p>
+    </li>
+    <li class="step" id="recording/rec-layer">
+      <h3>The REC layer</h3>
+      <p>Hold <kbd>HOME</kbd> (<a href="#g-shift">SHIFT</a>) and tap <kbd>REC</kbd>: the REC <a href="#g-layer">layer</a> opens locked,
+        REC LOCKED in the header. Its white keys are CLEAR, CLICK, COUNT-IN and CLICK LVL, each press the next value; its knobs are
+        CLICK, COUNT-IN, CLICK LVL and FEEL. While it's open the keys are the layer's, so nothing plays or records, and
+        <kbd>OCT−</kbd> puts back everything changed since it opened.</p>
+    </li>
+    <li class="step" id="recording/click">
+      <h3>Click</h3>
+      <p><kbd>KNOB 1</kbd>, CLICK: OFF, REC (a click on every beat while a track is armed) or ON (on every beat while playing). The bar's
+        first beat is higher. CLICK LVL sets how loud. The click goes to the headphones and the speaker only, never into USB audio;
+        these are the MENU's AUDIO settings too.</p>
+    </li>
+    <li class="step" id="recording/count-in">
+      <h3>Count-in</h3>
+      <p><kbd>KNOB 2</kbd>, COUNT-IN: OFF, 1 BAR or 2 BARS. With a track armed, starting from stop counts that many bars of clicks in
+        first, whatever CLICK says. A note played in the last half beat of the count-in lands on step 1.</p>
+    </li>
+    <li class="step" id="recording/feel">
+      <h3>Feel</h3>
+      <p><kbd>KNOB 4</kbd>, FEEL ON: a note recorded into an empty step keeps where you played it, as the step's NUDGE, instead of
+        landing square on the step (NUDGE: <a href="#variation">chapter 8</a>). A take keeps it too. A step that already has notes keeps
+        its own timing.</p>
+    </li>
+    <li class="step" id="recording/clear">
+      <h3>Clear</h3>
+      <p>Hold <kbd>F3</kbd>, CLEAR: the header says HOLD: CLEAR, and after the hold time track 5's steps, all 64 of them, and its
+        automation are gone: SEQUENCE CLEARED, T5 EMPTY. It's one undo, so SAVE held brings them back. The SEQ TOOLS clear too
+        (<a href="#variation">chapter 8</a>).</p>
+    </li>
+    <li class="step" id="recording/count-in-rec">
+      <h3>Count in</h3>
+      <p>Tap <kbd>REC</kbd> to close the layer; that tap doesn't arm. <kbd>PLAY</kbd> stops, and <kbd>REC</kbd> arms the track: instead
+        of starting at once, the screen counts the bar in, 4 3 2 1, a click on each beat, and then the music and the recording start
+        together on step 1. PLAY during the count-in cancels it.</p>
+    </li>
+    <li class="step" id="recording/loose">
+      <h3>As played</h3>
+      <p>The riff again, a little behind the beat: with FEEL on, each note keeps its lateness. <kbd>REC</kbd> disarms, and
+        <kbd>SEQ</kbd> twice opens ROLL, the piano roll: every note sits a third of a step after its line, where it was played. With FEEL
+        OFF they would sit on the lines.</p>
+    </li>
+    <li class="step" id="recording/take">
+      <h3>Take</h3>
+      <p>A <a href="#g-take">TAKE</a> keeps what you just played, without REC. Tap <kbd>HOME</kbd>, turn <kbd>ALGORITHM</kbd> to track
+        2, PAD, and play: here two chords, A minor and G, held through a bar. In the next bar hold <kbd>HOME</kbd> and tap
+        <kbd>SAVE</kbd>: TAKE KEPT, 6 notes. The last whole pass of the track's loop goes into its steps, held notes as ties and knob
+        moves as automation. It needs one whole pass played since PLAY, and REC off on that track.</p>
+    </li>
+    <li class="step" id="recording/undo">
+      <h3>Undo</h3>
+      <p>Hold <kbd>SAVE</kbd>: UNDO TAKE, 1 of 4 undone, and the chords are gone. While the box shows, <kbd>OCT−</kbd> goes further
+        back (UNDO RECORDING: track 5's riff goes too), and <kbd>OCT+</kbd> forward again, twice, to where you were. Eight undos are
+        kept, across all six tracks.</p>
+    </li>
+  </ol>
 </section>
 
-<section class="chapter" id="variation" data-n="8" data-group="MAKE MUSIC" data-video="">
+<section class="chapter" id="variation" data-n="8" data-group="MAKE MUSIC" data-video="vIyMdP7LRFw">
   <div class="ch-head"><span class="num">08</span><div><p class="group">MAKE MUSIC</p><h2>Variation</h2></div></div>
   <p class="meta"><b>You'll learn</b> to make a pattern move: chance, conditions, ratchets and flams, nudges, direction, locks, automation
     and the SEQ tools.</p>
   <div class="video"></div>
-  <ul class="outline">
-    <li>SEQ › CHANCE: CHANCE, RATCHET (×1–4 or FLAM), COND.</li>
-    <li>SEQ › PLAY: NUDGE, DIR, GATE.</li>
-    <li>Hold a step and turn <kbd>KNOB 1</kbd>–<kbd>KNOB 4</kbd>: a <a href="#g-lock">lock</a>, that step's own value.</li>
-    <li>SEQ › AUTOMATION: knob moves, recorded step by step.</li>
-    <li>Hold <kbd>SEQ</kbd>: CLEAR, REVERSE, SHIFT, RANDOM, COOK, EUCLID, DOUBLE, HALF, and BEAT on drum tracks.</li>
-  </ul>
-  <p class="soon-note">Video and step-by-step coming</p>
+  <ol class="steps">
+    <li class="step" id="variation/chance-page">
+      <h3>The CHANCE page</h3>
+      <p>The beat from <a href="#first-beat">chapter 3</a>: tap <kbd>PLAY</kbd>, turn <kbd>ALGORITHM</kbd> to track 4, tap
+        <kbd>SEQ</kbd> for the grid and turn <kbd>SELECT</kbd> to CHANCE. Its knobs are STEP, CHANCE (0 to 100 %, the chance the step
+        plays each time round), RATCHET and COND, for the step under the cursor; on a drum track they're the whole step's, every lane
+        on it. <kbd>KNOB 1</kbd> moves the cursor to step 15.</p>
+    </li>
+    <li class="step" id="variation/ratchet">
+      <h3>Ratchet</h3>
+      <p><kbd>KNOB 3</kbd>, RATCHET: X1 to X4 plays the step that many times inside its length. Step 15's hat at X3 is a quick roll
+        into the next bar. The grid draws the hits split.</p>
+    </li>
+    <li class="step" id="variation/flam">
+      <h3>Flam</h3>
+      <p>Past X4, RATCHET is FLAM: a softer grace hit, then the full one 15 ms later. <kbd>KNOB 1</kbd> back to step 13 and
+        <kbd>KNOB 3</kbd> to FLAM: the kick and the snare there flam.</p>
+    </li>
+    <li class="step" id="variation/cond">
+      <h3>Conditions</h3>
+      <p><kbd>KNOB 4</kbd>, COND: when the step plays at all. FILL plays it only during a fill, !FILL only when there's none; A:B plays
+        it in pass A of every B, counted from PLAY (1:2, 2:2, 1:3 … 4:4). Step 9's kick at 1:2 plays in the first bar of every two.</p>
+    </li>
+    <li class="step" id="variation/fill">
+      <h3>A fill</h3>
+      <p><kbd>SELECT</kbd> back to the grid, <kbd>G♯3</kbd> picks the SNARE lane and <kbd>G5</kbd> puts a snare on step 16
+        (<a href="#first-beat/snare">chapter 3</a>). <kbd>SELECT</kbd> on to CHANCE, where the cursor is now on 16: RATCHET X4 and COND
+        FILL. The roll waits for a fill.</p>
+    </li>
+    <li class="step" id="variation/fill-play">
+      <h3>Play the fill</h3>
+      <p>Hold <kbd>GLO</kbd> for its <a href="#g-layer">layer</a> and hold <kbd>F4</kbd>, FILL: while it's held, every FILL step plays
+        (and every !FILL step rests). Here the snare roll ends each bar for two bars, then the beat goes back to normal.</p>
+    </li>
+    <li class="step" id="variation/lock">
+      <h3>A lock</h3>
+      <p>A <a href="#g-lock">lock</a> is a step's own value for a knob. <kbd>SELECT</kbd> back to the grid, hold <kbd>D5</kbd> (step 13)
+        and turn <kbd>KNOB 1</kbd>: the cards show the sound's knobs, here DRUM's PITCH, TONE, DECAY and SNAP, and PITCH goes up on step
+        13 only. A mark over the step shows the lock. The knobs lock what they last edited: HOME's four after HOME, an EDIT, ENV, LFO or
+        FX page's after that page. On a melodic track, hold the step's key while REC writes steps, stopped (<a href="#first-beat/write-steps">chapter
+        3</a>); <kbd>EDIT</kbd> tapped with the step held clears its locks.</p>
+    </li>
+    <li class="step" id="variation/direction">
+      <h3>Direction</h3>
+      <p><kbd>ALGORITHM</kbd> back to track 1 and <kbd>SELECT</kbd> to PLAY: STEP, NUDGE, DIR and GATE, with the piano roll.
+        <kbd>KNOB 3</kbd>, DIR, is the track's: FWD, RVRS (backwards), PING (up and down) and RAND (any step each time). The bass line
+        plays each in turn, then FWD again.</p>
+    </li>
+    <li class="step" id="variation/nudge">
+      <h3>Nudge</h3>
+      <p><kbd>KNOB 1</kbd> to step 7 and <kbd>KNOB 2</kbd>, NUDGE: the step plays early or late, −32 to +31 sixty-fourths of a step.
+        At +16 it's a quarter of a step late, and the roll draws it where it plays. FEEL sets nudges as you record
+        (<a href="#recording/feel">chapter 7</a>).</p>
+    </li>
+    <li class="step" id="variation/step-gate">
+      <h3>A step's gate</h3>
+      <p><kbd>KNOB 1</kbd> to step 13 and <kbd>KNOB 4</kbd>, GATE: the step's own note length, a lock. It starts from the track's GATE,
+        dimmed; turned, it's the step's (here 82 %), and turned back to the track's value it follows the track again.</p>
+    </li>
+    <li class="step" id="variation/automation">
+      <h3>Automation</h3>
+      <p>Tap <kbd>HOME</kbd>, <kbd>REC</kbd> to arm track 1 while it plays, and turn <kbd>KNOB 1</kbd>, CUTOFF, up and down: each move is
+        recorded on the step it's made in. <kbd>REC</kbd> again, and the bar plays the moves back: the card's value follows, a MOTION
+        mark beside its label. HOME's knobs, the sound pages, the MIXER's LEVEL, PAN and REV record this way; at each loop's start the
+        sound goes back to its own value.</p>
+    </li>
+    <li class="step" id="variation/auto-list">
+      <h3>The list</h3>
+      <p>Tap <kbd>SEQ</kbd> (it reopens PLAY) and turn <kbd>SELECT</kbd> to AUTOMATION: every move and lock of the track, by step, AUTO or
+        LOCK, the parameter and its value. KNOB 1 picks a row, KNOB 2 moves it to another step, KNOB 3 changes the parameter and
+        KNOB 4 the value; past its lowest it's DELETE, and OCT+ does it. The top row turns them all on or off (PLAY ON) and clears them.
+        All six tracks share 64 records.</p>
+    </li>
+    <li class="step" id="variation/tools">
+      <h3>SEQ tools</h3>
+      <p>Tap <kbd>HOME</kbd> and hold <kbd>SEQ</kbd>: the SEQ TOOLS on the white keys, on any page. <kbd>F3</kbd> CLEAR,
+        <kbd>G3</kbd> REVERSE, <kbd>A3</kbd> and <kbd>B3</kbd> SHIFT the steps left or right, <kbd>C4</kbd> RANDOM, <kbd>D4</kbd> COOK
+        (a few notes changed), <kbd>F4</kbd> EUCLID, <kbd>D5</kbd> DOUBLE and <kbd>E5</kbd> HALF the length with its steps; on a drum
+        track <kbd>E4</kbd> BEAT (a basic beat) and the lane tools on G4 to C5. The knobs are the PATTERN page's. Here REVERSE, then
+        SHIFT &gt;. Each tool is one undo (SAVE held, once SEQ is let go); OCT− puts back the track as it was when the layer
+        opened.</p>
+    </li>
+    <li class="step" id="variation/euclid">
+      <h3>Euclid</h3>
+      <p>Hold <kbd>SEQ</kbd> and tap <kbd>F4</kbd>: EUCLID spreads HITS as evenly as they go over STEPS, turned by ROTATE, and plays it
+        at once. A hit on a note keeps it, one on an empty step plays the scale's root. <kbd>KNOB 1</kbd> HITS 5, <kbd>KNOB 3</kbd>
+        ROTATE 2, and <kbd>OCT+</kbd>
+        applies it (OCT− cancels). On a drum track it fills the selected lane.</p>
+    </li>
+  </ol>
 </section>
 
 <!-- ================================================================ SHAPE SOUND -->
-<section class="chapter" id="modulation" data-n="9" data-group="SHAPE SOUND" data-video="">
+<section class="chapter" id="modulation" data-n="9" data-group="SHAPE SOUND" data-video="XLGraH8EX6w">
   <div class="ch-head"><span class="num">09</span><div><p class="group">SHAPE SOUND</p><h2>Envelopes, LFOs, MOD</h2></div></div>
-  <p class="meta"><b>You'll learn</b> to shape a sound over time with two envelopes, two LFOs and the mod slots.</p>
+  <p class="meta"><b>You'll learn</b> to shape a sound over time with two envelopes, the LFO and the four mod slots, and to move knobs
+    for a moment only.</p>
   <div class="video"></div>
-  <ul class="outline">
-    <li>ENV, ENV DEST, ENV 2.</li>
-    <li>LFO: RATE, WAVE, PHASE, FADE. LFO 2: SYNC, TRIG, POLARITY. LFO DEST.</li>
-    <li>MOD: four slots, each a SOURCE to a DEST by an AMOUNT.</li>
-    <li>Hold <kbd>LFO</kbd> for MOMENTARY: knob moves spring back when you let go; <kbd>OCT+</kbd> keeps them.</li>
-  </ul>
-  <p class="soon-note">Video and step-by-step coming</p>
+  <ol class="steps">
+    <li class="step" id="modulation/env">
+      <h3>The envelope</h3>
+      <p>The beat from <a href="#first-beat">chapter 3</a> plays, and track 1 is selected: ACID, on ANALOG. Tap <kbd>ENV</kbd> for its
+        envelope: ATTACK, DECAY, SUSTAIN and RELEASE, each time from 1 ms to 10 s, SUSTAIN a level. The graph draws its shape.
+        <kbd>KNOB 2</kbd> stretches ACID's DECAY from 54 to 160 ms. FM6 and the drum engines have no ENV pages (NO ENV ON FM6): they
+        shape their notes on their own pages.</p>
+    </li>
+    <li class="step" id="modulation/env-dest">
+      <h3>Where it goes</h3>
+      <p>Tap <kbd>ENV</kbd> again for ENV DEST: how much of the envelope goes to the filter's CUTOFF, to the PITCH and to the SHAPE, each
+        −100 to +100 %. ACID's squelch is CUTOFF +76 %: <kbd>KNOB 1</kbd> down to +13 % dulls the bass, all the way up to +100 % makes
+        every note bite. SHAPE moves the engine's shape: on ANALOG the pulse width of PWM, the second oscillator of SYNC.</p>
+    </li>
+    <li class="step" id="modulation/env-sync">
+      <h3>In time</h3>
+      <p><kbd>KNOB 4</kbd>, SYNC ON: ATTACK, DECAY and RELEASE become note values, from 1/64T to 4BAR, and follow the tempo. Turn
+        <kbd>SELECT</kbd> back to ENV to see them: DECAY reads 1/8D, and <kbd>KNOB 2</kbd> takes it to 1/16, a note value a detent.
+        SUSTAIN stays a level.</p>
+    </li>
+    <li class="step" id="modulation/env-2">
+      <h3>ENV 2</h3>
+      <p><kbd>SELECT</kbd> on to ENV 2: a second envelope with the same four knobs, always in milliseconds. On its own it changes
+        nothing you hear: it's a source for the MOD slots, ENV2 (below). Here its DECAY goes up to 112 ms.</p>
+    </li>
+    <li class="step" id="modulation/lfo">
+      <h3>The LFO</h3>
+      <p>Tap <kbd>LFO</kbd>: RATE (0.05 to 40 Hz), WAVE (SIN, TRI, SAW, SQR or S&amp;H, a new random value each cycle), PHASE (where a
+        note starts it) and FADE (how long it takes to come in). The graph draws two seconds of it. Here RATE 2.21 Hz and WAVE TRI;
+        nothing moves yet, as every depth is still 0.</p>
+    </li>
+    <li class="step" id="modulation/lfo-dest">
+      <h3>LFO dest</h3>
+      <p><kbd>SELECT</kbd> on to LFO DEST, the depths: PITCH, CUTOFF, SHAPE and AMP (a tremolo), each drawn as the wave it makes.
+        <kbd>KNOB 2</kbd>, CUTOFF +50 %: the filter wobbles with the triangle. A little PITCH is a vibrato.</p>
+    </li>
+    <li class="step" id="modulation/lfo-2">
+      <h3>LFO 2</h3>
+      <p><kbd>SELECT</kbd> back to LFO 2. <kbd>KNOB 1</kbd>, SYNC, makes the LFO's cycle a note value of the tempo, 4BAR to 1/32; at 1/8
+        the wobble locks to the beat, and RATE dims. TRIG NOTE starts the LFO again at each new phrase, FREE lets it run.
+        <kbd>KNOB 3</kbd>, POLARITY UNI, makes it one-sided: the filter only opens.</p>
+    </li>
+    <li class="step" id="modulation/mod">
+      <h3>MOD</h3>
+      <p><kbd>SELECT</kbd> on to MOD: four slots, each a SOURCE sent to a DEST by an AMOUNT. The sources are the LFO, ENV, VEL, KEY,
+        RAND (a new value each note), MODW and AT (the mod wheel and aftertouch over MIDI), EXPR, ENV2, S&amp;H and SLEW; the
+        destinations the pitch, the cutoff, the shape, the level, the pan, DIST and the sends, the LFO's RATE and DEPTH, the vibrato, the
+        engine's own eight controls, and VEL and TIME. Slot 1 here: RAND to CUT, +63 %, so every note has its own brightness.</p>
+    </li>
+    <li class="step" id="modulation/mod-2">
+      <h3>Slot 2</h3>
+      <p><kbd>KNOB 1</kbd> picks the slot: 2. SOURCE ENV2, DEST PITCH, AMOUNT +25 %: each note starts three semitones sharp and drops
+        into place as ENV 2 decays. The graph lists the four slots, the one being edited lit.</p>
+    </li>
+    <li class="step" id="modulation/momentary">
+      <h3>Momentary</h3>
+      <p>Tap <kbd>HOME</kbd>. Hold <kbd>LFO</kbd> and turn knobs: the header says MOMENTARY, then OCT+: KEEP. Here <kbd>KNOB 1</kbd>
+        opens the CUTOFF and <kbd>KNOB 2</kbd> adds RES; let go of LFO and they spring back at once: BACK. It works on HOME, the sound
+        and FX pages and the MIXER, up to eight values at a time, and it's never recorded.</p>
+    </li>
+    <li class="step" id="modulation/keep">
+      <h3>Keep it</h3>
+      <p>Hold <kbd>LFO</kbd> again and turn <kbd>KNOB 1</kbd>, then tap <kbd>OCT+</kbd> before you let go: KEPT, and the new values
+        stay. A tap of LFO on its own still opens its pages.</p>
+    </li>
+  </ol>
 </section>
 
-<section class="chapter" id="engines" data-n="10" data-group="SHAPE SOUND" data-video="">
+<section class="chapter" id="engines" data-n="10" data-group="SHAPE SOUND" data-video="WjXIb2D1fPk">
   <div class="ch-head"><span class="num">10</span><div><p class="group">SHAPE SOUND</p><h2>Inside the engines</h2></div></div>
   <p class="meta"><b>You'll learn</b> each engine's own pages, the voice settings, drum lanes and slices.</p>
   <div class="video"></div>
-  <ul class="outline">
-    <li>EDIT 1 and EDIT 2: eight controls for each of the 14 engines.</li>
-    <li>VOICE and VOICE 2: GLIDE, PRIORITY, ALLOC, DETUNE, SPREAD.</li>
-    <li>Drums: LANES on DRUM, SOUND on DRUM-X.</li>
-    <li>SLICE: the SLICES page, the two built-in loops, and your own samples in USR1–3.</li>
-  </ul>
-  <p class="soon-note">Video and step-by-step coming</p>
+  <ol class="steps">
+    <li class="step" id="engines/edit-1">
+      <h3>EDIT 1</h3>
+      <p>The beat from <a href="#first-beat">chapter 3</a> plays, with two chords on track 2. Tap <kbd>EDIT</kbd> on track 1: the
+        <a href="#g-engine">engine</a>'s first page, named by the engine (ANALOG's is OSC). Every engine has up to eight controls of
+        its own on EDIT 1 and EDIT 2. OSC is WAVE, DETUNE, MIX and NOISE, and the graph draws the wave: <kbd>KNOB 3</kbd>,
+        MIX, brings in the second oscillator and <kbd>KNOB 2</kbd> detunes it, SAW, A SECOND ONE 16 CT UP.</p>
+    </li>
+    <li class="step" id="engines/edit-2">
+      <h3>EDIT 2</h3>
+      <p>Tap <kbd>EDIT</kbd> again for EDIT 2, FLT: CUTOFF, RES, DRIVE and KEYTRK, the low-pass drawn with its peak. <kbd>KNOB 3</kbd>,
+        DRIVE, roughens the bass. Other engines fill these pages their own way: FM6 its algorithm, WHEEL its drawbars, SAMPLE the
+        wave of the note played last; most draw the sound as it plays.</p>
+    </li>
+    <li class="step" id="engines/voice">
+      <h3>Voice</h3>
+      <p><kbd>EDIT</kbd> again: VOICE, how the track plays its notes. VOICE is POLY (a voice a note), MONO (one voice, a new attack each
+        note), LEG (one voice, no new attack) or UNI (every voice on one note). ACID is LEG; <kbd>KNOB 2</kbd>, GLIDE, slides each note into the next,
+        here 90 ms. GL MODE RATE keeps the speed the same, TIME the time; PRIORITY picks the note a MONO track plays when several are
+        held.</p>
+    </li>
+    <li class="step" id="engines/voice-2">
+      <h3>Voice 2</h3>
+      <p><kbd>ALGORITHM</kbd> to track 2, the PAD, on its own VOICE page, POLY; <kbd>SELECT</kbd> on to VOICE 2: ALLOC (ROT takes the
+        next voice in turn, so release tails ring out; REUSE the free voice nearest in pitch), DETUNE (UNI only) and SPREAD.
+        <kbd>KNOB 3</kbd>, SPREAD, sends the chord's voices left and right of the track's PAN in turn. The boxes are the voices, lit as
+        they sound.</p>
+    </li>
+    <li class="step" id="engines/fm6">
+      <h3>Another engine</h3>
+      <p>Tap <kbd>EDIT</kbd>: past the last page it goes round to EDIT 1, here FM6's, OPS: ALGO, FEEDBACK, MOD LVL and RATIO, the
+        algorithm drawn as its operators. <kbd>KNOB 3</kbd>, MOD LVL, brightens the pad. FM6's own OPERATOR and ALL OPS pages come
+        before VOICE: <a href="#fm6-lab">chapter 11</a>.</p>
+    </li>
+    <li class="step" id="engines/kit">
+      <h3>DRUM's kits</h3>
+      <p><kbd>ALGORITHM</kbd> to track 4: DRUM's EDIT 1 is KIT, PITCH, TONE and DECAY. <kbd>KNOB 1</kbd>, KIT, swaps the whole kit:
+        STD, the five virtual-analog kits 80, 10, 66, 55 and 77, and DEEP, TIGHT and PERC. KIT 80: a deep sine kick, a noisy
+        snare.</p>
+    </li>
+    <li class="step" id="engines/lanes">
+      <h3>Lanes</h3>
+      <p><kbd>EDIT</kbd> twice, past EDIT 2 (HIT), for LANES: each drum of the kit on its own. <kbd>KNOB 1</kbd> picks the lane, KICK
+        here; KNOB 2 is its LEVEL, <kbd>KNOB 3</kbd> its TUNE (−6 semitones) and <kbd>KNOB 4</kbd> its DECAY, longer (0 % is as the kit
+        has it).</p>
+    </li>
+    <li class="step" id="engines/drum-x">
+      <h3>DRUM-X</h3>
+      <p>Hold <kbd>EDIT</kbd> and tap <kbd>E5</kbd>: track 4 on DRUM-X (<a href="#sounds/edit-layer">chapter 4</a>), the same notes on
+        its kit. DRUM-X synthesizes each of its eight sounds from an oscillator, a pitch envelope and noise, in two patches, A and B,
+        with MORPH between them. One kit is the project's; LANES is DRUM's, so EDIT 1 opens instead (NO LANES ON DRUM-X).</p>
+    </li>
+    <li class="step" id="engines/sound">
+      <h3>The SOUND sheet</h3>
+      <p><kbd>EDIT</kbd> twice for SOUND: one sound of the kit on one sheet, BD first. <kbd>PRESETS</kbd> (or a key struck) picks the
+        sound, <kbd>SELECT</kbd> moves the knobs down the sheet: PITCH, P MOD, DECAY, NOISE and COLOR, each A beside B, then LEVEL,
+        DRIVE and the switches WAVE, FILTER, SNAP and P SHAPE. <kbd>KNOB 1</kbd>, PITCH A, takes the kick down.</p>
+    </li>
+    <li class="step" id="engines/slice">
+      <h3>Slice</h3>
+      <p><kbd>ALGORITHM</kbd> to track 6, hold <kbd>EDIT</kbd> and tap <kbd>C5</kbd>: SLICE, a drum break cut into slices (CHOP: BREAK
+        in 16). Every key plays one, from <kbd>F3</kbd>, black keys too: <kbd>F3</kbd> to <kbd>C4</kbd> in order are its first half
+        bar, and any order chops it up. Sequenced, the steps' notes pick the slices.</p>
+    </li>
+    <li class="step" id="engines/slices">
+      <h3>The slices</h3>
+      <p><kbd>EDIT</kbd> twice, past PLAYBACK (MODE, RVRS, DECAY, CUTOFF), for SLICES: the wave around a slice, its markers, and the
+        whole sample under it. <kbd>KNOB 1</kbd> steps through the slices, and a key shows the slice it plays. On your own samples KNOB 2
+        moves a marker and KNOB 3 and 4 split and join slices (OCT+ does it); the built-in loops are view only.</p>
+    </li>
+    <li class="step" id="engines/sources">
+      <h3>Sources</h3>
+      <p><kbd>SELECT</kbd> back to EDIT 1, SLICE: <kbd>KNOB 1</kbd>, SOURCE, runs BREAK, USR1, USR2, USR3, PIANO and FUNK; DIV cuts it in
+        4 to 32 or where the hits are (AUTO). FUNK is the second loop, two beats of funk. USR1–3 are your own samples, put on the unit
+        with the web editor's Samples tab (<a href="#midi-editor">chapter 19</a>); SAMPLE and GRAIN play them too. An empty one plays a
+        sine and says NO SAMPLE.</p>
+    </li>
+  </ol>
 </section>
 
 <section class="chapter" id="fm6-lab" data-n="11" data-group="SHAPE SOUND" data-video="">
