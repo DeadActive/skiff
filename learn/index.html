@@ -1344,68 +1344,399 @@ footer p { max-width: 1240px; margin: 6px auto; }
   </ol>
 </section>
 
-<section class="chapter" id="perform" data-n="15" data-group="ARRANGE AND PERFORM" data-video="">
+<section class="chapter" id="perform" data-n="15" data-group="ARRANGE AND PERFORM" data-video="AmZ00cKx9OE">
   <div class="ch-head"><span class="num">15</span><div><p class="group">ARRANGE AND PERFORM</p><h2>Perform</h2></div></div>
   <p class="meta"><b>You'll learn</b> to play a song live: launch entries, stage mutes, recall scenes and throw the knobs.</p>
   <div class="video"></div>
-  <ul class="outline">
-    <li>Hold <kbd>ARP</kbd> for PERFORM: the white keys launch entries, at the LAUNCH point (LOOP, BAR, BEAT, NOW) set with <kbd>SELECT</kbd>.</li>
-    <li>The black keys stage mutes for tracks 1–6.</li>
-    <li><a href="#g-scene">Scenes</a>: <kbd>SAVE</kbd> held and a key stores one, a key recalls it.</li>
-    <li>Throws on <kbd>KNOB 1</kbd>–<kbd>KNOB 4</kbd>, and chains of entries per track.</li>
-  </ul>
-  <p class="soon-note">Video and step-by-step coming</p>
+  <ol class="steps">
+    <li class="step" id="perform/layer">
+      <h3>The PERFORM layer</h3>
+      <p>This unit has entries to launch, made as in <a href="#song">chapter 14</a>: on track 4 the beat (A), the beat with sixteenth hats
+        (B) and the hats alone (C); on track 1 two bass lines (A, B); on track 2 the chords (A). Any patterns of your own work the same way.
+        Tap <kbd>PLAY</kbd>, then hold <kbd>ARP</kbd>: PERFORM, ARP's <a href="#g-layer">layer</a>. A row for each track: its number in
+        its colour, then its <a href="#g-list">list</a>'s 16 entries, A to P, across, the way the white keys run (<kbd>F3</kbd> is A,
+        <kbd>G5</kbd> is P). An entry naming a pattern shows its letter, an empty one a dot, and the entry the track is on is a tile of the
+        track's colour. The selected track's row is a band of its colour. Under the tracks, SCN: the scenes. The header says PERFORM and
+        the LAUNCH point, LOOP; the footer says WHITE: PATTERN, BLACK: MUTE.</p>
+    </li>
+    <li class="step" id="perform/launch">
+      <h3>Launch an entry</h3>
+      <p>Hold <kbd>ARP</kbd> and tap <kbd>G3</kbd>, the second white key: the selected track, track 1, goes to its entry B. While playing
+        it waits for the LAUNCH point, here the end of the track's loop: the header says T1 B AT LOOP END and B is outlined. Then B is the
+        filled tile and the bass plays its other line. Stopped, it switches at once (LOADED T1 B); an empty entry says T1 F EMPTY. What
+        the track had is kept as its pattern, so a launch needs no undo.</p>
+    </li>
+    <li class="step" id="perform/keep-open">
+      <h3>Keep it open</h3>
+      <p>Hold <kbd>HOME</kbd> and tap <kbd>ARP</kbd> (or hold <kbd>ARP</kbd> and tap <kbd>HOME</kbd>): the layer stays open with nothing
+        held, a lock before PERFORM in the header, and the keys and knobs act as if <kbd>ARP</kbd> were held. <kbd>PLAY</kbd> and the
+        rest of this chapter work either way; <kbd>ARP</kbd> closes it.</p>
+    </li>
+    <li class="step" id="perform/track">
+      <h3>Any track</h3>
+      <p><kbd>ALGORITHM</kbd> picks the track whose entries the white keys launch (and whose sound the knobs throw), its row the band:
+        track 4, the drums. <kbd>A3</kbd>, entry C: T4 C AT LOOP END, and at the end of the loop only the hats are left.</p>
+    </li>
+    <li class="step" id="perform/launch-point">
+      <h3>When it lands</h3>
+      <p><kbd>SELECT</kbd> turns LAUNCH, when a launch comes in: LOOP (the default) at the end of the track's own loop, so tracks of
+        different lengths switch at different times; BAR on the next bar; BEAT on the next beat; NOW on the next step, the playhead going
+        on where it is. LOOP, BAR and BEAT start the pattern from its first step. The header shows it: PERFORM BAR. <kbd>F3</kbd>, entry
+        A: T4 A AT NEXT BAR, and the beat is back on the bar. LAUNCH is kept with the settings.</p>
+    </li>
+    <li class="step" id="perform/mutes">
+      <h3>Stage a mute</h3>
+      <p>The black keys <kbd>F♯3</kbd> <kbd>G♯3</kbd> <kbd>A♯3</kbd> <kbd>C♯4</kbd> <kbd>D♯4</kbd> <kbd>F♯4</kbd> turn the mutes of
+        tracks 1–6, staged as the entries are. <kbd>G♯3</kbd>: T2 MUTE AT NEXT BAR, an outlined M at the end of track 2's row; on the bar
+        the chords drop out and the M is lit. The same key again stages the unmute, and a second press before a mute lands takes it back
+        (T2 MUTE CANCELLED). Stopped, a mute turns at once.</p>
+    </li>
+    <li class="step" id="perform/cancel">
+      <h3>Cancel</h3>
+      <p><kbd>ALGORITHM</kbd> back to track 1. <kbd>F3</kbd> stages its entry A, and <kbd>G♯3</kbd> the chords' unmute. <kbd>OCT−</kbd>
+        before the bar drops everything staged, every track's entries and mutes: CANCELLED (NOTHING STAGED when there was nothing). The
+        bass stays on B and the chords stay out.</p>
+    </li>
+    <li class="step" id="perform/scenes">
+      <h3>Scenes</h3>
+      <p><kbd>PRESETS</kbd> turns what the white keys are, KEYS: TRACK, the selected track's entries as so far, or SCENE, the 16
+        <a href="#g-scene">scenes</a> of the SCN row. The footer says WHITE: SCENE and SAVE + WHITE: STORE. The black keys still stage
+        mutes.</p>
+    </li>
+    <li class="step" id="perform/store">
+      <h3>Store a scene</h3>
+      <p>Hold <kbd>SAVE</kbd> and tap <kbd>F3</kbd>: SCENE 1 SAVED, the entry each track is on and every track's mute, as they are now:
+        the bass on B, the chords out. Its number is boxed on the SCN row, filled while it's the scene stored or recalled last. Storing
+        over a kept scene asks first (OVERWRITE SCENE 1?). Then <kbd>C♯4</kbd> and <kbd>G♯3</kbd>: on the bar the drums drop out and the
+        chords come back.</p>
+    </li>
+    <li class="step" id="perform/recall">
+      <h3>Recall it</h3>
+      <p>Tap <kbd>F3</kbd>: SCENE 1 AT NEXT BAR. Each track's entry and mute is staged for the LAUNCH point, so with BAR or BEAT they all
+        land together: on the bar the drums come back and the chords go out. Stopped, it loads at once (LOADED SCENE 1). The scenes are
+        kept with the project (<a href="#projects">chapter 17</a>).</p>
+    </li>
+    <li class="step" id="perform/throws">
+      <h3>Throws</h3>
+      <p>The four knobs throw the selected track's sound: <kbd>KNOB 1</kbd> its tone (CUTOFF on most engines, PITCH on a drum kit),
+        <kbd>KNOB 2</kbd> its REVERB, <kbd>KNOB 3</kbd> its DELAY and <kbd>KNOB 4</kbd> its DIST. A turn pushes the value out, the card
+        saying how far (+40), and once the knob rests it glides back over a bar: here the bass opens and closes again, then its echoes
+        swell and fade. A throw never edits the sound and is never saved; stopping drops it at once.</p>
+    </li>
+    <li class="step" id="perform/close">
+      <h3>Close it</h3>
+      <p>Tap <kbd>ARP</kbd>: the lock closes and HOME is back. Everything launched plays on. With SONG on
+        (<a href="#song/song-on">chapter 14</a>) a launch moves the track's place in its list, and the song goes on from there.</p>
+    </li>
+  </ol>
 </section>
 
-<section class="chapter" id="fx-layer" data-n="16" data-group="ARRANGE AND PERFORM" data-video="">
+<section class="chapter" id="fx-layer" data-n="16" data-group="ARRANGE AND PERFORM" data-video="B56oNsGptTI">
   <div class="ch-head"><span class="num">16</span><div><p class="group">ARRANGE AND PERFORM</p><h2>The FX layer</h2></div></div>
   <p class="meta"><b>You'll learn</b> the 14 performance effects on the keys, the track cuts and the four macros.</p>
   <div class="video"></div>
-  <ul class="outline">
-    <li>Hold <kbd>FX</kbd>: the white keys are REPEAT 1/8, 1/16 and 1/32, REVERSE, LPF, HPF, TAPE STOP, FREEZE, OCT UP, OCT DN, GATE, DUB, FLANGE and VINYL.</li>
-    <li>The black keys cut tracks 1–6.</li>
-    <li><kbd>KNOB 1</kbd>–<kbd>KNOB 4</kbd>: FILTER, CRUSH, THROW, DEPTH.</li>
-    <li>SHIFT + <kbd>FX</kbd> keeps the layer open and latches the effects.</li>
-  </ul>
-  <p class="soon-note">Video and step-by-step coming</p>
+  <ol class="steps">
+    <li class="step" id="fx-layer/layer">
+      <h3>The FX layer</h3>
+      <p>The beat from <a href="#first-beat">chapter 3</a> plays, with two chords on track 2 and a piano line on track 5. Tap
+        <kbd>PLAY</kbd>, then hold <kbd>FX</kbd>: the FX layer, FX HOLD in the header. Its effects work on the whole mix, each while its
+        key is held. The map shows the 14 effects of the white keys, seven a row, an octave each (<kbd>F3</kbd> to <kbd>E4</kbd> over
+        <kbd>F4</kbd> to <kbd>E5</kbd>), each cell its key's letter and the effect's icon; under them the six cuts of the black keys. The
+        four knobs are the layer's macros. (Tapped, <kbd>FX</kbd> opens a track's FX pages: <a href="#track-fx">chapter 12</a>.)</p>
+    </li>
+    <li class="step" id="fx-layer/repeat">
+      <h3>Repeat</h3>
+      <p>Hold <kbd>FX</kbd> and hold <kbd>F3</kbd>: REPEAT 1/8. From the next sixteenth it takes an eighth of the music and plays it over
+        and over until the key is let go. <kbd>G3</kbd> is REPEAT 1/16 and <kbd>A3</kbd> REPEAT 1/32, faster stutters (the map writes
+        their rates 8, 16 and 32). Below 81 BPM an eighth is longer than the effects' buffer: REPEAT 1/8 and REVERSE do nothing and their
+        cells are dim.</p>
+    </li>
+    <li class="step" id="fx-layer/reverse">
+      <h3>Reverse</h3>
+      <p><kbd>B3</kbd>: REVERSE. From the next sixteenth it takes an eighth and plays it backwards, again and again. Let go and the music
+        goes on where it is.</p>
+    </li>
+    <li class="step" id="fx-layer/sweeps">
+      <h3>Sweeps</h3>
+      <p><kbd>C4</kbd>: LPF, a low-pass that closes over a bar, the mix getting darker and darker. <kbd>D4</kbd>: HPF, a high-pass that
+        opens over a bar, the bass going first.</p>
+    </li>
+    <li class="step" id="fx-layer/tape-freeze">
+      <h3>Tape stop and freeze</h3>
+      <p><kbd>E4</kbd>: TAPE STOP, the music slowing down to a stop over a beat, as a tape machine switched off. <kbd>F4</kbd>: FREEZE,
+        the sound of that moment held on, as long as the key is.</p>
+    </li>
+    <li class="step" id="fx-layer/octaves">
+      <h3>Octaves</h3>
+      <p><kbd>G4</kbd>: OCT UP, the mix an octave up beside itself. While it plays, <kbd>KNOB 4</kbd> is its shimmer (SHIMR): the
+        shifted sound fed back into itself, so each pass climbs another octave. <kbd>A4</kbd>: OCT DN, an octave down.</p>
+    </li>
+    <li class="step" id="fx-layer/gate-dub">
+      <h3>Gate and dub</h3>
+      <p><kbd>B4</kbd>: GATE, the mix chopped on the sixteenths, open for the first half of each. <kbd>C5</kbd>: DUB, the mix sent into
+        the delay with its feedback turned up while the key is held; let go and the echoes ring on and fade. The delay is GLO's
+        (<a href="#mixer/delay">chapter 13</a>): its TIME sets their spacing.</p>
+    </li>
+    <li class="step" id="fx-layer/flange-vinyl">
+      <h3>Flange and vinyl</h3>
+      <p><kbd>D5</kbd>: FLANGE, a jet sweep, a bar each way. <kbd>E5</kbd>: VINYL, the wow of a record turning, a darker top and crackle.
+        The last two white keys, <kbd>F5</kbd> and <kbd>G5</kbd>, do nothing in the layer.</p>
+    </li>
+    <li class="step" id="fx-layer/stack">
+      <h3>Stack them</h3>
+      <p>Effects of different kinds stack: <kbd>C4</kbd> held, then <kbd>F3</kbd> with it, and the repeat goes through the closing
+        filter. Of the ones that play back what was just heard (REPEAT, REVERSE, TAPE STOP, FREEZE, OCT UP and DN, FLANGE, VINYL) the last
+        one pressed plays: <kbd>B3</kbd> over <kbd>F3</kbd> reverses, and letting <kbd>B3</kbd> go returns to the repeat.</p>
+    </li>
+    <li class="step" id="fx-layer/cuts">
+      <h3>Cuts</h3>
+      <p>The black keys <kbd>F♯3</kbd> <kbd>G♯3</kbd> <kbd>A♯3</kbd> <kbd>C♯4</kbd> <kbd>D♯4</kbd> <kbd>F♯4</kbd> cut tracks 1–6 while
+        they're held: <kbd>C♯4</kbd>, the drums, then <kbd>F♯3</kbd> and <kbd>G♯3</kbd> together, the bass and the chords. A cut isn't
+        the track's mute (GLO's, <a href="#mixer/mute">chapter 13</a>) and is never saved.</p>
+    </li>
+    <li class="step" id="fx-layer/macros">
+      <h3>Macros</h3>
+      <p>The four knobs: <kbd>KNOB 1</kbd> FILTER, left a low-pass, right a high-pass (here 40 LP); <kbd>KNOB 2</kbd> CRUSH, fewer bits
+        and a lower rate; <kbd>KNOB 3</kbd> THROW, the mix sent into the delay and the reverb; <kbd>KNOB 4</kbd> DEPTH, how much of a
+        playback effect you hear (with OCT UP or DN its shimmer, with GATE how deep it cuts). Let go of <kbd>FX</kbd> and they all go back:
+        FILTER, CRUSH and THROW to OFF, DEPTH to 100 %.</p>
+    </li>
+    <li class="step" id="fx-layer/latch">
+      <h3>Latch</h3>
+      <p>Hold <kbd>HOME</kbd> and tap <kbd>FX</kbd> (or hold <kbd>FX</kbd> and tap <kbd>HOME</kbd>): the layer stays open and latches,
+        FX LATCH in the header. Now a key turns its effect on, and the same key again off, with nothing held: <kbd>G4</kbd>, then
+        <kbd>B4</kbd>, an octave up and the gate together. The macros keep their values too. The footer says KEYS: ON / OFF.</p>
+    </li>
+    <li class="step" id="fx-layer/all-off">
+      <h3>All off</h3>
+      <p><kbd>G4</kbd> again: its effect off. <kbd>OCT−</kbd> turns every effect and macro off at once: FX ALL OFF. <kbd>FX</kbd>
+        closes the layer, and anything still latched with it; so do the MENU and a dialog.</p>
+    </li>
+  </ol>
 </section>
 
 <!-- ================================================================ YOUR SETUP -->
-<section class="chapter" id="projects" data-n="17" data-group="YOUR SETUP" data-video="">
+<section class="chapter" id="projects" data-n="17" data-group="YOUR SETUP" data-video="iBUhshLwh1g">
   <div class="ch-head"><span class="num">17</span><div><p class="group">YOUR SETUP</p><h2>Projects and saving</h2></div></div>
   <p class="meta"><b>You'll learn</b> what Skiff keeps by itself, and how to save, load and back up projects.</p>
   <div class="video"></div>
-  <ul class="outline">
-    <li>The autosave, and RESTORE LAST at power-on.</li>
-    <li>SAVE › PROJECT: four <a href="#g-project">projects</a>: SAVE, LOAD, NEW, NAME and DELETE.</li>
-    <li>Complete backups of your music with the <a href="../webapp/editor/">web editor</a>.</li>
-  </ul>
-  <p class="soon-note">Video and step-by-step coming</p>
+  <ol class="steps">
+    <li class="step" id="projects/kept">
+      <h3>Kept as you go</h3>
+      <p>The beat from <a href="#first-beat">chapter 3</a> plays, with two chords on track 2. Nothing in Skiff has to be saved to be kept:
+        the patterns keep themselves (<a href="#song/kept">chapter 14</a>), and the whole session, the sounds and the mix too, goes into an
+        autosave of its own, written once the music has changed, stopped, with nothing touched for 10 s (at most once a minute). Tap
+        <kbd>PLAY</kbd>, then hold <kbd>HOME</kbd> and let it go: the MENU. <kbd>ALGORITHM</kbd> to SYSTEM and <kbd>PRESETS</kbd> to
+        RESTORE LAST: ON, the default, so at power-on the music you left comes back and the header says RESTORED. OFF starts with the
+        power-on sounds. Projects are for keeping versions, and starting something new.</p>
+    </li>
+    <li class="step" id="projects/page">
+      <h3>Four projects</h3>
+      <p><kbd>HOME</kbd> closes the MENU. Tap <kbd>SAVE</kbd> (USER, the first time) and turn <kbd>SELECT</kbd> on to PROJECT, the last
+        of SAVE's pages: four <a href="#g-project">project</a> slots, A to D, each with its name (USED when it has none); -- is an empty
+        one. <kbd>KNOB 1</kbd> is the SLOT, <kbd>KNOB 2</kbd> DELETE, <kbd>KNOB 3</kbd> LOAD (NEW on an empty slot), <kbd>KNOB 4</kbd>
+        SAVE: a knob turned right picks its action, <kbd>OCT+</kbd> does it and <kbd>OCT−</kbd> drops the pick, or goes HOME. A project
+        keeps the sounds, the mix and the effects, the tempo, the lists and the entry each track is on, SONG, the scenes, the FM6 patches,
+        the DRUM-X kit and its name; its patterns stay in the pool, named by the lists. The unit's own settings (the MENU's, CLOCK, MIDI
+        IN and TUNE among them) are never part of it.</p>
+    </li>
+    <li class="step" id="projects/save">
+      <h3>Save it</h3>
+      <p>A save writes the flash, so it waits for a stop (STOP TO SAVE): tap <kbd>PLAY</kbd>. <kbd>KNOB 4</kbd>: SAVE, and the footer
+        says OCT+: SAVE. <kbd>OCT+</kbd>: the NAME screen, SAVE PROJECT A, the name empty for now. Over a used slot it asks first
+        (OVERWRITE PROJECT A?).</p>
+    </li>
+    <li class="step" id="projects/name">
+      <h3>Name it</h3>
+      <p>The keys type, phone style, as for a sound (<a href="#sounds/name">chapter 4</a>): AB twice for B, EF for E, AB for A, TU for
+        T: BEAT. <kbd>C♯4</kbd> deletes, <kbd>G♯3</kbd> is a space and <kbd>D♯4</kbd> switches to digits; <kbd>KNOB 1</kbd> moves along
+        the name and <kbd>KNOB 2</kbd> changes the letter there. <kbd>OCT+</kbd>: SAVED. Slot A says BEAT, and the boxed A in the header
+        is the project the music now is.</p>
+    </li>
+    <li class="step" id="projects/new">
+      <h3>A new project</h3>
+      <p><kbd>KNOB 1</kbd> to slot B, empty, and <kbd>KNOB 3</kbd> says NEW. <kbd>OCT+</kbd>: NEW PROJECT, the music as a new unit has
+        it: the power-on sounds, no notes, 120 BPM. It's on no slot until it's saved. Had the music changed since its last save, it would
+        ask first (NEW PROJECT? the music now goes). <kbd>HOME</kbd>: six tracks, nothing in their lanes.</p>
+    </li>
+    <li class="step" id="projects/load">
+      <h3>Load</h3>
+      <p><kbd>SAVE</kbd> opens PROJECT again, where it was left. <kbd>KNOB 1</kbd> back to A, <kbd>KNOB 3</kbd>: LOAD, <kbd>OCT+</kbd>:
+        LOADED. A load stops the music first; <kbd>PLAY</kbd>, and the beat is back at 110 BPM. When the music has changed since its last
+        save or load, LOAD asks first (LOAD PROJECT A? and its name), since what's playing would go. A load can't be undone.</p>
+    </li>
+    <li class="step" id="projects/delete">
+      <h3>Delete</h3>
+      <p>Stopped (STOP TO DELETE otherwise), <kbd>KNOB 2</kbd> one detent: DELETE; one more, NAME, renames the slot on the NAME screen.
+        <kbd>OCT+</kbd> asks first: DELETE PROJECT A?, its name, and can't be undone. <kbd>OCT+</kbd> would delete it.</p>
+    </li>
+    <li class="step" id="projects/backup">
+      <h3>Back it up</h3>
+      <p><kbd>OCT−</kbd> cancels, and project A stays; <kbd>PLAY</kbd> starts the beat again. The four projects, the autosave, the
+        pattern pool, your sounds and samples and the settings all live in the unit's flash. A complete backup of it all, a file on your
+        computer, is the <a href="../webapp/editor/">web editor</a>'s (<a href="#midi-editor">chapter 19</a>); the installer makes one
+        too before it puts the official firmware back (<a href="#install">chapter 1</a>).</p>
+    </li>
+  </ol>
 </section>
 
-<section class="chapter" id="settings" data-n="18" data-group="YOUR SETUP" data-video="">
+<section class="chapter" id="settings" data-n="18" data-group="YOUR SETUP" data-video="iocVsJvfCcQ">
   <div class="ch-head"><span class="num">18</span><div><p class="group">YOUR SETUP</p><h2>Settings and themes</h2></div></div>
   <p class="meta"><b>You'll learn</b> the MENU, its five tabs, and the six themes.</p>
   <div class="video"></div>
-  <ul class="outline">
-    <li>Hold <kbd>HOME</kbd> and let go: the MENU. <kbd>ALGORITHM</kbd> changes the tab, <kbd>PRESETS</kbd> the row, <kbd>KNOB 1</kbd>–<kbd>KNOB 4</kbd> or <kbd>OCT−</kbd> <kbd>OCT+</kbd> the value.</li>
-    <li>DISPLAY: THEME (SKIFF, HI-CON, PAPER, CRYPT, NEON, QUARK), LARGE, LEDS, SCREEN OFF.</li>
-    <li>CONTROL: HOLD, KNOB ACCEL, BPM LOCK, STEP PREVIEW. AUDIO: SPEAKER EQ, CLICK, COUNT-IN, TUNE.</li>
-    <li>SYSTEM: CPU (one core or two), CPU CLOCK, CALIBRATION, ABOUT.</li>
-  </ul>
-  <p class="soon-note">Video and step-by-step coming</p>
+  <ol class="steps">
+    <li class="step" id="settings/menu">
+      <h3>The MENU</h3>
+      <p>The beat from <a href="#first-beat">chapter 3</a> plays, with two chords on track 2 and a piano line on track 5. Tap
+        <kbd>PLAY</kbd>, then hold <kbd>HOME</kbd> and let it go: the MENU (<a href="#find-your-way/menu">chapter 2</a>). Its five tabs
+        are icons across the top, the open one named: DISPLAY, CONTROL, AUDIO, SYSTEM and MIDI (<a href="#midi-editor">chapter 19</a>).
+        <kbd>ALGORITHM</kbd> moves between the tabs and <kbd>PRESETS</kbd> through the rows of one, both going round; any of
+        <kbd>KNOB 1</kbd>–<kbd>KNOB 4</kbd>, or <kbd>OCT+</kbd> and <kbd>OCT−</kbd>, changes the value of the row. A tab of more than
+        six rows scrolls. The settings are the unit's, not a project's, and the web editor's Settings tab reads and changes them too.</p>
+    </li>
+    <li class="step" id="settings/theme">
+      <h3>Six themes</h3>
+      <p>DISPLAY's first row is THEME; turn any knob: HI-CON (high contrast), PAPER (light), CRYPT (a dungeon synth's stone, amber and
+        pixel letters), NEON (synthwave's chrome and neon) and QUARK (particle physics), then round to SKIFF, each track in its own colour.
+        The whole screen changes at once, the MENU first; the web editor follows the theme too. One detent back: NEON.</p>
+    </li>
+    <li class="step" id="settings/every-screen">
+      <h3>Every screen</h3>
+      <p><kbd>HOME</kbd> closes the MENU: NEON on HOME, a car driving the lanes' highway; <kbd>GLO</kbd>, the MIXER; <kbd>ENV</kbd>, the
+        envelope. Each theme draws every page its own way, the graphs too: CRYPT's are ASCII art with torches and skulls, NEON's have the
+        striped sun and the grid, QUARK's beams, collisions and calorimeter towers.</p>
+    </li>
+    <li class="step" id="settings/large">
+      <h3>Large</h3>
+      <p>Open the MENU again: it comes back at the tab and row it was left at. THEME two detents on, QUARK and round to SKIFF.
+        <kbd>PRESETS</kbd> to LARGE, ON, and <kbd>HOME</kbd>: the four cards are tall, marked K1–K4, the labels larger and the values
+        about twice the size, and the graph below becomes a strip. Lists, the piano roll, the drum grid and the layers keep their layout,
+        with larger labels. ANIM, the next row, OFF shows every change at once: no rolling digits, no gliding piano roll, no LED sweep
+        at power-on.</p>
+    </li>
+    <li class="step" id="settings/leds">
+      <h3>LEDs</h3>
+      <p>In the MENU, LARGE back to OFF and <kbd>PRESETS</kbd> on to LEDS, how the buttons and keys glow: DIM HI, the default, lights
+        what's active and glows the rest; DIM LO glows darker; OFF has no glow; INV lights the idle ones and darkens the active ones, as
+        the stock firmware does. What can be pressed breathes in every mode. SCREEN OFF, below it, turns the screen and its backlight off
+        after 5 to 60 minutes untouched (30 MIN, the default, or NEVER), never while the music plays, and the next touch only wakes it.
+        HINTS OFF drops the hint lines and SHIFT's map.</p>
+    </li>
+    <li class="step" id="settings/control">
+      <h3>Control</h3>
+      <p><kbd>ALGORITHM</kbd> on to CONTROL. HOLD is how long a button is held before its hold acts, 0.3 to 0.6 s (the layers, SAVE's
+        undo, HOME's SHIFT). KNOB ACCEL ON makes a fast, steady turn move 2 to 4 steps a detent, up to 8 on wide values. BPM LOCK ON (the
+        default) keeps <kbd>SELECT</kbd> for the pages and <kbd>GLO</kbd> + <kbd>SELECT</kbd> for the tempo; OFF, <kbd>SELECT</kbd> is
+        the tempo everywhere. STEP PREVIEW is <a href="#steps/preview">chapter 6</a>'s. SCALE LEDS ON: the keys of the selected track's
+        scale glow, the root's brighter, and the others are dark: track 1 is in A minor (<a href="#keys/scale">chapter 5</a>), so
+        <kbd>A3</kbd>, <kbd>C4</kbd> and <kbd>E4</kbd> are among them. Not on a drum or SLICE track.</p>
+    </li>
+    <li class="step" id="settings/audio">
+      <h3>Audio</h3>
+      <p><kbd>ALGORITHM</kbd> on to AUDIO. SPEAKER EQ: FLAT, LOWCUT or BASS+, a tone for the built-in speaker that reaches the
+        headphones and USB audio too, so keep it FLAT to record. USB LEVEL: MASTER (the <kbd>MASTER</kbd> knob sets USB audio too) or
+        FIXED. CLICK: OFF, REC (while a track is armed) or ON, a click on every beat, the bar's first higher; CLICK LEVEL its loudness.
+        COUNT-IN: a bar or two of clicks before recording (<a href="#recording/count-in">chapter 7</a>). TUNE: the whole unit, ±50
+        cents.</p>
+    </li>
+    <li class="step" id="settings/system">
+      <h3>System</h3>
+      <p><kbd>ALGORITHM</kbd> on to SYSTEM, <kbd>PRESETS</kbd> down its seven rows. USB SERIAL OFF leaves out the serial console, a
+        developer's tool, so that macOS 13–15 sees the USB audio input. RESTORE LAST is <a href="#projects/kept">chapter 17</a>'s. CPU:
+        1 CORE or 2 CORES (BETA, up to 12 voices instead of 8), and how busy the audio is (0 % here: this film's run was made on a
+        computer). CPU CLOCK: 360 MHZ or 320 MHZ. Both take effect at the next power-on: stop, then restart when the row says RESTART.
+        CALIBRATION asks for each button and knob in turn, to learn which is which (a unit that works never needs it). RESET SETTINGS puts
+        every MENU setting back as a new unit has it, after asking; the music stays.</p>
+    </li>
+    <li class="step" id="settings/about">
+      <h3>About</h3>
+      <p>On ABOUT, <kbd>OCT+</kbd>: SKIFF, its version (v1.3.1), the CPU's clock, a QR code to the source on GitHub, and the credits of
+        the code it's built on, Felucca first. <kbd>PRESETS</kbd> scrolls them; <kbd>OCT−</kbd> goes back to the tabs.</p>
+    </li>
+    <li class="step" id="settings/close">
+      <h3>Close it</h3>
+      <p><kbd>HOME</kbd> closes the MENU, from ABOUT too, and the settings are written then (while playing, at the next stop). The
+        MIDI tab is <a href="#midi-editor">chapter 19</a>'s.</p>
+    </li>
+  </ol>
 </section>
 
-<section class="chapter" id="midi-editor" data-n="19" data-group="YOUR SETUP" data-video="">
+<section class="chapter" id="midi-editor" data-n="19" data-group="YOUR SETUP" data-video="mXNAUkO3bYo">
   <div class="ch-head"><span class="num">19</span><div><p class="group">YOUR SETUP</p><h2>MIDI and the web editor</h2></div></div>
-  <p class="meta"><b>You'll learn</b> to play Skiff from MIDI, map controllers to its knobs, and edit it from a computer.</p>
+  <p class="meta"><b>You'll learn</b> to play Skiff from MIDI, map controllers to its knobs, and edit it from a computer. The video
+    shows MIDI on the unit; the web editor is at the end of this chapter.</p>
   <div class="video"></div>
+  <ol class="steps">
+    <li class="step" id="midi-editor/midi-tab">
+      <h3>The MIDI tab</h3>
+      <p>The beat from <a href="#first-beat">chapter 3</a> plays, with two chords on track 2. Tap <kbd>PLAY</kbd>, open the MENU
+        (<kbd>HOME</kbd> held and let go) and turn <kbd>ALGORITHM</kbd> back one tab, round to MIDI, the last. Its ten rows scroll:
+        CLOCK, where the tempo comes from (INT, its own; USB or TRS, an outside clock); MIDI IN, CH1-6 (channels 1–6 play tracks 1–6) or
+        SEL (every channel plays the selected track); MIDI LEARN and LEARN CLEAR; T1–T6 CHANNEL. CLOCK, MIDI IN and TUNE are the
+        unit's: loading a project never changes them.</p>
+    </li>
+    <li class="step" id="midi-editor/play-in">
+      <h3>Play from a keyboard</h3>
+      <p>MIDI comes in over USB, where the FM-1 is a class-compliant MIDI device (no driver), or at its TRS MIDI input. With MIDI IN on
+        CH1-6, channels 1–6 play tracks 1–6, with their velocity: here a keyboard on channel 5 plays track 5's piano over the beat
+        (<kbd>ALGORITHM</kbd> to track 5 lights its notes on the keys). A track armed with <kbd>REC</kbd> records them as it does the
+        keys (<a href="#recording/rec">chapter 7</a>). A track's own keys play out on its channel too.</p>
+    </li>
+    <li class="step" id="midi-editor/channel">
+      <h3>A channel of its own</h3>
+      <p>The MENU again, at the row left; <kbd>PRESETS</kbd> down to T4 CHANNEL and <kbd>KNOB 1</kbd> to CH 10, the channel drum pads
+        usually send on. Track 4 now hears channel 10 (and its keys play out on it), and a fill sent there plays the kit, its sounds on
+        the General MIDI drum notes (36 kick, 38 snare, 42 closed hat …). MIDI IN says TRACK once a track has moved. Two tracks on one
+        channel: the first of them plays it; a channel no track is on is left for other instruments.</p>
+    </li>
+    <li class="step" id="midi-editor/learn">
+      <h3>MIDI LEARN</h3>
+      <p><kbd>PRESETS</kbd> up to MIDI LEARN, and <kbd>OCT+</kbd>: MIDI LEARN ON, the MENU closes and the footer says LEARN: TURN A
+        KNOB. Turn the knob you want on a controller, on HOME, a sound's page, the MIXER or the GLO layer's levels: here track 1's
+        <kbd>KNOB 1</kbd>, and the footer says T1 CUTOFF: SEND A CC. Move the controller's knob: CC21 -> T1 CUTOFF, learned. Turn the
+        next knob for another; <kbd>OCT−</kbd> clears the picked one's CC.</p>
+    </li>
+    <li class="step" id="midi-editor/follow">
+      <h3>It follows</h3>
+      <p><kbd>OCT+</kbd>: LEARN DONE. From now on CC 21 sets track 1's CUTOFF, as the knob does, the card following: the bass opens and
+        closes. Up to 10 CCs, on any channel MIDI IN hears; a learned CC is yours, no longer the standard one's. CC 1, 6, 11, 32, 38, 64,
+        96–101 and 120–127 are never learned. What's learned is kept with the settings.</p>
+    </li>
+    <li class="step" id="midi-editor/standard">
+      <h3>Standard CCs</h3>
+      <p>Without learning anything, each track answers the standard CCs on its channel: CC 7 LEVEL, CC 10 PAN, CC 5 GLIDE, CC 73
+        ATTACK, CC 75 DECAY, CC 72 RELEASE, CC 74 the engine's brightness (ANALOG's CUTOFF …), CC 71 its resonance, CC 91 REVERB, CC 93
+        CHORUS and CC 94 DELAY; CC 1 (the mod wheel) and CC 11 (expression) are MOD sources (<a href="#modulation/mod">chapter 9</a>), and
+        CC 64 is sustain. <kbd>GLO</kbd>, the MIXER: CC 7 on channel 2 takes track 2's fader down and back. Into an armed track, they're
+        recorded as automation.</p>
+    </li>
+    <li class="step" id="midi-editor/program">
+      <h3>Program Change</h3>
+      <p><kbd>HOME</kbd>. A Program Change on a track's channel loads its engine's sound of that number, counted from 0: 0 on channel
+        2, and track 2, on FM6, plays TINE EP, FM6's first.</p>
+    </li>
+    <li class="step" id="midi-editor/clear">
+      <h3>Learn clear</h3>
+      <p>The MENU again, at MIDI LEARN's row; <kbd>PRESETS</kbd> down to LEARN CLEAR: 1 CC. <kbd>OCT+</kbd>: LEARN CLEARED, every
+        learned CC forgotten (NOTHING LEARNED when there was none). RESET SETTINGS (<a href="#settings/system">chapter 18</a>) clears
+        them too.</p>
+    </li>
+  </ol>
+  <p class="meta"><b>The web editor.</b> The <a href="../webapp/editor/">Skiff Editor</a> runs in Chrome or Edge and talks to the FM-1
+    over the same USB MIDI: plug the unit in, open the page and connect. It edits the unit live, looks like it and follows its THEME, with
+    PLAY, STOP and REC at the top. Its tabs:</p>
   <ul class="outline">
-    <li>MENU › MIDI: CLOCK (INT, USB, TRS), MIDI IN (a channel per track, or the selected track), T1–T6 CHANNEL.</li>
-    <li>MIDI LEARN: any controller's CC to any knob. The standard CCs each track answers (CC7 level, CC10 pan …) and Program Change.</li>
-    <li>The <a href="../webapp/editor/">web editor</a> (Chrome or Edge, over USB): sounds, patterns, the library, <code>.syx</code> import, backups.</li>
+    <li><b>Sound</b>: every parameter of the selected track. <b>6-OP FM</b>: an FM6 track's whole patch, six operators
+      (<a href="#fm6-lab">chapter 11</a>), with <code>.syx</code> SysEx files imported and exported.</li>
+    <li><b>Sequencer</b>, <b>Song</b> and <b>Mixer</b>: the steps; each track's list, the scenes and the pattern pool
+      (<a href="#song">chapter 14</a>); the six strips.</li>
+    <li><b>Library</b>: sounds kept on the computer, dragged to and from the unit's 32 user slots.</li>
+    <li><b>Samples</b>: your own samples for USR1–3 (<a href="#engines/sources">chapter 10</a>), from a file or recorded from an input,
+      trimmed on the waveform.</li>
+    <li><b>Projects</b>: the four projects and their names (<a href="#projects">chapter 17</a>), and the complete backup: the music
+      now, projects A–D, the sounds, your samples and the settings in one file on the computer, restored the same way.</li>
+    <li><b>Settings</b>: the MENU's settings (<a href="#settings">chapter 18</a>).</li>
   </ul>
-  <p class="soon-note">Video and step-by-step coming</p>
 </section>
 
 <!-- ================================================================ REFERENCE -->
