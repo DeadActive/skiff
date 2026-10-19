@@ -1004,6 +1004,56 @@ static int test_home_footer(void)
     return check("#3 HOME after SEQ's first page (the tiles, a drum grid): the footer as after any other page", ok);
 }
 
+/* (#22) HOME without its lanes (MENU > LARGE's tall cards; the scope, HOME tapped on HOME): the footer names the track's
+ * engine and sound, as with HINTS OFF, not HOLD [HOME] SHIFT; with the lanes the hint stays */
+static int test_home_names(void)
+{
+    static uint16_t named[240 * 240];
+    uint32_t at = foot_y() * 240u, sz = 240u * foot_h() * sizeof *named, k, ok = 1;
+    for (k = 0; k < 3u; k++) {                          /* LARGE, the scope, the lanes */
+        ui_power_on();
+        ui_prefs = k == 0u ? PREF_LARGE : 0u;
+        if (k == 1u)
+            press(B_HOME);                              /* (on HOME: the scope) */
+        ui_hints_off = 1;
+        ui.force = 1;
+        frame();
+        memcpy(named, host_screen, sizeof named);
+        ui_hints_off = 0;
+        ui.force = 1;
+        frame();
+        ok &= ui.home && ui.home_scope == (k == 1u) && !memcmp(named + at, host_screen + at, sz) == (k < 2u);
+    }
+    ui_prefs = 0;
+    return check("#22 HOME with LARGE or the scope: the footer names the sound (HINTS ON as OFF); the lanes keep the hint",
+                 ok);
+}
+
+/* (a Learn video comment, 2026-10-19) PLAY on CLOCK USB with no clock coming: a second on, WAITING FOR USB CLOCK, then
+ * where CLOCK is; once a start. With the clock's pulses: nothing */
+static int test_clock_wait(void)
+{
+    uint32_t ok;
+    ui_power_on();
+    song.g[G_CLOCK] = 1;
+    press(B_PLAY); events_block(32);
+    frames(800);
+    ok = song.playing && !msg_is("WAITING FOR USB CLOCK");
+    frames(300);
+    ok &= msg_is("WAITING FOR USB CLOCK") && str_eq(ui.msg2, "MENU > MIDI > CLOCK");
+    ui.msg_t = 0; ui.msg2[0] = 0;
+    frames(2000);
+    ok &= !msg_is("WAITING FOR USB CLOCK");             /* (once) */
+    stop_transport(); frame();
+    press(B_PLAY); events_block(32);
+    midi_clock_pulse(fm1_ms);                           /* (the clock comes) */
+    frames(1500);
+    ok &= song.playing && !msg_is("WAITING FOR USB CLOCK");
+    song.g[G_CLOCK] = 0;
+    stop_transport(); frame();
+    return check("PLAY on CLOCK USB with no clock: WAITING FOR USB CLOCK, MENU > MIDI > CLOCK, once; with pulses, quiet", ok);
+}
+
 /* (#10) a drum track's grid at one height on SEQ's pages: STEP drew it from the panel's top (cv_oy 0), CHANCE and PLAY
  * centred (pad lower) */
 static int test_grid_rows(void)
@@ -6974,7 +7024,7 @@ static int test_u4(void)
         "SAVED UNTIL POWER OFF", "RENAMED UNTIL POWER OFF", "ERASED UNTIL POWER OFF", "STORAGE ERROR", "KEYS RECORD LANES",
         "HOLD [GLO]: SHORTCUTS", "HOLD [EDIT]: SHORTCUTS", "SOUND INITIALIZED", "PATTERN 06 CLEARED", "UNDONE: SEQUENCE",
         "SESSION NOT RESTORED", "IT STOPPED BEFORE", "HOLD [SAVE]: UNDO", "PICK WITH A KNOB FIRST", "ONE LAYER AT A TIME",
-        "TAP 2 MORE", "SETTINGS RESET"};
+        "TAP 2 MORE", "SETTINGS RESET", "WAITING FOR USB CLOCK", "WAITING FOR TRS CLOCK", "MENU > MIDI > CLOCK"};
     int bad = 0, ok = 1;
     uint32_t i;
     const char *u;
@@ -7486,15 +7536,17 @@ static int test_large(void)
     press(B_HOME);
     bad += check("#15 MENU > LARGE: OFF by default, under COLOR; KNOB 1 right / OCT+ ON, left / OCT- OFF", ok && !ui.menu);
 
-    /* HOME: tall cards (rows 28..132) and the strip (136..198); the footer as it was */
+    /* HOME: tall cards (rows 28..132) and the strip (136..198); (#22) no lanes, so the footer names the sound, not the hint */
     frame();
     ok = ui.home && large_kind() == LK_TALL && card_h() == LG_CARD_H && graph_y() == LG_Y_GRAPH && strip_kind() == SK_SCOPE;
     ok &= lg_px(30, Y_SEP_END + 1) == T_SURF && off[(Y_SEP_END + 1) * 240 + 30] == swap16(T_BG);     /* a card where the gap was */
     ok &= lg_px(30, LG_Y_GRAPH + 1) == T_SURF;
     for (c = 0; c < 4u; c++)                                      /* each column's K pill, over its knob */
         ok &= lg_px(CARD_X(c) + 8, Y_LABEL + LG_MY + LG_MH / 2) == T_KEY;
-    ok &= !memcmp(off + foot_y() * 240, host_screen + foot_y() * 240, 240u * foot_h() * sizeof *off);
-    bad += check("#15 LARGE ON: HOME's cards tall (a K1..K4 pill over each column), the scope a strip, the footer kept", ok);
+    ok &= memcmp(off + foot_y() * 240, host_screen + foot_y() * 240, 240u * foot_h() * sizeof *off) != 0;   /* (its
+                                                                   * pixels as HINTS OFF's: test_home_names) */
+    bad += check("#15 LARGE ON: HOME's cards tall (a K1..K4 pill over each column), the scope a strip, the footer the sound's",
+                 ok);
 
     /* the value in L: GLOBAL's BPM 124 stands about twice as tall as in M */
     go_title("GLOBAL"); frame();
@@ -8249,6 +8301,8 @@ int main(void)
     bad += test_tracks();
     bad += test_grid();
     bad += test_home_footer();
+    bad += test_home_names();
+    bad += test_clock_wait();
     bad += test_grid_rows();
     bad += test_mixer_no_flash();
     bad += test_screen();

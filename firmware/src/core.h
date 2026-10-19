@@ -433,6 +433,8 @@ typedef struct track {
     uint8_t ins_run;             /* (Skiff 1.3) the INSERT runs (fx.c track_insert): on, or fading */
     uint8_t lfo_wrap;            /* (Skiff 1.3) the LFO's phase wrapped this block: its S&H is drawn after the tracks
                                   * (voice.c track_lfo_end; in the pad before armp: track_t keeps its size) */
+    uint8_t hits;                /* (Skiff Q6) its note-ons, counted (voice.c trk_note_on): QUARK's event display
+                                  * (ui_graph.c qk_detector; the pad's last byte) */
     int16_t armp, aholdp;        /* P_AMODE / P_AHOLD as last seen by the ISR */
     /* engine switch (voice.c engine_block): the old engine's voices fade out, then it switches */
     uint8_t xf_on, xf;           /* fading; blocks of the fade still to render */

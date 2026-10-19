@@ -75,21 +75,32 @@ static void qk_nucleus(int32_t x, int32_t y, uint16_t c, int32_t r)
     cv_rect(x + r * 7 / 10, y - r * 3 / 10, 2, 2, T_ACCENT);
 }
 
+/* a dotted ring round (cx, cy), radius r, n dots */
+static void qk_dotring(int32_t cx, int32_t cy, int32_t r, uint32_t n, uint16_t c)
+{
+    uint32_t k;
+    for (k = 0; k < n; k++) {
+        uint32_t ph = k * (0xFFFFFFFFu / n);
+        cv_rect(cx + r * QK_COS(ph) / 32767, cy + r * QK_SIN(ph) / 32767, 1, 1, c);
+    }
+}
+
 /* a charged particle's track from (x, y), heading `dir` (a turn 2^32), curling one way (curl +-1) ever tighter as it
- * slows, `len` px; its colour fading into `under` */
-static void qk_track(int32_t x, int32_t y, uint32_t dir, int32_t r, int32_t len, int32_t curl, uint16_t c, uint16_t under,
-                     int bubbles)
+ * slows, `len` px, its first n drawn ((Skiff Q6) n < len: still flying out); its colour fading into `under`;
+ * -> where it has got to, x << 16 | y */
+static uint32_t qk_track(int32_t x, int32_t y, uint32_t dir, int32_t r, int32_t len, int32_t curl, uint16_t c,
+                         uint16_t under, int32_t n)
 {
     int32_t dx = QK_COS(dir) / 8, dy = QK_SIN(dir) / 8, fx = x << 12, fy = y << 12, k;   /* (Q12) */
-    for (k = 0; k < len; k++) {
+    for (k = 0; k < n; k++) {
         int32_t rr = r - r * 6 * k / (10 * len), t = 4096 / (rr > 4 ? rr : 4) * curl, ndx = dx - dy * t / 4096;
         dy += dx * t / 4096;
         dx = ndx;
         fx += dx;
         fy += dy;
-        if (!bubbles || !(k & 1))
-            cv_rect(fx >> 12, fy >> 12, 1, 1, ux_mix(c, under, 65 * k / len));
+        cv_rect(fx >> 12, fy >> 12, 1, 1, ux_mix(c, under, 65 * k / len));
     }
+    return (uint32_t)(fx >> 12) << 16 | ((uint32_t)(fy >> 12) & 0xFFFFu);
 }
 
 /* a collision at (x, y): n tracks out of it, each its colour charge, curling its own way (seed: which way) */
@@ -97,9 +108,11 @@ static void qk_burst(int32_t x, int32_t y, uint32_t n, uint32_t seed, int32_t le
 {
     uint32_t k;
     for (k = 0; k < n; k++) {
+        int32_t l;
         seed = seed * 1103515245u + 12345u;
-        qk_track(x, y, k * (0xFFFFFFFFu / n) + (seed >> 6 & 0x0FFFFFFFu), 10 + (int32_t)(seed >> 26) % 30,
-                 len / 2 + (int32_t)(seed >> 20) % (len / 2 + 1), (seed >> 16) & 1u ? 1 : -1, T_TRK(k), under, 0);
+        l = len / 2 + (int32_t)(seed >> 20) % (len / 2 + 1);
+        qk_track(x, y, k * (0xFFFFFFFFu / n) + (seed >> 6 & 0x0FFFFFFFu), 10 + (int32_t)(seed >> 26) % 30, l,
+                 (seed >> 16) & 1u ? 1 : -1, T_TRK(k), under, l);
     }
     qk_disc(x, y, 1, T_TEXT);
 }

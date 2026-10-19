@@ -428,6 +428,7 @@ static void trk_note_on(track_t *t, uint32_t note, uint32_t vel)
         return;
     }
     duck_note(t, note);                                 /* (Skiff) a hit another track may duck under */
+    t->hits++;                                          /* ((Skiff Q6) QUARK's event display) */
     vel = mod_note(t, note, vel);                       /* the matrix's VEL / KEY / RAND ((1.3) VEL as a destination) */
     for (i = 0; i < NVOICE; i++)
         any |= t->v[i].gate;

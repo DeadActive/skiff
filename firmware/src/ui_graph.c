@@ -2141,6 +2141,77 @@ static void draw_tracks(void)
         cv_blit(0, graph_y() + graph_h() + 1u);
     }
 }
+/* (Skiff Q6) QUARK: the scope as the 1.2 tour video's event display, live: each note a track plays is a collision at
+ * the vertex, three particles flying out of it in the track's colour and curling in the field (two events a track at a
+ * time; ANIM OFF: they appear whole), then fading; round the beam pipe's rings the calorimeter, eight towers a track,
+ * as loud as it is (muted: dark); the vertex gold, brighter just after a hit */
+static struct {
+    uint32_t t0[NTRK][2], seed[NTRK][2], last;      /* each event's fm1_ms and shape (0: none); the last draw's fm1_ms */
+    int16_t lv[NTRK];                               /* the towers' levels, 0..1000, falling */
+    uint8_t seen[NTRK], nx[NTRK];                   /* trk.hits as last seen; the event a new hit takes */
+} qkd __attribute__((section(".pool")));            /* (.pool: not among the globals the audio ISR reaches) */
+static void qk_detector(int32_t cx, int32_t cy)
+{
+    int32_t R = cy - 3, k, j, fall;
+    uint32_t now = fm1_ms, newest = 1000u;
+    fall = (int32_t)(now - qkd.last > 500u ? 500u : now - qkd.last) * 2;   /* (towers: all the way down in 0.5 s) */
+    qkd.last = now;
+    qk_disc(cx, cy, R * 58 / 100, ux_mix(T_THEME, T_SURF, 93));   /* (the glow round the beam) */
+    qk_ellipse(cx, cy, R * 19 / 100, R * 19 / 100, 0, ux_mix(T_THEME, T_SURF, 78), 24);
+    qk_dotring(cx, cy, R * 37 / 100, 40, ux_mix(T_THEME, T_SURF, 66));
+    qk_ellipse(cx, cy, R * 58 / 100, R * 58 / 100, 0, ux_mix(T_THEME, T_SURF, 70), 48);
+    qk_dotring(cx, cy, R * 76 / 100, 72, ux_mix(T_THEME, T_SURF, 50));
+    for (k = 0; k < NTRK; k++) {
+        track_t *t = &trk[k];
+        int32_t lv = t->p[P_MUTE] ? 0 : meter_px(t->peak) * 1000 / (TS_MH - 2);
+        t->peak = 0;                                 /* (a max-hold, as the MIXER reads it) */
+        qkd.lv[k] = (int16_t)(lv > qkd.lv[k] - fall ? lv : qkd.lv[k] - fall);
+        if (t->hits != qkd.seen[k]) {                /* struck: a new event, in place of its older one */
+            j = qkd.nx[k];
+            qkd.nx[k] ^= 1u;
+            qkd.seen[k] = t->hits;
+            qkd.t0[k][j] = now;
+            qkd.seed[k][j] = ((uint32_t)t->hits * 2654435761u ^ (uint32_t)k * 0x9E3779B9u) | 1u;
+        }
+    }
+    for (k = 0; k < 48; k++) {                       /* the calorimeter: the six tracks' towers in turn */
+        uint32_t ph = (uint32_t)k * (0xFFFFFFFFu / 48u), r = (uint32_t)k * 2654435761u >> 24;   /* (r: its own reach) */
+        int32_t lv = qkd.lv[k % NTRK], r0 = R * 78 / 100, h = 1 + lv * (R * 22 / 100) * (600 + (int32_t)r * 400 / 255) / 1000000;
+        int32_t co = QK_COS(ph), si = QK_SIN(ph);
+        cv_line_t(cx + r0 * co / 32767, cy + r0 * si / 32767, cx + (r0 + h) * co / 32767, cy + (r0 + h) * si / 32767,
+                  ux_mix(T_TRK(k % NTRK), T_SURF, 65 - lv * 65 / 1000), 2);
+    }
+    for (k = 0; k < NTRK; k++)
+        for (j = 0; j < 2; j++) {
+            uint32_t age = now - qkd.t0[k][j], seed = qkd.seed[k][j], u, i;
+            int32_t g, fade;
+            uint16_t col;
+            if (!seed || age >= 1100u)
+                continue;
+            newest = age < newest ? age : newest;
+            u = age >= 250u ? 0u : 1000u - age * 4u;       /* (flying out over 250 ms, slowing) */
+            g = ui_prefs & PREF_ANIM_OFF ? 1000 : 1000 - (int32_t)(u * u / 1000u);
+            fade = age < 450u ? 0 : (int32_t)(age - 450u) * 100 / 650;
+            col = ux_mix(T_TRK(k), T_SURF, fade);
+            for (i = 0; i < 3u; i++) {               /* three particles, each its own way */
+                uint32_t dir, e;
+                int32_t len, rc, curl, n;
+                seed = seed * 1103515245u + 12345u;
+                dir = seed * 2654435761u;
+                len = R * (34 + (int32_t)(seed >> 16) % 46) / 100;
+                rc = R * (15 + (int32_t)(seed >> 24) % 136) / 100;
+                curl = seed >> 3 & 1u ? 1 : -1;
+                n = len * g / 1000;
+                qk_track(cx + 1, cy, dir, rc, len, curl, ux_mix(col, T_SURF, 60), T_SURF, n);   /* (its glow) */
+                e = qk_track(cx, cy, dir, rc, len, curl, col, T_SURF, n);
+                if (n)
+                    cv_rect((int16_t)(e >> 16), (int16_t)e - 1, 2, 2, col);   /* (the particle) */
+            }
+        }
+    qk_disc(cx, cy, newest < 150u ? 4 : 3, ux_mix(T_ACCENT, T_SURF, 60));
+    qk_disc(cx, cy, newest < 150u ? 3 : 2, T_ACCENT);
+}
+
 /* oscilloscope of the output, triggered on a rising zero crossing: a RAISE centre line, the trace 2 px (in silence
  * a flat line on it; MENU > SCREEN OFF keeps it from staying on the panel for hours) */
 static void graph_scope(uint16_t c)
@@ -2148,6 +2219,10 @@ static void graph_scope(uint16_t c)
     static int16_t snap[SCOPE_N];
     uint32_t w = scope_w, i, trig = 0;
     int32_t cy = (int32_t)cv_h / 2, py = cy, x, peak = 1500, a = cv_h >= H_GRAPH ? 46 : cy - 6;   /* (LARGE: the strip) */
+    if (ux.quark && cv_h >= H_GRAPH) {
+        qk_detector(120, cy);
+        return;
+    }
     for (i = 0; i < SCOPE_N; i++) {
         snap[i] = scope_buf[(w + i) & (SCOPE_N - 1u)];
         if (snap[i] > peak)
@@ -2177,33 +2252,6 @@ static void graph_scope(uint16_t c)
                 cv_rect(PANEL_X0 + x, y0, 2, y1 - y0, k == 0 ? CR_EMBER : k == 1 ? T_THEME : k == 2 ? CR_GOLD : CR_FLAME);
             }
         }
-        return;
-    }
-    if (ux.quark && cv_h >= H_GRAPH) {               /* (Skiff Q5) QUARK: the sound as an event: the wave wrapped round the
-                                                      * detector (its radius the sound), the calorimeter's towers outside
-                                                      * it as loud as it is there, a collision at its heart */
-        int32_t cx = 120, cc = (int32_t)cv_h / 2, k, qx0 = 0, qy0 = 0;
-        qk_ellipse(cx, cc, 22, 22, 0, T_LINE, 48);
-        qk_ellipse(cx, cc, 36, 36, 0, T_LINE, 64);
-        qk_ellipse(cx, cc, 50, 50, 0, T_DIM, 72);
-        for (k = 0; k <= 96; k++) {
-            uint32_t ph = (uint32_t)k * (0xFFFFFFFFu / 96u) - 0x40000000u;   /* (from the top, clockwise) */
-            int32_t s = snap[trig + (uint32_t)(k % 96) * 2u], r = 36 + s * 12 / peak;
-            int32_t qx = cx + r * QK_COS(ph) / 32767, qy = cc + r * QK_SIN(ph) / 32767;
-            if (k)
-                cv_line_t(qx0, qy0, qx, qy, c, 2);
-            qx0 = qx;
-            qy0 = qy;
-            if (k % 4 == 0 && k < 96) {
-                int32_t e = (s < 0 ? -s : s) * 6 / peak, j;
-                for (j = 0; j <= e; j++) {
-                    int32_t rr = 54 + j * 3;
-                    cv_rect(cx + rr * QK_COS(ph) / 32767, cc + rr * QK_SIN(ph) / 32767, 2, 1,
-                            ux_mix(T_ACCENT, T_REC, j * 100 / 7));
-                }
-            }
-        }
-        qk_burst(cx, cc, 6, ui.frame / 8u * 2654435761u + 1u, 16, T_SURF);
         return;
     }
     if (ux.neon && cv_h >= H_GRAPH) {                /* (Skiff N8) NEON: the sound as the skyline: the wave a ridge of

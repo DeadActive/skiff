@@ -14,7 +14,11 @@ synths and drums, patterns and songs, live performance, and a screen that shows 
   <img src="https://img.shields.io/badge/hardware-M--VAVE%20FM--1-555" alt="Hardware: M-VAVE FM-1">
 </p>
 
-<p align="center"><b>New in 1.3.2:</b> a stereo HALL reverb, <a href="https://illuminus5.github.io/skiff/try/">Skiff in
+<p align="center"><b>New in 1.3.3:</b> QUARK's scope as the tour video's event display, live from all six tracks, and
+fixes from your comments: HOME names the sound in LARGE too, PLAY says when it waits for an external clock, the
+installer says what it found ·
+<a href="https://github.com/illuminus5/skiff/releases/tag/v1.3.3">the release notes</a><br>
+<b>New in 1.3.2:</b> a stereo HALL reverb, <a href="https://illuminus5.github.io/skiff/try/">Skiff in
 your browser</a>, update mode on the screen and a finer vibrato ·
 <a href="https://github.com/illuminus5/skiff/releases/tag/v1.3.2">the release notes</a><br>
 <b>New in 1.3:</b> the FM-1's second core (BETA: 12 voices), MIDI LEARN and a channel per track,
@@ -51,12 +55,12 @@ Custom firmware, at your own risk; the way back to the official firmware is belo
 connect the FM-1 by USB and follow it. The same page takes the FM-1 back to the official V15 firmware, saving a
 complete backup of your music first.
 
-**With Python 3:** download `skiff-1.3.2.fwsc` from the [latest release](https://github.com/illuminus5/skiff/releases/latest)
+**With Python 3:** download `skiff-1.3.3.fwsc` from the [latest release](https://github.com/illuminus5/skiff/releases/latest)
 and, with this repository's `tools/` folder,
 
 ```
 pip install mido python-rtmidi
-python tools/fm1_install.py skiff-1.3.2.fwsc
+python tools/fm1_install.py skiff-1.3.3.fwsc
 ```
 
 It takes about two minutes and the FM-1 restarts on Skiff.
@@ -265,7 +269,8 @@ FM6 patches from `.syx` files and saves complete backups.
 - **Sequencer:** 64 steps a track with chords, ties, accent, slide, velocity, per-step chance and trig
   conditions (1:2, 3:4 ..), ratchets and **FLAM**, **NUDGE** (a step early or late, in 64ths), a step's own
   GATE, play direction (FWD, RVRS, PING, RAND); SEQ › STEP as 16 tiles, the piano roll (ROLL), a drum grid
-  (white keys steps, black keys lanes); live loop recording with overdub, **FEEL** (recording keeps where you
+  (white keys steps, black keys lanes; a step's chance, ratchet and condition cover every hit on it); live loop
+  recording with overdub, **FEEL** (recording keeps where you
   played), step recording, count-in and click. While playing, the step pages follow the playhead past step 16
   (1.3); MENU › STEP PREVIEW sounds the step KNOB 1 lands on in the piano roll (1.3); QUANTIZE SEQ+T transposes the
   sequencer's notes by TRANSP before it snaps them to the scale (1.3)
@@ -575,9 +580,10 @@ and control behaves, rule by rule: [DESIGN.md](DESIGN.md). The editor's protocol
 **The screen says UPDATE MODE, or stays black while a computer sees a USB MIDI device named "Felucca
 Update":** an install was cut off, and the FM-1 waits in Skiff's update loader at every power-on. Nothing is
 lost. Connect it by USB and run the [Skiff installer](https://illuminus5.github.io/skiff/webapp/installer/) again
-(or `python tools/fm1_install.py skiff-1.3.2.fwsc`): it finishes the install. M-VAVE's own updater does not see
-the FM-1 in this state. (Since 1.3.2 the loader says UPDATE MODE on the screen; one an older Skiff left there
-keeps it black.)
+(or `python tools/fm1_install.py skiff-1.3.3.fwsc`): it finishes the install. If the installer can't find it, plug
+the FM-1 straight into the computer: a USB hub or USB-sharing software can lose it when it switches to update mode.
+M-VAVE's own updater does not see the FM-1 in this state. (Since 1.3.2 the loader says UPDATE MODE on the screen;
+one an older Skiff left there keeps it black.)
 
 **A computer sees a USB device named WL80UBOOT** (or a USB mass-storage device with ID 4C4A:8057): that is the
 chip's built-in boot mode, and the FM-1 can be brought back:

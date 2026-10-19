@@ -11,6 +11,9 @@ screens 2x, nearest), skiff-hub-2x.png.
 
   RENDERS=~/skiff-fm6-ui/build/ui_new/ppm python3 hub_card.py   -> design/mockups/hub_card_{a,b,c}.png, hub_cards.png;
                                                                    docs/logo/skiff-hub.png, skiff-hub-2x.png
+The hub shows pictures square, so the 2:1 card came out cropped and squeezed; (2026-10-18) the user's pick for a square
+one, E (the icon and the word over HOME and the FM6 page):
+  RENDERS=... python3 hub_card.py square   -> docs/logo/skiff-hub-square.png (480), skiff-hub-square-2x.png (960)
 """
 import os
 import sys
@@ -109,7 +112,28 @@ def card_c(z):
     return im
 
 
+def card_square(z):
+    """(2026-10-18, the user's pick E) square, as the hub shows a picture (img/<id>.png: its lineup crops to 1:1, its list
+    is a 60 px box; the 2:1 card came out cropped and squeezed): the icon and the word over HOME and the FM6 page, 480 x
+    480 at z 1 (the screens 0.9x: drawn at z 2 and scaled down, so z 1 is z 2 resized)"""
+    im = Image.new("RGBA", (480 * z, 480 * z), (*NIGHT, 255))
+    icon(im, 20, 20, 176, z)
+    word(im, 214, 40, 6, z)
+    text(im, (216, 128), "six-track groovebox", 27, MID, z)
+    text(im, (216, 160), "for the M-VAVE FM-1", 27, MID, z)
+    for x, n in ((16, "SKIFF_six_home"), (248, "NEON_fm_op_tone")):
+        im.paste(screen(n, 2).resize((216 * z, 216 * z), Image.LANCZOS), (x * z, 248 * z))
+        ImageDraw.Draw(im).rectangle([x * z - 1, 248 * z - 1, (x + 216) * z, (248 + 216) * z], outline=(40, 40, 40))
+    return im
+
+
 def main():
+    if "square" in sys.argv[1:]:                         # hub_card.py square: only the square picture
+        big = card_square(2).convert("RGB")
+        big.save(HERE.parent / "docs" / "logo" / "skiff-hub-square-2x.png", optimize=True)
+        big.resize((480, 480), Image.LANCZOS).save(HERE.parent / "docs" / "logo" / "skiff-hub-square.png", optimize=True)
+        print("skiff-hub-square.png, skiff-hub-square-2x.png")
+        return
     out = HERE / "mockups"
     for k, fn in (("a", card_a), ("b", card_b), ("c", card_c)):
         fn(1).convert("RGB").save(out / f"hub_card_{k}.png", optimize=True)

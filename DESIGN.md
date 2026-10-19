@@ -432,8 +432,10 @@ collisions, dark matter, the hazard sign, the polar scope; `ui_quark.c`, its cir
   its sine's end), FLANGER's and PHASER's response and REVERB's tail (its reflections towers, DAMP's share sparse);
   CHORUS's copy ends in the electron, its FEEDBACK copy dotted; GLOBAL, FX's sends, LANES, WHEEL and SLICER calorimeter towers;
   the roll's notes bubble tracks from their vertex (its cursor in gold corners); the drum grid's hits and PATTERN's steps
-  bunches. The scope (HOME tapped on HOME): the sound as an event, the wave wrapped round the detector, the
-  calorimeter's towers outside it as loud as it is there, a collision at its heart.
+  bunches. The scope (HOME tapped on HOME; 1.3.3, Q6): the 1.2 tour video's event display, live: each note a track
+  plays a collision at the vertex, three particles flying out in the track's colour and curling in the field, then
+  fading; round the beam pipe's rings the calorimeter, eight towers a track, as loud as the track is; the vertex gold,
+  brighter just after a hit. (It replaced Q5's wave wrapped round the detector.)
 
 **The web editor looks like the unit** (1.0; `design/editor_looks.png` A BLOCKS, the user's pick over a softer app
 look): the night, each section a tile, white values, Barlow Condensed for headings, labels and values, each track its

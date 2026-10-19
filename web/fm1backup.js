@@ -166,7 +166,7 @@ export class BackupConnection {
   async request([cmd, args], opt = {}) {
     if (this.pending || this.closed || this.input.state === "disconnected" || this.output.state === "disconnected") throw new Error("Backup connection closed or busy");
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { this.pending = null; reject(new Error("Backup timed out. Keep the FM-1 connected and stopped.")); }, opt.timeout || 1200);
+      const timer = setTimeout(() => { this.pending = null; reject(Object.assign(new Error("Backup timed out. Keep the FM-1 connected and stopped."), { code: "timeout" })); }, opt.timeout || 1200);
       this.pending = { cmd, timer, resolve, reject };
       try { this.output.send([240, 125, 70, 76, cmd, ...args, 247]); }
       catch (e) { clearTimeout(timer); this.pending = null; reject(e); }

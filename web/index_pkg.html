@@ -50,6 +50,7 @@
   <p id="status"></p>
   <pre id="log"></pre>
   <p><a href="../editor/" style="color:inherit" data-t="editor"></a></p>
+  <p><a href="../../learn/" style="color:inherit" data-t="learn"></a></p>
   <p class="small">Skiff by illuminus5, built on Felucca by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener" style="color:inherit">Hügelton Instruments</a>, with its CrispyZebra waveforms, drum voices, Sample Pack and Fukiai icons (MIT).<br>
     Font: Barlow Condensed (The Barlow Project Authors, SIL OFL 1.1). DRUM-X: JIANT FM by juanjiant-bit (GPL-3.0). Samples: Versilian Studios VSCO-2 Community Edition and VCSL (CC0 1.0).<br>
     FM6 engine: msfa from Dexed (Google Inc., Pascal Gauthier, Apache-2.0). The package also holds three JieLi AC79 SDK files, uboot.boot, cfg_tool.bin and eq_cfg_hw.bin (JieLi Technology, Apache-2.0). <a href="../../firmware/LICENSING.md" style="color:inherit">Licences</a>: <a href="../../firmware/LICENSE" style="color:inherit">GPL-3.0</a>, <a href="../../firmware/LICENSES/Apache-2.0.txt" style="color:inherit">Apache-2.0</a>, <a href="../../firmware/LICENSES/" style="color:inherit">all</a>.<br>
@@ -65,6 +66,7 @@ const TEXT = {
     warn: "書き込み中は USB を抜かないでください。",
     install: "インストール", other: "English",
     editor: "エディタ（インストール後、パソコンから音色やシーケンスを編集）",
+    learn: "Learn Skiff（使い方ガイド。章ごとに解説動画つき・英語のみ）",
     direct: "USB ケーブルはパソコンに直接つないでください。Probe や Transporter などの機材は不要です。",
     brick: "万一インストールに失敗して起動しなくなった場合は、復旧に Transporter が必要です:",
     beta: "Skiff はカスタムファームウェアです。不具合は GitHub で知らせてください。このカスタムファームウェアを使ったことで FM-1 が壊れたり不具合が起きたりしても、作者は一切の責任を負いません。自己責任でお使いください。",
@@ -74,7 +76,9 @@ const TEXT = {
     stockRecovery: "更新中断の再開：全体バックアップはすでにパソコンへ保存済み",
     stockValid: "公式V15を確認しました", stockConfirm: "全体バックアップファイルをパソコンに保存できましたか？ 続けると公式V15へ戻します。Skiff の曲は公式V15では開けません。",
     stockNeedBackup: "書き込みモードからはバックアップできません。保存済みバックアップがある場合だけ、更新中断の再開にチェックしてください。",
-    stockUnsupported: "この Skiff は全体バックアップに未対応です。先に最新版をインストールしてください。",
+    stockUnsupported: "このファームウェアは Skiff の全体バックアップを作れません。古い Skiff なら先に最新版をインストールしてください。他のファームウェアから V15 へ戻すには M-VAVE のアップデーターを使ってください。",
+    stockIsV15: "この FM-1 はすでに公式 V15 です。",
+    stockNotSkiff: "この FM-1 は Skiff ではないため、バックアップする Skiff の曲はありません。他のファームウェアから V15 へ戻すには M-VAVE のアップデーターを使ってください。FM-1 の報告: ",
     backup: "全体バックアップ保存中 ", stockError: "公式ファイルを確認できません: ",
     nomidi: "このブラウザでは使えません。Chrome か Edge で開いてください。", loadfail: "読み込めませんでした: ",
     start: "開始します", verify: "確認中", loader: "書き込みモードに切り替え中", write: "書き込み中",
@@ -84,7 +88,7 @@ const TEXT = {
     notfound: "FM-1 が見つかりません。USB ケーブル（データ通信用か）を確かめ、MIDI を使う他のアプリを閉じてから、もう一度押してください。",
     model: "接続されている機器は FM-1 ではありません。",
     lost: "USB の接続が切れました。挿し直してもう一度押してください。",
-    noloader: "書き込みモードの FM-1 が見つかりません。USB を挿し直してもう一度押してください（終わるまで書き込みモードのままです）。",
+    noloader: "書き込みモードの FM-1 が見つかりません。USB をハブや USB 共有ソフトを通さずパソコンに直接挿し直して、もう一度押してください（終わるまで書き込みモードのままです）。",
     noreturn: "FM-1 が戻ってきません。電源を入れ直してください。",
     mismatch: "書き込みは終わりましたが、FM-1 が別のバージョンを報告しています: ",
     badpkg: "インストールするファイルが壊れています。ページを再読み込みしてください。",
@@ -96,6 +100,7 @@ const TEXT = {
     warn: "Do not unplug the USB cable while writing.",
     install: "Install", other: "日本語",
     editor: "Editor (after installing: edit sounds and sequences from the computer)",
+    learn: "Learn Skiff (the manual, with a video for every chapter)",
     direct: "Connect the USB cable directly to the computer. No probe or Transporter is needed.",
     brick: "If an install fails and the FM-1 no longer starts, recovering it needs a Transporter:",
     beta: "Skiff is custom firmware; please report problems on GitHub. The author accepts no responsibility if your FM-1 is damaged or misbehaves because of this custom firmware. Use it at your own risk.",
@@ -105,7 +110,9 @@ const TEXT = {
     stockRecovery: "Resume an interrupted update: I already saved a complete backup to this computer",
     stockValid: "Official V15 verified", stockConfirm: "Has the complete backup file been saved to this computer? Continue to return to official V15. Official V15 cannot open Skiff music.",
     stockNeedBackup: "An update loader cannot export a backup. Only select resume if you already saved a complete backup.",
-    stockUnsupported: "This Skiff does not support complete backups. Install the current Skiff first.",
+    stockUnsupported: "This firmware cannot make a complete Skiff backup. An older Skiff: install the current Skiff first. Another firmware: return to V15 with M-VAVE's updater.",
+    stockIsV15: "This FM-1 already runs official V15.",
+    stockNotSkiff: "This FM-1 is not running Skiff, so there is no Skiff music to back up. To return to V15 from another firmware, use M-VAVE's updater. The FM-1 reports: ",
     backup: "Saving complete backup ", stockError: "Cannot validate official firmware: ",
     nomidi: "This browser cannot do it. Open the page in Chrome or Edge.", loadfail: "Could not load: ",
     start: "Starting", verify: "Verifying", loader: "Switching to update mode", write: "Writing",
@@ -115,7 +122,7 @@ const TEXT = {
     notfound: "FM-1 not found. Check the USB cable (a data cable), close other apps that use MIDI, and press Install again.",
     model: "The connected device is not an FM-1.",
     lost: "The USB connection was lost. Replug it and press Install again.",
-    noloader: "The FM-1 in update mode was not found. Replug the USB cable and press Install again (it stays in update mode until it is finished).",
+    noloader: "The FM-1 in update mode was not found. Replug the USB cable straight into the computer (not through a hub or USB-sharing software) and press Install again (it stays in update mode until it is finished).",
     noreturn: "The FM-1 did not come back. Power-cycle it.",
     mismatch: "Written, but the FM-1 reports another version: ",
     badpkg: "The file to install is damaged. Reload the page.",
@@ -234,8 +241,12 @@ $("stock-go").addEventListener("click", async () => {
       const device = await up.find(id => id.model === "FM-1");
       if (!device) { sayK("notfound"); return; }
       const input = device.link.input, output = device.link.output; device.link.close();
+      if (device.id.text === "FM-1_015") { sayK("stockIsV15"); return; }   // (#23: it is official V15 already)
       link = new BackupConnection(input, output);
-      const info = archiveInfo(await link.request([1,[]]));
+      let reply;   // every Skiff answers INFO: no answer, no Skiff (#23 read "Backup timed out")
+      try { reply = await link.request([1,[]]); }
+      catch (e) { if (e.code !== "timeout") throw e; sayK("stockNotSkiff", device.id.text); return; }
+      const info = archiveInfo(reply);
       if (!info.supported) { sayK("stockUnsupported"); return; }
       const archive = await captureBackup((r,o) => link.request(r,o), info.version,
         (done,total) => sayK("backup", `${Math.round(done / Math.max(1,total) * 100)}%`));

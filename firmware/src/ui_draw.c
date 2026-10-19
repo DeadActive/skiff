@@ -579,6 +579,9 @@ static int32_t foot_hint_r(const char *ti)
 {
     return 232 - text_w(&AF_S, ti) - (ui.home || page_icon(cur_page()) == ICON_NONE ? 0 : 16) - 12;
 }
+/* (#22) HOME shows its lanes, which name every track's sound (ui_home.c); MENU > LARGE's tall cards and the scope (HOME
+ * tapped on HOME) have none, so there the footer names the sound instead of HOLD [HOME] SHIFT (both force a redraw) */
+static int home_lanes(void) { return ui.home && !ui.home_scope && large_kind() != LK_TALL; }
 static void draw_foot(void)
 {
     char s[48], pn[16], ti[20];
@@ -696,9 +699,9 @@ static void draw_foot(void)
         ex = 8 + 16 + 5 + (ew < 80 ? ew : 80);        /* (where the engine's name ends) */
         tx = r - text_w(&AF_S, ti) - (pi != ICON_NONE ? 16 : 0);
         (void)need;
-        if (ui.home && !ui_hints_off)                  /* Skiff BLOCKS on HOME: the lanes name the sounds; the hint */
+        if (home_lanes() && !ui_hints_off)             /* Skiff BLOCKS on HOME: the lanes name the sounds; the hint */
             cv_free_hint(8, ly, "HOLD [HOME] SHIFT", T_MID, T_BG, 160);
-        if ((ui.home && !ui_hints_off) || hints) {     /* (an action page's or a grid's hints: the title) */
+        if ((home_lanes() && !ui_hints_off) || hints) {   /* (an action page's or a grid's hints: the title) */
             if (pi != ICON_NONE) {
                 GFX_HOOK_ALIGN(0, ly + AF_S_CAP_Y, 0, ly + AF_S_CAP_Y + AF_S_CAP_H, AL_V, "footer icons on the names' line");
                 cv_icon_in(tx, ly + AF_S_CAP_Y, 0, AF_S_CAP_H, 12, pi, T_MID, T_BG);

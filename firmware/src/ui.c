@@ -548,6 +548,21 @@ static void unit_g_poll(void)
         settings_save();
     }
 }
+/* every frame: PLAY with CLOCK USB or TRS follows that clock's pulses (seq.c events_block, midi_clock.c), so with none
+ * a second after the start the music stands still: say so, once a start, and where CLOCK is. (A comment on the Learn
+ * videos, 2026-10-19: PLAY and REC did nothing after the install till RESET SETTINGS; Skiff's first boot takes CLOCK
+ * from the session it restores, unit_g_boot) */
+static void ui_way(const char *s, const char *way);
+static void clock_wait_poll(void)
+{
+    static uint8_t said;
+    if (!song.playing || !song.g[G_CLOCK] || midi_clock.have_pulse)
+        said = 0;
+    else if (!said && fm1_ms - midi_clock.start_ms >= 1000u) {
+        said = 1;
+        ui_way(song.g[G_CLOCK] == 1 ? "WAITING FOR USB CLOCK" : "WAITING FOR TRS CLOCK", "MENU > MIDI > CLOCK");
+    }
+}
 /* after the session came back (main.c, autosave_boot): the unit's into song.g; the first boot the other way */
 static void unit_g_boot(void)
 {
