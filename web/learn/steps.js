@@ -1,6 +1,6 @@
 // Learn Skiff: each step's time in its chapter's video and the controls it uses, the chapters' video lengths. Written by
 // the video project's export (learn.mjs) from the firmware captures; edit the page's prose, not this file.
-const LEARN = {"chapters": {"first-beat":{"dur":146.5,"poster":true},"find-your-way":{"dur":126.87,"poster":true},"sounds":{"dur":132.83,"poster":true},"keys":{"dur":123.9,"poster":true},"steps":{"dur":140,"poster":true},"recording":{"dur":118,"poster":true},"modulation":{"dur":129.9,"poster":true},"variation":{"dur":158.2,"poster":true},"engines":{"dur":139,"poster":true},"fm6-lab":{"dur":200.5,"poster":true},"track-fx":{"dur":125.5,"poster":true},"mixer":{"dur":145.8,"poster":true},"song":{"dur":134,"poster":true},"perform":{"dur":108,"poster":true},"fx-layer":{"dur":134.5,"poster":true},"projects":{"dur":84.5,"poster":true},"settings":{"dur":123.5,"poster":true},"midi-editor":{"dur":105.2,"poster":true},"install":{"dur":131,"poster":true}}, "steps": {
+const LEARN = {"chapters": {"first-beat":{"dur":146.5,"poster":true},"find-your-way":{"dur":126.87,"poster":true},"sounds":{"dur":132.83,"poster":true},"keys":{"dur":123.9,"poster":true},"steps":{"dur":140,"poster":true},"recording":{"dur":118,"poster":true},"modulation":{"dur":129.9,"poster":true},"variation":{"dur":158.2,"poster":true},"engines":{"dur":139,"poster":true},"fm6-lab":{"dur":200.5,"poster":true},"track-fx":{"dur":125.5,"poster":true},"mixer":{"dur":145.8,"poster":true},"song":{"dur":134,"poster":true},"perform":{"dur":108,"poster":true},"fx-layer":{"dur":134.5,"poster":true},"projects":{"dur":84.5,"poster":true},"settings":{"dur":123.5,"poster":true},"midi-editor":{"dur":105.2,"poster":true},"install":{"dur":131,"poster":true},"web-editor":{"dur":167.5,"poster":true}}, "steps": {
   "first-beat/new-project": {"t":4,"ctrl":{"KEY4":"press","KEY7":"press","KEY11":"press","KEY14":"press","KEY16":"press"}},
   "first-beat/drum-track": {"t":12.5,"ctrl":{"ALGORITHM":"turn","KEY7":"press","KEY13":"press","KEY9":"press"}},
   "first-beat/grid": {"t":21,"ctrl":{"SEQ":"press","KEY1":"press","KEY3":"press","KEY8":"press"}},
@@ -230,5 +230,19 @@ const LEARN = {"chapters": {"first-beat":{"dur":146.5,"poster":true},"find-your-
   "install/stopped": {"t":81.5,"ctrl":{}},
   "install/stuck": {"t":90,"ctrl":{}},
   "install/stock": {"t":98,"ctrl":{}},
-  "install/python": {"t":107,"ctrl":{}}
+  "install/python": {"t":107,"ctrl":{}},
+  "web-editor/skiff": {"t":4,"ctrl":{"PLAY":"press"}},
+  "web-editor/connect": {"t":13,"ctrl":{}},
+  "web-editor/projects": {"t":23,"ctrl":{}},
+  "web-editor/backup": {"t":35,"ctrl":{}},
+  "web-editor/new": {"t":45,"ctrl":{"SAVE":"press","SELECT":"turn","KNOB1":"turn","KNOB3":"turn","OCT+":"press","HOME":"press"}},
+  "web-editor/restore": {"t":56.5,"ctrl":{}},
+  "web-editor/play": {"t":67,"ctrl":{}},
+  "web-editor/fm6": {"t":73.5,"ctrl":{}},
+  "web-editor/export": {"t":82.5,"ctrl":{}},
+  "web-editor/import": {"t":89.5,"ctrl":{}},
+  "web-editor/samples": {"t":101.5,"ctrl":{}},
+  "web-editor/upload": {"t":112.5,"ctrl":{}},
+  "web-editor/sample": {"t":121.5,"ctrl":{"ALGORITHM":"turn","EDIT":"press","KNOB1":"turn","PLAY":"press","KEY16":"press","KEY19":"press","KEY23":"hold","KEY21":"press","KEY18":"press","KEY26":"press","KEY14":"hold"}},
+  "web-editor/settings": {"t":138.5,"ctrl":{}}
 }};

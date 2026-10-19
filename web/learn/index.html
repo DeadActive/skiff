@@ -8,7 +8,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Learn Skiff</title>
-<meta name="description" content="Learn Skiff, the six-track groovebox firmware for the M-VAVE FM-1: a manual in 19 chapters, each with a video showing every press on the unit.">
+<meta name="description" content="Learn Skiff, the six-track groovebox firmware for the M-VAVE FM-1: a manual in 20 chapters, each with a video showing every press on the unit.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 rx=%223%22 fill=%22%23111%22/%3E%3Crect x=%223%22 y=%229%22 width=%223%22 height=%224%22 fill=%22%23ff5a36%22/%3E%3Crect x=%227%22 y=%226%22 width=%223%22 height=%227%22 fill=%22%2322c3b4%22/%3E%3Crect x=%2211%22 y=%223%22 width=%223%22 height=%2210%22 fill=%22%23ffbf00%22/%3E%3C/svg%3E">
 <style>
 @font-face { font-family: "Barlow Condensed"; src: url("../fonts/BarlowCondensed-Medium.ttf") format("truetype"); font-weight: 500; font-display: swap; }
@@ -219,7 +219,7 @@ footer p { max-width: 1240px; margin: 6px auto; }
       <nav class="links" aria-label="Skiff"><a href="../webapp/installer/">Install</a><a href="../webapp/editor/">Editor</a><a href="../try/">Try Skiff</a><a href="https://github.com/illuminus5/skiff">GitHub</a></nav>
     </div>
     <h1>Learn Skiff</h1>
-    <p class="lede">The manual for Skiff, the six-track groovebox firmware for the M-VAVE FM-1, in 19 chapters. Each chapter has a short
+    <p class="lede">The manual for Skiff, the six-track groovebox firmware for the M-VAVE FM-1, in 20 chapters. Each chapter has a short
       video that shows every press, hold and turn on the unit, made from the firmware itself. Play it and the steps below
       follow along. New to grooveboxes? Start at chapter 1 and read on. Know your way around? Jump to any chapter.
       No unit at hand? <a href="../try/">Try Skiff</a> runs the same firmware in your browser, and on a wide screen
@@ -1097,7 +1097,7 @@ footer p { max-width: 1240px; margin: 6px auto; }
       <h3>Sources</h3>
       <p><kbd>SELECT</kbd> back to EDIT 1, SLICE: <kbd>KNOB 1</kbd>, SOURCE, runs BREAK, USR1, USR2, USR3, PIANO and FUNK; DIV cuts it in
         4 to 32 or where the hits are (AUTO). FUNK is the second loop, two beats of funk. USR1–3 are your own samples, put on the unit
-        with the web editor's Samples tab (<a href="#midi-editor">chapter 19</a>); SAMPLE and GRAIN play them too. An empty one plays a
+        with the web editor's Samples tab (<a href="#web-editor/samples">chapter 20</a>); SAMPLE and GRAIN play them too. An empty one plays a
         sine and says NO SAMPLE.</p>
     </li>
   </ol>
@@ -1215,7 +1215,8 @@ footer p { max-width: 1240px; margin: 6px auto; }
       <h3>Name it</h3>
       <p><kbd>C♯4</kbd> held deletes it, then the white keys type, phone style: TINE is <kbd>A4</kbd> (TU), <kbd>C4</kbd> (IJK),
         <kbd>E4</kbd> (NO) and <kbd>A3</kbd> (EF), one tap each. <kbd>OCT+</kbd> writes it: SAVED U01, and the list says U01 TINE. The
-        name goes into the FM6 patch too, so a <code>.syx</code> of it from the web editor carries it.</p>
+        name goes into the FM6 patch too, so a <code>.syx</code> of it from the web editor carries it
+        (<a href="#web-editor/export">chapter 20</a>).</p>
     </li>
     <li class="step" id="fm6-lab/yours">
       <h3>Yours</h3>
@@ -1693,7 +1694,7 @@ footer p { max-width: 1240px; margin: 6px auto; }
       <h3>Back it up</h3>
       <p><kbd>OCT−</kbd> cancels, and project A stays; <kbd>PLAY</kbd> starts the beat again. The four projects, the autosave, the
         pattern pool, your sounds and samples and the settings all live in the unit's flash. A complete backup of it all, a file on your
-        computer, is the <a href="../webapp/editor/">web editor</a>'s (<a href="#midi-editor">chapter 19</a>); the installer makes one
+        computer, is the <a href="../webapp/editor/">web editor</a>'s (<a href="#web-editor/backup">chapter 20</a>); the installer makes one
         too before it puts the official firmware back (<a href="#install">chapter 1</a>).</p>
     </li>
   </ol>
@@ -1711,7 +1712,8 @@ footer p { max-width: 1240px; margin: 6px auto; }
         are icons across the top, the open one named: DISPLAY, CONTROL, AUDIO, SYSTEM and MIDI (<a href="#midi-editor">chapter 19</a>).
         <kbd>ALGORITHM</kbd> moves between the tabs and <kbd>PRESETS</kbd> through the rows of one, both going round; any of
         <kbd>KNOB 1</kbd>–<kbd>KNOB 4</kbd>, or <kbd>OCT+</kbd> and <kbd>OCT−</kbd>, changes the value of the row. A tab of more than
-        six rows scrolls. The settings are the unit's, not a project's, and the web editor's Settings tab reads and changes them too.</p>
+        six rows scrolls. The settings are the unit's, not a project's, and the web editor's Settings tab reads and changes them too
+        (<a href="#web-editor/settings">chapter 20</a>).</p>
     </li>
     <li class="step" id="settings/theme">
       <h3>Six themes</h3>
@@ -1782,8 +1784,8 @@ footer p { max-width: 1240px; margin: 6px auto; }
 
 <section class="chapter" id="midi-editor" data-n="19" data-group="YOUR SETUP" data-video="mXNAUkO3bYo">
   <div class="ch-head"><span class="num">19</span><div><p class="group">YOUR SETUP</p><h2>MIDI and the web editor</h2></div></div>
-  <p class="meta"><b>You'll learn</b> to play Skiff from MIDI, map controllers to its knobs, and edit it from a computer. The video
-    shows MIDI on the unit; the web editor is at the end of this chapter.</p>
+  <p class="meta"><b>You'll learn</b> to play Skiff from MIDI and map controllers to its knobs. Editing it from a computer, the web
+    editor, is <a href="#web-editor">chapter 20</a>.</p>
   <div class="video"></div>
   <ol class="steps">
     <li class="step" id="midi-editor/midi-tab">
@@ -1841,21 +1843,108 @@ footer p { max-width: 1240px; margin: 6px auto; }
         them too.</p>
     </li>
   </ol>
-  <p class="meta"><b>The web editor.</b> The <a href="../webapp/editor/">Skiff Editor</a> runs in Chrome or Edge and talks to the FM-1
-    over the same USB MIDI: plug the unit in, open the page and connect. It edits the unit live, looks like it and follows its THEME, with
-    PLAY, STOP and REC at the top. Its tabs:</p>
-  <ul class="outline">
-    <li><b>Sound</b>: every parameter of the selected track. <b>6-OP FM</b>: an FM6 track's whole patch, six operators
-      (<a href="#fm6-lab">chapter 11</a>), with <code>.syx</code> SysEx files imported and exported.</li>
-    <li><b>Sequencer</b>, <b>Song</b> and <b>Mixer</b>: the steps; each track's list, the scenes and the pattern pool
-      (<a href="#song">chapter 14</a>); the six strips.</li>
-    <li><b>Library</b>: sounds kept on the computer, dragged to and from the unit's 32 user slots.</li>
-    <li><b>Samples</b>: your own samples for USR1–3 (<a href="#engines/sources">chapter 10</a>), from a file or recorded from an input,
-      trimmed on the waveform.</li>
-    <li><b>Projects</b>: the four projects and their names (<a href="#projects">chapter 17</a>), and the complete backup: the music
-      now, projects A–D, the sounds, your samples and the settings in one file on the computer, restored the same way.</li>
-    <li><b>Settings</b>: the MENU's settings (<a href="#settings">chapter 18</a>).</li>
-  </ul>
+  <p class="meta"><b>The web editor</b>, which edits the unit from a computer over the same USB MIDI, has a chapter of its own:
+    <a href="#web-editor">chapter 20</a>.</p>
+</section>
+
+<section class="chapter" id="web-editor" data-n="20" data-group="YOUR SETUP" data-video="xmV7wPG3mWA">
+  <div class="ch-head"><span class="num">20</span><div><p class="group">YOUR SETUP</p><h2>The web editor</h2></div></div>
+  <p class="meta"><b>You'll need</b> an FM-1 on Skiff, a USB data cable, and Chrome or Edge on a computer. <b>You'll learn</b> to
+    connect the <a href="../webapp/editor/">Skiff Editor</a>, save a complete backup of the unit and restore it, bring FM6 patches in
+    and out as <code>.syx</code> files, put samples of your own on the unit, and change its settings and theme from the computer.</p>
+  <div class="video"></div>
+  <ol class="steps">
+    <li class="step" id="web-editor/skiff">
+      <h3>The web editor</h3>
+      <p>The beat from <a href="#first-beat">chapter 3</a> plays, with two chords on track 2, saved as project A, BEAT. The Skiff
+        Editor is a web page that reads and changes the FM-1 over USB while it plays. It runs in Chrome or Edge on a computer, which let
+        a page talk to MIDI devices; nothing is installed, and what it saves stays on your computer.</p>
+    </li>
+    <li class="step" id="web-editor/connect">
+      <h3>Connect</h3>
+      <p>The FM-1 on, a USB data cable from its back to the computer (<a href="#install/connect">chapter 1</a>). Open the
+        <a href="../webapp/editor/">editor</a> (the installer and this page link to it), press Connect, and allow MIDI when the browser
+        asks. It reads the unit, every parameter and every sound's name, then opens on Sound: the selected track's engine, its presets
+        and all its parameters. The top line names the firmware and says Live: the editor follows the unit, a knob turned there moves
+        its slider here.</p>
+    </li>
+    <li class="step" id="web-editor/projects">
+      <h3>Projects</h3>
+      <p>Projects lists the four projects, A to D, with their names (<a href="#projects">chapter 17</a>), and Now, the music playing.
+        Type a name, up to 12 letters, and Save on a slot: here BEAT 2 on B, empty until now. Load and Rename work on the slots the same
+        way. Saving writes to the unit's flash, so the editor stops the music first; the unit says SAVED.</p>
+    </li>
+    <li class="step" id="web-editor/backup">
+      <h3>Complete backup</h3>
+      <p>Save backup reads everything the unit keeps: the music as it is now, projects A–D, your user sounds and their FM6 patches,
+        the pattern pool, samples USR1–3 and the settings. It stops the music first, shows how far it has got, and the browser saves
+        one file, Skiff-backup- and the date, <code>.json</code>: 25 KB here, a few hundred with samples. Keep it somewhere safe.</p>
+    </li>
+    <li class="step" id="web-editor/new">
+      <h3>Music gone</h3>
+      <p>What a backup is for: here the music goes. On the unit, <kbd>SAVE</kbd>, <kbd>SELECT</kbd> on to PROJECT,
+        <kbd>KNOB 1</kbd> to C, an empty slot, <kbd>KNOB 3</kbd> to NEW and <kbd>OCT+</kbd>: a new project, the tracks' power-on
+        sounds at 120 BPM and no notes (<a href="#projects/new">chapter 17</a>). <kbd>HOME</kbd>.</p>
+    </li>
+    <li class="step" id="web-editor/restore">
+      <h3>Restore</h3>
+      <p>Restore backup, then the file. The editor checks all of it first, then asks: Restore this complete backup? OK, and it writes
+        it all back, the music last: projects A–D, sounds, patterns, samples, settings, and the music as it was when the backup was
+        saved. Whatever the unit held before is replaced. The unit's screen has the beat again, and the editor reads it anew.</p>
+    </li>
+    <li class="step" id="web-editor/play">
+      <h3>Play from here</h3>
+      <p>Play, Stop and REC at the top work as the unit's own buttons: Play starts it (Shift + Play: from the top), Stop stops it, REC
+        arms the selected track. Beside them the state, Playing or Stopped and the armed tracks, as the unit has it. Play: the beat is
+        back.</p>
+    </li>
+    <li class="step" id="web-editor/fm6">
+      <h3>6-OP FM</h3>
+      <p>6-OP FM edits the whole patch of an FM6 track: six operators, each with its envelope, level and frequency, the algorithm, the
+        feedback and the LFO, more than the unit's own pages show (<a href="#fm6-lab">chapter 11</a>). Pick the track, here 2, and Read
+        from track: its patch, SOFT PAD, fills the tables.</p>
+    </li>
+    <li class="step" id="web-editor/export">
+      <h3>Export SysEx</h3>
+      <p>Export SysEx saves the patch in the tables as a <code>.syx</code> file named after it, <code>soft-pad.syx</code>: the 6-operator
+        voice format that Dexed and other 6-operator FM synths read and write.</p>
+    </li>
+    <li class="step" id="web-editor/import">
+      <h3>Import SysEx</h3>
+      <p>Import SysEx opens a <code>.syx</code> file: one voice, or a bank of 32 listed to pick from (a file holding something else says
+        what it holds). Here GLASS PAD, a voice made for this chapter, goes into the tables. Send to track puts it on track 2 at once,
+        and the chords play it: HOME names it. The track's patch is now its own (SLOT says OWN); to keep the sound, save it on the unit
+        as a user sound (<kbd>SAVE</kbd> › USER) or in a project.</p>
+    </li>
+    <li class="step" id="web-editor/samples">
+      <h3>Samples</h3>
+      <p>Samples has the three slots for sounds of your own, USR1–USR3 (<a href="#engines/sources">chapter 10</a>). Choose files reads
+        WAV files, or any audio the browser can play; Record takes the computer's input instead. Each file is a sound in the slot,
+        its root note from its name (<code>kalimba C4.wav</code>: C4), and the slot's name comes from it too. Drag the waveform's ends
+        to trim: here the quiet start goes. Up to 16 sounds and about 7 seconds fit in a slot.</p>
+    </li>
+    <li class="step" id="web-editor/upload">
+      <h3>Upload</h3>
+      <p>Upload asks first (Write to USR1?), then writes the slot. Like every write to the unit's flash, it stops the music first.
+        USR1 now holds KALIMBA, 21 KiB of the slot's 80.</p>
+    </li>
+    <li class="step" id="web-editor/sample">
+      <h3>Play your sample</h3>
+      <p>On the unit, <kbd>ALGORITHM</kbd> to track 5: PIANO is the SAMPLE engine. <kbd>EDIT</kbd> opens EDIT 1, where
+        <kbd>KNOB 1</kbd> is SET: on past FLUTE and SAX to USR1, and the screen draws the kalimba's wave. <kbd>PLAY</kbd>, and the
+        keys play it over the beat, each in tune from its root. SLICE and GRAIN take USR1–3 too.</p>
+    </li>
+    <li class="step" id="web-editor/settings">
+      <h3>Settings</h3>
+      <p>Settings has the global values (BPM, SWING+, CLOCK, TUNE, and ROUTE: MIDI IN), the unit's THEME, and below it every setting of the
+        unit's MENU, tab by tab (<a href="#settings">chapter 18</a>). A change applies on the unit at once: Theme NEON, and its screen
+        is NEON, while the editor takes the unit's theme too. Changes made while playing are kept at the next stop.</p>
+    </li>
+  </ol>
+  <p class="meta"><b>The other tabs.</b> Sound: every parameter of the selected track, its engine and presets, and files of single
+    sounds. Sequencer: the steps of the selected track, its automation and locks. Song: each track's list, the scenes and the
+    pattern pool (<a href="#song">chapter 14</a>). Mixer: the six strips. Library: sounds kept on the computer, dragged to and from the
+    unit's 32 user slots.</p>
 </section>
 
 <!-- ================================================================ REFERENCE -->
