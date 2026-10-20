@@ -87,11 +87,11 @@ static int ed_bk_panel_valid(const panel_t *p)
     uint32_t b = 0, e = 0;
     if (p->magic != PANEL_MAGIC) return 0;
     for (uint32_t i = 0; i < NB; i++) {
-        if (p->btn[i] >= NB || (b & (1u << p->btn[i]))) return 0;
+        if (p->btn[i] >= PANEL_NBTN || (b & (1u << p->btn[i]))) return 0;
         b |= 1u << p->btn[i];
     }
     for (uint32_t i = 0; i < NE; i++) {
-        if (p->enc[i] >= NE || (e & (1u << p->enc[i])) || (p->dir[i] != 1 && p->dir[i] != -1)) return 0;
+        if (p->enc[i] >= PANEL_NENC || (e & (1u << p->enc[i])) || (p->dir[i] != 1 && p->dir[i] != -1)) return 0;
         e |= 1u << p->enc[i];
     }
     return 1;
@@ -158,7 +158,7 @@ static uint32_t ed_bk_commit(void)
     } else if (ed_bk_id == 1u) {
         memcpy(&ed_bk_settings, raw, sizeof ed_bk_settings);
         settings_import(&ed_bk_settings, sizeof ed_bk_settings);
-        panel_init(); settings_init(); palette_set(settings.palette);
+        panel_init(); settings_init();
 #if FELUCCA_FLASH
         persist_saved = ed_bk_settings; persist_pending = 0;
 #endif

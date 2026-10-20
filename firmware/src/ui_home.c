@@ -151,13 +151,13 @@ static void graph_tracks(void)
                     int32_t yy;
                     for (yy = y; yy < y + h; yy += 2)
                         cv_rect(x - 2, yy, 1, 1, T_ACCENT);
-                    if (sel) {
+                    if (sel && !ui_ph_line) {     /* ((Skiff #27) MENU > PLAYHEAD LINE: no collision) */
                         qx = x - 2;
                         qy = y + h / 2;
                     }
                 } else
                 cv_rect(x - 2, y + 2, 1, h - 4, ux.neon ? T_ACCENT : sel ? T_INK : ux.crypt ? CR_GOLD : T_TEXT);
-                if (sel) {
+                if (sel && !ui_ph_line) {         /* ((Skiff #27) PLAYHEAD LINE: no torch, no car) */
                     tx = x - 7;
                     ty = y + (h - 24) / 2;
                 }

@@ -18,10 +18,11 @@ enum { ED_INFO = 1, ED_GET, ED_SET, ED_DUMP, ED_DESC, ED_STEP_GET, ED_STEP_SET, 
        ED_WATCH, ED_CHANGED, ED_RELOAD, ED_PING, ED_STEP_CHANGED,              /* v2: live sync */
        ED_TRACK, ED_TRACK_MIX, ED_TRACK_DUMP, ED_TRACK_STEP,                    /* v3: tracks */
        ED_TRACK_PARAM, ED_TRACK_CHANGED, ED_SONG,
-       ED_UI_STATE, ED_UI_SET, ED_UI_PALETTES, ED_FAV_GET, ED_FAV_SET,
+       ED_UI_STATE, ED_UI_SET, ED_UI_PALETTES, ED_FAV_GET, ED_FAV_SET, ED_COLORS,   /* ((Skiff #27) 39: THEME CUSTOM) */
        ED_MOTION = 64, ED_BACKUP_LIST, ED_BACKUP_GET, ED_BACKUP_PUT };                              /* v6: song chain */
 
 enum { ED_KIT_GET = 74, ED_KIT_PUT };                 /* (Skiff W3) the DRUM-X kit (INFO 4B 01 8) */
+enum { ED_SMP_MIX = 81 };                             /* (Skiff, #21) a user slot's sounds' LEVEL REV DLY (INFO 57 01 bit 5) */
 
 static uint8_t ed_out[600];
 static uint32_t ed_n;
@@ -35,7 +36,7 @@ static void ed_begin(uint32_t cmd)
     ed_out[4] = (uint8_t)cmd;
     ed_n = 5;
 }
-static void ed_b(uint32_t v)
+static __attribute__((noinline)) void ed_b(uint32_t v)   /* ((#21) a call: smaller than its copies) */
 {
     if (ed_n < sizeof ed_out - 1u)
         ed_out[ed_n++] = (uint8_t)(v & 0x7Fu);
@@ -90,6 +91,11 @@ static int ed_smp_erase(uint32_t k, uint32_t all)  /* header sector, or the whol
 {
     uint32_t i, took;
     int rc = 0;
+#if BOARD_SMK37
+    if (!SMP_USER_HAS(k))
+        return -8;                                 /* SMK: USR2 / USR3 have no flash */
+    st_stock_release();                            /* before the first erase in USRFLASH: storage.c */
+#endif
     usr_nz[k] = 0;
     for (i = 0; i < 16u; i++)
         usr_zone[k][i].n = 0;                     /* a sounding voice ends instead of reading 0xFF */
@@ -105,6 +111,10 @@ static int ed_flash_stop(void);
 static int ed_smp_end(uint32_t k, const uint8_t *a, uint32_t na)
 {
     const smp_user_hdr_t *h = (const smp_user_hdr_t *)ed_smp_buf;
+#if BOARD_SMK37
+    if (!SMP_USER_HAS(k))
+        return 4;                                  /* SMK: USR2 / USR3 have no flash */
+#endif
     if (ed_unpack7(a, na, ed_smp_buf, sizeof(smp_user_hdr_t)) != sizeof(smp_user_hdr_t))
         return 1;
     if (h->magic != SMP_USER_MAGIC || h->version != 1 || !h->nz || h->nz > 16u ||
@@ -447,6 +457,40 @@ static int ed_args_ok(uint32_t cmd, const uint8_t *a, uint32_t n)
     }
 }
 
+/* (#21) SMP_MIX (ed_service: the frame f, n bytes between F0 and F7): slot [, 48 values: LEVEL x 16, REV x 16, DLY x 16]
+ * -> slot, rc (0, 1 an empty slot: nothing set, 2 set but not kept: the sample fills the slot's last sector), nz, nz x
+ * (lo, hi), the 48 values. Other arguments: no reply. (Out of ed_handle: a line there grows it by ~200 B) */
+static void ed_smp_mix(const uint8_t *f, uint32_t n)
+{
+    const uint8_t *a = f + 4;
+    uint32_t na = n - 4u, k = a[0], rc = 0, i;
+    int16_t *x;
+    if (k >= SMP_USER_SLOTS || (na != 1u && na != 49u))
+        return;
+    ed_begin(ED_SMP_MIX);
+    x = usr_mix[k][0];
+    if (na > 1u) {
+        rc = !usr_nz[k];
+        if (!rc) {
+            for (i = 0; i < 48u; i++)
+                x[i] = a[1u + i];                          /* (SysEx bytes: 0..127) */
+            smx_save |= (uint8_t)(1u << k);                /* (slice_store.c, once stopped) */
+            rc = ((const smp_user_hdr_t *)smp_user_xip(k))->data_len > SMP_USER_SIZE - 0x1000u - SMP_USER_DATA ? 2u : 0u;
+            ui.force = 1;
+        }
+    }
+    ed_b(k);
+    ed_b(rc);
+    ed_b(usr_nz[k]);
+    for (i = 0; i < usr_nz[k]; i++) {
+        ed_b(usr_zone[k][i].lo);
+        ed_b(usr_zone[k][i].hi);
+    }
+    for (i = 0; i < 48u; i++)
+        ed_b(x[i]);
+    ed_send();
+}
+
 static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0 and F7 */
 {
     if (n < 4u)
@@ -644,13 +688,16 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         len = ed_unpack7(a + 4, na - 4u, ed_smp_buf, 256u);
         if (off < SMP_USER_DATA || (off & 0xFFu) || !len || off + len > SMP_USER_SIZE)
             rc = 1;
-        else if (usr_nz[a[0]])
+        else if (usr_nz[a[0]] || !SMP_USER_HAS(a[0]))
             rc = 4;                                        /* slot in use: SMP_BEGIN first (voices read it) */
         else if (ed_flash_stop())
             rc = 1;
         else {
             if (!(off & 0xFFFu)) {                         /* first write into a sector: erase it */
                 audio_silence();
+#if BOARD_SMK37
+                st_stock_release();                        /* (storage.c: the stock mapping's marker) */
+#endif
                 rc = fl_erase4k(ed_smp_slot(a[0]) + off, &took) ? 2u : 0u;
             }
             if (!rc && fl_write(ed_smp_slot(a[0]) + off, ed_smp_buf, len))
@@ -670,9 +717,9 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         ed_b((uint32_t)ed_smp_end(a[0], a + 1, na - 1u));
         break;
     case ED_SMP_INFO:                                      /* -> per slot: zones (0 = empty), name, data KiB */
-        ed_b(SMP_USER_SLOTS);
+        ed_b(SMP_SHOWN);
         ed_b(SMP_USER_SIZE / 1024u);
-        for (i = 0; i < SMP_USER_SLOTS; i++) {
+        for (i = 0; i < SMP_SHOWN; i++) {
             const smp_user_hdr_t *h = (const smp_user_hdr_t *)smp_user_xip(i);
             char nm[9] = {0};
             uint32_t j;
@@ -926,7 +973,10 @@ static void ed_service(void)
         return;
     ed_w.last_ms = fm1_ms;                                 /* any request keeps WATCH alive */
     if (p[3] >= ED_SMP_BEGIN) {                            /* large frames: handled in place, then freed */
-        ed_handle(p, n);
+        if (p[3] == ED_SMP_MIX && n > 4u)
+            ed_smp_mix(p, n);                              /* ((#21) ed_smp_mix) */
+        else
+            ed_handle(p, n);
         ota_frame_done();
         return;
     }

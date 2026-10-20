@@ -1514,13 +1514,13 @@ static int test_menu_tabs(void)
     bad += check("MENU tabs: DISPLAY CONTROL AUDIO SYSTEM MIDI ((1.3) MIDI appended), rows in a run, 6 shown fit the page; "
                  "tab gaps constant (S, LARGE)",
                  ok && MTAB_COUNT == 5u && str_eq(MTAB_NAME[0], "DISPLAY") && str_eq(MTAB_NAME[MTAB_MIDI], "MIDI") &&
-                 mtab_rows(MTAB_DISPLAY) == 6u && mtab_rows(MTAB_CONTROL) == 5u && mtab_rows(MTAB_AUDIO) == 6u &&
+                 mtab_rows(MTAB_DISPLAY) == 7u && mtab_rows(MTAB_CONTROL) == 5u && mtab_rows(MTAB_AUDIO) == 6u &&   /* (#27) */
                  mtab_rows(MTAB_SYSTEM) == 7u && mtab_rows(MTAB_MIDI) == 10u);   /* ((Skiff) SYSTEM: CPU CLOCK) */
 
     ui_power_on();
     hold(B_HOME);
     ok = ui.menu == 1 && ui.menu_sel == MI_COLOR && menu_tab() == MTAB_DISPLAY;
-    for (i = 0; i < 5u; i++) turn(EN_PRESET, 1);
+    for (i = 0; i < 6u; i++) turn(EN_PRESET, 1);       /* ((Skiff #27) PLAYHEAD after COLOR: DISPLAY's seven scroll) */
     ok &= ui.menu_sel == MI_HINTS;
     turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_COLOR;  /* (wraps within the tab) */
     turn(EN_PRESET, -1); ok &= ui.menu_sel == MI_HINTS;
@@ -3306,6 +3306,59 @@ static int test_slices(void)
     memset(host_slots, 0, sizeof host_slots);        /* (the other tests: empty slots) */
     smp_user_scan(0);
     slc_man_save = 0;
+    return bad;
+}
+
+/* (Skiff, #21) EDIT > SAMPLES (ui.c smx_zone, params.c page_desc): a SAMPLE track's on a USR set with samples only, after
+ * EDIT 2; KNOB 1 the sample (its number, kept within the slot's), a key played picks its sample; KNOB 2..4 its LEVEL,
+ * REVERB, DELAY (eng_sample.c usr_mix), marked to keep (slice_store.c waits while the page is on); never a lock; another
+ * set: the page goes */
+static int test_samples_page(void)
+{
+    static const char *const CYC_B[] = {"EDIT 1", "EDIT 2", "VOICE", "VOICE 2", "EDIT 1"};
+    static const char *const CYC_U[] = {"EDIT 1", "EDIT 2", "SAMPLES", "VOICE", "VOICE 2", "EDIT 1"};
+    smp_user_hdr_t *h = (smp_user_hdr_t *)host_slots;
+    int bad = 0, ok;
+    uint32_t z;
+    ui_power_on();
+    set_engine_of(TSEL, ENGI_SAMPLE);                /* SET PIANO */
+    bad += check("SAMPLES: not on a built-in set (EDIT 1 EDIT 2 VOICE VOICE 2)", engine_cycle(CYC_B, NELEM(CYC_B)));
+    host_slot_make(0);                               /* USR1: three sounds on C4 C#4 D4 */
+    for (h->nz = 3, z = 0; z < 3u; z++) {
+        h->zone[z] = h->zone[0];
+        h->zone[z].off = z * (h->data_len / 3u);
+        h->zone[z].n = h->data_len / 2u;
+        h->zone[z].le = h->zone[z].n - 1u;
+        h->zone[z].root16 = (int16_t)((60 + z) * 16);
+        h->zone[z].lo = h->zone[z].hi = (uint8_t)(60u + z);
+    }
+    smp_user_scan(0);
+    TSEL->p[P_E0] = (int16_t)SMP_NSETS;              /* SET USR1 */
+    bad += check("SAMPLES: on USR1 with samples, after EDIT 2", engine_cycle(CYC_U, NELEM(CYC_U)));
+    go_page(GR_SMIX);
+    last_note = 61;
+    frame();
+    ok = smx_sel == 2 && smx_page_on() && !lock_page_ok(ui.page);
+    turn(EN_K1, 5); frame();
+    ok &= smx_sel == 3;                              /* (kept within the slot's three) */
+    turn(EN_K1, -1); frame();
+    ok &= smx_sel == 2;
+    bad += check("SAMPLES: a key played picks its sample; KNOB 1 the one beside, within the slot's; no lock", ok);
+    smx_save = 0;
+    turn(EN_K2, -3); turn(EN_K3, 4); turn(EN_K4, 2); frame();
+    ok = usr_mix[0][SMX_LVL][1] < 127 && usr_mix[0][SMX_REV][1] > 0 && usr_mix[0][SMX_DLY][1] > 0 && smx_save &&
+         usr_mix[0][SMX_LVL][0] == 127 && !usr_mix[0][SMX_REV][2];
+    bad += check("SAMPLES: KNOB 2..4 the picked sample's LEVEL REVERB DELAY (the others as they were), to keep", ok);
+    last_note = 60; frame();
+    turn(EN_K2, -1); frame();
+    ok = smx_sel == 1 && usr_mix[0][SMX_LVL][0] < 127;
+    TSEL->p[P_E0] = 0; frame();                      /* SET PIANO: no samples of its own */
+    ok &= cur_page()->graph != GR_SMIX && !smx_page_on();
+    bad += check("SAMPLES: another key, another sample; a built-in set: the page goes", ok);
+    memset(host_slots, 0, sizeof host_slots);        /* (the other tests: empty slots) */
+    smp_user_scan(0);
+    smx_save = 0;
+    set_engine_of(TSEL, 0); frame();
     return bad;
 }
 #endif
@@ -5161,7 +5214,7 @@ static int test_screen_off(void)
 
     ui_power_on();                                    /* in the MENU: OCT+ / a knob step it */
     hold(B_HOME);
-    for (i = 0; i < 4u; i++) turn(EN_PRESET, 1);
+    for (i = 0; i < 5u; i++) turn(EN_PRESET, 1);       /* ((Skiff #27) past PLAYHEAD) */
     ok = ui.menu == 1 && ui.menu_sel == MI_SCROFF;
     press(B_OCTUP); ok &= scr_get() == 4u;
     press(B_OCTUP); ok &= scr_get() == 4u;           /* (stops at the end) */
@@ -7521,7 +7574,7 @@ static int test_large(void)
     song.playing = 0;
     frame();
     ok = !(ui_prefs & PREF_LARGE) && large_kind() == LK_OFF && card_h() == CARD_H && graph_y() == Y_GRAPH;
-    ok &= MI_LARGE == MI_COLOR + 1u && str_eq(MI_NAME[MI_LARGE], "LARGE") && menu_flag(MI_LARGE) &&
+    ok &= MI_LARGE == MI_PHEAD + 1u && str_eq(MI_NAME[MI_LARGE], "LARGE") && menu_flag(MI_LARGE) &&   /* (#27) */
           str_eq(menu_flag(MI_LARGE)->name[0], "OFF") && str_eq(menu_flag(MI_LARGE)->name[1], "ON");
     ui.force = 1; frame();
     memcpy(off, host_screen, sizeof off);
@@ -7534,7 +7587,7 @@ static int test_large(void)
     press(B_OCTUP);
     ok &= ui_prefs == PREF_LARGE;                                  /* (no other setting moved) */
     press(B_HOME);
-    bad += check("#15 MENU > LARGE: OFF by default, under COLOR; KNOB 1 right / OCT+ ON, left / OCT- OFF", ok && !ui.menu);
+    bad += check("#15 MENU > LARGE: OFF by default, under COLOR ((Skiff #27) and PLAYHEAD); KNOB 1 right / OCT+ ON, left / OCT- OFF", ok && !ui.menu);
 
     /* HOME: tall cards (rows 28..132) and the strip (136..198); (#22) no lanes, so the footer names the sound, not the hint */
     frame();
@@ -7694,7 +7747,7 @@ static int test_style(void)
     ui_power_on();
     for (i = 0; i < MI_COUNT; i++)
         ok &= !str_eq(MI_NAME[i], "STYLE");
-    ok &= mtab_rows(MTAB_DISPLAY) == 6u && MI_LARGE == MI_COLOR + 1u;   /* ((U4) HINTS) */
+    ok &= mtab_rows(MTAB_DISPLAY) == 7u && MI_LARGE == MI_PHEAD + 1u;   /* ((U4) HINTS, (#27) PLAYHEAD) */
     p.magic = PERSIST_MAGIC; p.panel = panel;
     settings_export(&p);
     for (i = 0; i < 4u; i++) {
@@ -8077,6 +8130,23 @@ static int test_song_page(void)
     ok &= head_mark(mk) && str_eq(mk, "SONG ON");
     song.playing = 0;
     bad += check("  STEP's header: the entry, the pattern, the entries naming it (B 01 2x); SONG, playing: SONG ON", ok);
+    turn(EN_K1, 4);                                  /* (#28) E: empty, after D (the list's last) */
+    turn(EN_K2, 1);                                  /* --, then REST */
+    ok = sg.entry == 4u && song_pick() == PAT_REST && str_eq(song_act_name(), "SET REST");
+    press(B_OCTUP);
+    ok &= ent_rest(song.sel, 4) && ent_pat(song.sel, 4) == PAT_NONE && !song_pick() && msg_is("T1 E SET REST");
+    turn(EN_K2, 1);                                  /* REST, then the used ones */
+    ok &= song_pick() == a + 1u;
+    turn(EN_K2, -2);                                 /* back to its own (-- is an empty entry's): no pick */
+    ok &= !song_pick();
+    bad += check("  (#28) KNOB 2: --, REST, then the patterns; OCT+ SET REST", ok);
+    press(B_OCTUP);                                  /* OCT+ with no pick: the track to the REST, at once */
+    ok = lists.cur[song.sel] == 4u && !trk_pid[song.sel] && seq_is_empty(t) && msg_is("LOADED T1 E");
+    song.playing = 1;
+    song_pick_clear();                               /* CLEAR: no dialog (nothing goes with it), playing too */
+    ok &= !ui.confirm && !ent_rest(song.sel, 4) && !lists.ent[song.sel][4][0] && msg_is("T1 E CLEARED");
+    song.playing = 0;
+    bad += check("  .. OCT+ plays it (the track silent on it); CLEAR it at once, playing too", ok);
     lists.song = 0;
     return bad;
 }
@@ -8285,6 +8355,39 @@ static int test_six_tracks(void)
     return bad;
 }
 
+/* (Skiff #27, @tradiuz) MENU > DISPLAY > PLAYHEAD: THEME (the figure on HOME's selected lane at the playhead: CRYPT's
+ * torch, NEON's car, QUARK's collision) or LINE (the playhead's line only); SKIFF, HI-CON and PAPER draw none either way */
+static int test_playhead_line(void)
+{
+    static uint16_t fig[240 * 240];
+    int bad = 0, ok;
+    uint32_t p, f0;
+    ui_power_on();
+    ok = str_eq(MI_NAME[MI_PHEAD], "PLAYHEAD") && MI_PHEAD == MI_COLOR + 1u && MI_TAB[MI_PHEAD] == MTAB_DISPLAY &&
+         menu_n(MI_PHEAD) == 2u && str_eq(menu_vname(MI_PHEAD, 0), "THEME") && str_eq(menu_vname(MI_PHEAD, 1), "LINE") &&
+         menu_get(MI_PHEAD) == 0u && !ui_ph_line && menu_step(MI_PHEAD, 1) == 1u && menu_step(MI_PHEAD, -1) == 0u;
+    bad += check("(#27) PLAYHEAD: a MENU > DISPLAY row after THEME, THEME (the default, stored 0) or LINE", ok);
+    ok = ui.home && !ui.home_scope;
+    song.playing = 1;
+    TSEL->seq_idx = 6;
+    for (p = 0; p < NPALETTES; p++) {
+        int figure = p == UI_CRYPT_INDEX || p == UI_NEON_INDEX || p == UI_QUARK_INDEX;
+        menu_put(MI_COLOR, p);
+        f0 = ui.frame;
+        menu_put(MI_PHEAD, 0); ui.force = 1; ui_draw();
+        memcpy(fig, host_screen, sizeof fig);
+        ui.frame = f0;
+        menu_put(MI_PHEAD, 1); ui.force = 1; ui_draw();
+        ok &= !memcmp(fig, host_screen, sizeof fig) == !figure;
+        if (!ok) { printf("  PLAYHEAD LINE on %s: %s\n", UI_PALETTES[p].name, figure ? "the same" : "changed"); break; }
+    }
+    menu_put(MI_PHEAD, 0);
+    menu_put(MI_COLOR, UI_SKIFF_INDEX);
+    song.playing = 0;
+    bad += check("(#27) PLAYHEAD LINE: HOME without the torch, the car, the collision; SKIFF, HI-CON, PAPER as they were", ok);
+    return bad;
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -8353,6 +8456,7 @@ int main(void)
     bad += test_fm6_lab();
 #if FELUCCA_SLICE
     bad += test_slices();
+    bad += test_samples_page();
 #endif
     bad += test_sample_alert();
     bad += test_quick_layers();
@@ -8369,6 +8473,7 @@ int main(void)
     bad += test_step_leds();
     bad += test_scale_leds();
     bad += test_screen_off();
+    bad += test_playhead_line();
     bad += test_fm6_charts();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */

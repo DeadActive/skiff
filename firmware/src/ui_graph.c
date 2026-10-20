@@ -351,7 +351,7 @@ static uint32_t pr_src(const track_t *t, uint32_t si, uint32_t len)   /* the ste
 static uint32_t pr_held(void)
 {
     uint32_t k, i, m = 0;
-    for (k = 0; k < 27u; k++)
+    for (k = 0; k < KB_N; k++)
         if (kb_chn[k] && kb_trk[k] == song.sel)
             for (i = 0; i < kb_chn[k]; i++) {
                 int32_t r = (int32_t)proll.lo + PR_ROWS - 1 - kb_chord[k][i];
@@ -884,7 +884,9 @@ static struct {
 
 static uint32_t sample_wave_zone(const track_t *t)
 {
-    uint32_t si = (uint32_t)t->p[P_E0] % SMP_NALL, i, zi = 0xFFFFu;
+    uint32_t si = (uint32_t)t->p[P_E0] % SMP_NALL, i, zi = 0xFFFFu, k;
+    if (cur_page()->graph == GR_SMIX && (i = smx_zone(&k)) != 0xFFu)   /* ((#21) SAMPLES: the one picked) */
+        return 0x8000u | k << 5 | i;
     if (si < SMP_NSETS) {
         const smp_set_t *set = &SMP_SETS[si];
         for (i = 0; i < set->nz; i++)
@@ -1356,7 +1358,8 @@ static uint32_t graph_signature(void)
     h ^= (uint32_t)pg->graph * 131u + TSEL->eng_req + song.sel * 7777u + ui.page * 1291u;
     if (strip_kind() == SK_TITLE)                    /* MENU > LARGE: the page's title (its engine, its number) */
         return h ^ 0x5A17u;
-    if (pg->graph == GR_NONE && !analog_page(pg, t)) h ^= ui.frame / 2u;   /* the scope */
+    if ((pg->graph == GR_NONE && !analog_page(pg, t)) || pg->graph == GR_SMIX) h ^= ui.frame / 2u;   /* the scope; (#21)
+                                                      * SAMPLES' waveform as EDIT's */
     for (i = 0; i < P_COUNT; i++)
         h = (h ^ (uint32_t)t->p[i]) * 16777619u;
     h ^= (uint32_t)TSEL->preset * 7u + (uint32_t)song.g[G_SLOT] * 13u + TSEL->user * 257u + up_gen * 7919u + ui.uslot * 104729u;
@@ -1644,7 +1647,8 @@ static void graph_bank(void)
  * (a launch, the song's next): outlined; repeats past 1: a tick each under the tile (three at most). The selected
  * track's row a band of its colour. BLOCKS: on the black ground; FLAT and LINE: on the panel, the band RAISE. (Phase 6)
  * With six tracks the rows of the four shown (ui.c trk_top), the tiles 13.4 apart and the band to x 236: the scroll
- * bar at 238 (design/mock_p6.py song) */
+ * bar at 238 (design/mock_p6.py song). (#28) A REST: a tile as a pattern's, a dash in it for the number (lit while
+ * the track is on it); the rests between patterns stay a bare dash (design/mock_rest.py, B) */
 #define SG_X(p) (22 + ((int32_t)(p) * 134 + 5) / 10)   /* entry p's tile, 13 x 18, 13.4 apart: x 22 .. 235 */
 #define SG_BAND_W 237
 #define SG_W 13
@@ -1665,9 +1669,9 @@ static void graph_song(void)
         uint16_t col = T_TRK(k), g = cb ? col : g0;
         uint32_t cur = bank_cur(k), nx = bank_next(k), first, last, rest = trk_pid[k] ? NENT : lists.cur[k] % NENT;
         char d[2] = {(char)('1' + k), 0};
-        for (first = 0; first < NENT && !bank_used(k, first); first++)   /* ((1.2.1, #12) the empty entries between */
-            ;                                                        /* these two are rests) */
-        for (last = first < NENT ? NENT - 1u : 0u; last > first && !bank_used(k, last); last--)
+        for (first = 0; first < NENT && !ent_on(k, first); first++)   /* ((1.2.1, #12) the empty entries between */
+            ;                                                      /* these two are rests; (#28) a REST is one too */
+        for (last = first < NENT ? NENT - 1u : 0u; last > first && !ent_on(k, last); last--)
             ;
         if (cb && ux.neon) {                         /* ((Skiff S1) NEON: the band its colour into violet) */
             uint16_t st[2] = {col, ux_mix(col, NE_VIOLET, 70)};
@@ -1681,10 +1685,10 @@ static void graph_song(void)
         for (p = 0; p < NENT; p++) {
             int32_t x = SG_X(p);
             uint32_t id = ent_pat(k, p), reps = (uint32_t)lists.ent[k][p][1] + 1u;
-            int pick = band && p == sg.entry % NENT;
+            int pick = band && p == sg.entry % NENT, rt = ent_rest(k, p), on;
             uint16_t fill, ink;
             char s[3];
-            if (id == PAT_NONE) {                    /* empty: a dot; ((1.2.1, #12) a rest: a dash, lit while it plays, */
+            if (id == PAT_NONE && !rt) {             /* empty: a dot; ((1.2.1, #12) a rest: a dash, lit while it plays, */
                 uint16_t dc = cb ? ux_mix(col, T_INK, 55) : T_DIM;   /* framed while staged, its repeats under it) */
                 if (p > first && p < last) {
                     cv_rect(x + 3, ty + SG_TH / 2 - 1, SG_W - 6, 2, p == rest ? (cb ? T_INK : col) : dc);
@@ -1698,21 +1702,26 @@ static void graph_song(void)
                     cv_frame(x, ty, SG_W, SG_TH, T_TEXT);
                 continue;
             }
+            on = p == cur || (rt && p == rest);
             if (pick)
                 fill = T_TEXT, ink = T_INK;
-            else if (p == cur)
+            else if (on)
                 fill = cb ? T_INK : col, ink = cb ? col : T_INK;
             else if (cb)
                 fill = ux_mix(col, T_INK, 35), ink = T_INK;
             else
                 fill = T_SURF, ink = T_MID;
-            if (ux.neon && !cb && p == cur)          /* ((Skiff S1) NEON: the entry playing a lit tube; SURF ones glass, */
+            if (ux.neon && !cb && on)                /* ((Skiff S1) NEON: the entry playing a lit tube; SURF ones glass, */
                 ne_tube(x, ty, SG_W, SG_TH, fill, g);    /* CRYPT's stone (cv_rrect)) */
             else
                 cv_rrect(x, ty, SG_W, SG_TH, 0, fill, g);
-            pat_num(s, id);
-            GFX_HOOK_ALIGN(x, ty, x + SG_W, ty + SG_TH, AL_HV, "song entry number centred");
-            cv_text_in(x, ty + CAP_IN(S, SG_TH), SG_W, &AF_S, s, ink, fill);
+            if (rt)
+                cv_rect(x + 3, ty + SG_TH / 2 - 1, SG_W - 6, 2, ink);
+            else {
+                pat_num(s, id);
+                GFX_HOOK_ALIGN(x, ty, x + SG_W, ty + SG_TH, AL_HV, "song entry number centred");
+                cv_text_in(x, ty + CAP_IN(S, SG_TH), SG_W, &AF_S, s, ink, fill);
+            }
             if (p == nx)                             /* staged: comes in at its launch point */
                 cv_frame(x - 1, ty - 1, SG_W + 2, SG_TH + 2, cb ? T_INK : col);
             for (r = 0; r + 1u < reps && r < 3u; r++)
@@ -2293,7 +2302,8 @@ static void draw_graph(void)
         draw_tracks();
         return;
     }
-    if (!ui.home && pg->scope == SC_ENGINE && ENGINES[t->eng_req % NENGINES] == &ENG_SAMPLE) sample_wave_tick(t);
+    if (!ui.home && (pg->scope == SC_ENGINE || pg->graph == GR_SMIX) && ENGINES[t->eng_req % NENGINES] == &ENG_SAMPLE)
+        sample_wave_tick(t);
     sig = graph_signature() + (ui.take_t ? take_box.gen * 2654435761u + 0x7A6Bu : 0u);   /* (Skiff: the TAKE box) */
     if (!ui.force && sig == ui.graph_sig)
         return;
@@ -2463,7 +2473,8 @@ static void draw_graph(void)
 #endif
         default:
             if (pg->scope == SC_ENGINE && ENGINES[t->eng_req % NENGINES] == &ENG_WHEEL) graph_wheel(t, c);
-            else if (pg->scope == SC_ENGINE && ENGINES[t->eng_req % NENGINES] == &ENG_SAMPLE && sample_wave.ready) graph_sample(c);
+            else if ((pg->scope == SC_ENGINE || pg->graph == GR_SMIX) && ENGINES[t->eng_req % NENGINES] == &ENG_SAMPLE &&
+                     sample_wave.ready) graph_sample(c);   /* ((#21) SAMPLES: the sample's) */
             else if (pg->scope == SC_ENGINE && t->eng_req % NENGINES == ENGI_FM6) graph_fm6(t, c);   /* EDIT 1 and 2 */
             else if (analog_page(pg, t)) {           /* (Skiff U5) ANALOG's OSC and FLT */
                 cv_oy = 0;

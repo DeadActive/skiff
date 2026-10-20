@@ -165,6 +165,9 @@ static uint32_t ux_luma(uint16_t c)        /* 0..255 */
     return ((c >> 11) * 255u / 31u * 54u + ((c >> 5) & 63u) * 255u / 63u * 183u + (c & 31u) * 255u / 31u * 19u) >> 8;
 }
 
+/* (Skiff #27) THEME CUSTOM's colours over the palette's: 11 RGB565, low byte first (BG SURF TEXT THEME ACCENT, the six
+ * tracks'), the rest derived from them as from a palette's; 0: the palette's own (ui.c theme_apply) */
+static const uint8_t *ux_cpal;
 static void palette_set(uint32_t i)
 {
     const ui_pal_t *p = &UI_PALETTES[i % NPALETTES];
@@ -179,17 +182,21 @@ static void palette_set(uint32_t i)
     ux.accent = p->accent;
     for (k = 0; k < UI_NTRK; k++)
         ux.trk[k] = UI_TRACKS[i][k];
-    ux.mid = ux_mix(p->bg, p->text, UI_MID_PCT);
-    ux.dim = ux_mix(p->bg, p->text, UI_DIM_PCT);
-    ux.line = ux_mix(p->bg, p->text, UI_LINE_PCT);
-    ux.sel = ux_mix(p->bg, p->theme, UI_SEL_PCT);
-    ux.tint = ux_mix(p->bg, p->theme, UI_TINT_PCT);
-    ux.ink = p->bg;
-    ux.raise = ux_mix(p->surf, p->text, UI_RAISE_PCT);
-    ux.key = ux_mix(p->bg, p->text, UI_KEY_PCT);
-    ux.lane = ux_mix(ux.surf, p->theme, 10);
-    ux.grid = ux_mix(ux.surf, p->text, 6);
-    ux.light = ux_luma(p->bg) > 128u;
+    if (ux_cpal) {                               /* (low byte first, as the settings record is) */
+        memcpy(&ux.bg, ux_cpal, 10u);            /* (BG .. ACCENT in a row) */
+        memcpy(ux.trk, ux_cpal + 10, 2u * UI_NTRK);
+    }
+    ux.mid = ux_mix(ux.bg, ux.text, UI_MID_PCT);
+    ux.dim = ux_mix(ux.bg, ux.text, UI_DIM_PCT);
+    ux.line = ux_mix(ux.bg, ux.text, UI_LINE_PCT);
+    ux.sel = ux_mix(ux.bg, ux.theme, UI_SEL_PCT);
+    ux.tint = ux_mix(ux.bg, ux.theme, UI_TINT_PCT);
+    ux.ink = ux.bg;
+    ux.raise = ux_mix(ux.surf, ux.text, UI_RAISE_PCT);
+    ux.key = ux_mix(ux.bg, ux.text, UI_KEY_PCT);
+    ux.lane = ux_mix(ux.surf, ux.theme, 10);
+    ux.grid = ux_mix(ux.surf, ux.text, 6);
+    ux.light = ux_luma(ux.bg) > 128u;
     ux.rec = ux.light ? UI_REC_LIGHT : UI_REC_DARK;
     ux.gen++;                                    /* the text ramps change with the coverage curve */
 }

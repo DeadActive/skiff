@@ -56,6 +56,27 @@ static uint32_t st_crc32(const void *p, uint32_t n)   /* zlib CRC-32, 4 bits per
     return ~c;
 }
 
+#if BOARD_SMK37
+/* SMK-37 Pro (fm1_flash_map.h; after genkigenki's SMK-37 layer): every object an A/B pair in FL_DATA 0x9D000..0xBAFFF
+ * (the stock VM), in this order: projects 0x9D000..0xA4FFF, user preset banks 0xA5000..0xA8FFF, the autosave 0xA9000 /
+ * 0xAA000, the user presets' FM6 patches (OBJ_UPFM6, the pair of the retired OBJ_FM6BANK) 0xAB000 / 0xAC000, settings
+ * 0xAD000 / 0xAE000; the owner tag 0xAF000 (st_owner_check); 0xB0000..0xBAFFF spare (eleven sectors). The pattern
+ * pool (bank.c) and the user sample slot (eng_sample.c) are in USRFLASH (FL_SMP): twenty sectors each. */
+#define ST_SMK_BASE FL_DATA_LO
+#define ST_SMK_PAIRS 9u
+#define ST_SMK_SECTORS (2u * ST_SMK_PAIRS)
+#define ST_OWNER_OFF (ST_SMK_BASE + ST_SMK_SECTORS * ST_SECTOR)
+_Static_assert(OBJ_COUNT == 10u && OBJ_UPFM6 == OBJ_FM6BANK + 1u, "SMK store: a new object needs a place");
+_Static_assert(ST_OWNER_OFF == 0xAF000u && ST_OWNER_OFF + ST_SECTOR <= FL_DATA_HI, "SMK store: past FL_DATA");
+static const uint8_t ST_SMK_ORDER[OBJ_COUNT] = {
+    [OBJ_PROJECT0] = 0, [OBJ_PROJECT0 + 1] = 1, [OBJ_PROJECT0 + 2] = 2, [OBJ_PROJECT0 + 3] = 3,
+    [OBJ_UPRESET0] = 4, [OBJ_UPRESET0 + 1] = 5, [OBJ_AUTOSAVE] = 6, [OBJ_FM6BANK] = 7, [OBJ_UPFM6] = 7,
+    [OBJ_SETTINGS] = 8};
+static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy A (0) / B (1) */
+{
+    return ST_SMK_BASE + (ST_SMK_ORDER[obj % OBJ_COUNT] * 2u + (copy & 1u)) * ST_SECTOR;
+}
+#else
 static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy A (0) / B (1) */
 {
     if (obj == OBJ_SETTINGS)
@@ -68,6 +89,7 @@ static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy 
         return 0xDC000u + (obj - OBJ_UPRESET0) * 2u * ST_SECTOR + copy * ST_SECTOR;
     return 0x97000u + (obj - OBJ_PROJECT0) * 2u * ST_SECTOR + copy * ST_SECTOR;
 }
+#endif
 
 static uint8_t st_buf[ST_PAYLOAD_MAX] __attribute__((aligned(4)));
 
@@ -169,3 +191,99 @@ static int st_save_to(uint32_t obj, const void *src, uint32_t len, int to)
 }
 
 static int st_save(uint32_t obj, const void *src, uint32_t len) { return st_save_to(obj, src, len, -1); }
+
+#if BOARD_SMK37
+/* (SMK-37 Pro, after genkigenki's SMK-37 layer) The store's owner. The store window is the stock firmware's VM, so
+ * after an install it may hold the stock firmware's (or another port's) data, which Skiff must never parse as its own.
+ * The sector after the objects (ST_OWNER_OFF) holds the tag "SMK37DATA" + the data family (SMK_DATA_FAMILY, zero
+ * padded to 16 B). Tagged: load as ever. Anything else (another family, or none): erase the nine pairs and the pattern
+ * pool's sectors that hold one of its chunks (an "SKB1" record, bank.c BK_MAGIC: a stale chunk would come back as the
+ * pool's newest copy), then write the tag. Sectors of the pool with anything else in them (the stock mapping, another
+ * firmware's sample) are left for the pool's own erase before its first write, so an intact stock mapping stays until
+ * then. The user sample (FL_SLOT) checks itself (eng_sample.c). Calibration, pairing and key_mac lie outside every
+ * window: never touched. FELUCCA_DATA_UNTAGGED_OK 1 would keep a store with an erased tag (0: the SMK build never
+ * wrote untagged data). Called first in persist_boot (project.c), before any store read. */
+#ifndef SMK_DATA_FAMILY
+#define SMK_DATA_FAMILY "SKIFF"                     /* 1..7 characters: Skiff's settings bytes are its own */
+#endif
+#ifndef FELUCCA_DATA_UNTAGGED_OK
+#define FELUCCA_DATA_UNTAGGED_OK 0
+#endif
+_Static_assert(sizeof SMK_DATA_FAMILY >= 2u && sizeof SMK_DATA_FAMILY <= 8u, "SMK data family: 1..7 characters");
+/* The stock firmware's mapping in USRFLASH (its settings at 0xC2000, magic A3 3A; 8 presets from 0xC3000 every
+ * 0x5000, 0x29E3 bytes each, the rest erased; the end marker "usrdata\0" at 0xEAFF8, FL_STOCKTAG): it trusts the area
+ * while the marker is there and never rebuilds it, so after a return to stock Skiff's sample and patterns would be
+ * read as its key, knob and fader mapping. So: an intact stock mapping is kept (it reads as an empty slot and pool),
+ * and the marker is released (its sector erased: the stock firmware rebuilds its factory mapping at its next start)
+ * before the first erase in USRFLASH (storage_hw.c st_erase, editor.c) and at boot when it stands over anything else
+ * (st_owner_check). */
+static int st_stock_tagged(void)
+{
+    static const uint8_t TAG[8] = {'u', 's', 'r', 'd', 'a', 't', 'a', 0};
+    uint8_t t[8];
+    uint32_t i;
+    if (st_read(FL_STOCKTAG_OFF, t, 8))
+        return 0;
+    for (i = 0; i < 8u; i++)
+        if (t[i] != TAG[i])
+            return 0;
+    return 1;
+}
+static int st_stock_intact(void)                /* the marker over the stock layout */
+{
+    uint8_t b[8];
+    uint32_t n, k, i, ff;
+    if (!st_stock_tagged() || st_read(FL_SMP_LO, b, 2) || b[0] != 0xA3u || b[1] != 0x3Au)
+        return 0;
+    for (n = 0; n < 8u; n++)                    /* each preset: its head written, its last two sectors erased */
+        for (k = 0; k < 3u; k++) {
+            if (st_read(FL_SMP_LO + 0x1000u + n * 0x5000u + (k ? 0x2000u + k * 0x1000u : 0u), b, 8))
+                return 0;
+            for (ff = 1, i = 0; i < 8u; i++)
+                ff &= b[i] == 0xFFu;
+            if (ff != (k != 0u))
+                return 0;
+        }
+    return 1;
+}
+static void st_stock_release(void)              /* erase the marker's sector, once: later calls find no marker */
+{
+    if (st_stock_tagged())
+        st_erase(FL_STOCKTAG_LO);
+}
+static int st_in_usrflash(uint32_t off) { return off >= FL_SMP_LO && off < FL_SMP_HI; }
+static uint8_t st_owner_cleared;                /* (the console says so) */
+static void st_owner_tag(uint8_t *want)         /* the tag this build writes: 16 bytes */
+{
+    static const char FAM[] = SMK_DATA_FAMILY;
+    uint32_t i;
+    for (i = 0; i < 16u; i++)
+        want[i] = i < 9u ? (uint8_t)"SMK37DATA"[i] : i - 9u < sizeof FAM - 1u ? (uint8_t)FAM[i - 9u] : 0u;
+}
+static void st_owner_check(void)
+{
+    uint8_t tag[16], want[16], m[4];
+    uint32_t i, erased = 1, ours = 1, s;
+    st_owner_tag(want);
+    if (!st_stock_intact())
+        st_stock_release();                     /* the marker over anything but the stock mapping: let it rebuild */
+    if (st_read(ST_OWNER_OFF, tag, 16))
+        return;
+    for (i = 0; i < 16u; i++) {                 /* (16 bytes, not a string: a 7-letter family has no NUL) */
+        erased &= tag[i] == 0xFFu;
+        ours &= tag[i] == want[i];
+    }
+    if (ours)
+        return;
+    if (!erased || !FELUCCA_DATA_UNTAGGED_OK) {     /* not ours (or untagged data): clear it */
+        for (s = 0; s < ST_SMK_SECTORS; s++)
+            st_erase(ST_SMK_BASE + s * ST_SECTOR);
+        for (s = FL_BANK_LO; s < FL_BANK_HI; s += ST_SECTOR)
+            if (!st_read(s, m, 4) && (m[0] | m[1] << 8 | m[2] << 16 | (uint32_t)m[3] << 24) == 0x31424B53u)
+                st_erase(s);                    /* ("SKB1": a pattern pool chunk, bank.c BK_MAGIC) */
+        st_owner_cleared = 1;
+    }
+    st_erase(ST_OWNER_OFF);
+    st_prog(ST_OWNER_OFF, want, 16);
+}
+#endif

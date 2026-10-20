@@ -198,6 +198,15 @@ static void midi_out_event(uint32_t pkt)            /* from the audio ISR */
         RING_PUBLISH();
         mo_w++;
     }
+#if BOARD_SMK37 && !defined(FELUCCA_LOADER)
+    {   /* (SMK-37 Pro) the same to the TRS jack's MIDI OUT (hal/smk_uart_tx.h): status, then one or two data bytes */
+        uint32_t st = (pkt >> 8) & 0xFFu;
+        smk_uart_tx_put(st);
+        smk_uart_tx_put((pkt >> 16) & 0x7Fu);
+        if ((st & 0xE0u) != 0xC0u)                  /* (Program Change, Channel Pressure: one) */
+            smk_uart_tx_put((pkt >> 24) & 0x7Fu);
+    }
+#endif
 }
 
 /* ------------------------------------------------------- descriptors --- */

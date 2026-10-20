@@ -15,8 +15,8 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import vm from "node:vm";
-import { logicalImage, productOf } from "./fm1pkg.js";
-import { Updater, pack7, unpack7 } from "./fm1ota.js";
+import { logicalImage, productOf, flashSpan, validateStockPackage } from "./fm1pkg.js";
+import { Updater, pack7, unpack7, WriteMeter, packageFor, needsStockUpdate } from "./fm1ota.js";
 
 let failed = 0;
 const ok = (cond, what) => { console.log(`${what.padEnd(64)} ${cond ? "ok" : "FAIL"}`); if (!cond) failed++; };
@@ -39,6 +39,7 @@ const E = vm.runInNewContext(proto + `
    UP, bank, capturePatch, auditionPatch, lightRefuses, startWatch, libraryFile, readLibraryFile, paramKeys, patternFromSteps, stepsFromPattern, upName,
    mixer, parseNotes, parseHits, hitsText, gridFromSteps, LANE_NOTE, LANE_OF, readDevicePreferences, devicePresetRows, TC_NAMES, engineOrder, ENGINE_ORDER, aliasOf, fmtValue, FM6, enumShown, F,
    FM4, fromDigital, fromPerc, DRUM_KIT_E, DX_KIT_DEF, DX_KITS, DRUMX_PKIT,
+   PAL_BUILTIN, PAL_ROLES, colorWarnings, customTokens, hex565, from565hex, mix565, luma565,
    MENU: typeof MENU === "undefined" ? null : MENU, MENU_TABS: typeof MENU_TABS === "undefined" ? null : MENU_TABS,
    readDeviceMenu: typeof readDeviceMenu === "undefined" ? null : readDeviceMenu })`,
 { setTimeout, clearTimeout, setInterval, clearInterval, console });
@@ -154,8 +155,8 @@ async function editorMock() {
   const names = [];
   for (let e = 0; e < info.nengines; e++) names.push(E.parse[E.CMD.NAMES](await rq(E.req.names(e))).names);
   let prefs = await E.readDevicePreferences(rq, info, names);
-  ok(info.uiCaps === 9 && prefs.palettes.length === 6 && prefs.palettes[0] === "SKIFF" && prefs.palettes[1] === "HI-CON" && prefs.palettes[2] === "PAPER" && prefs.palettes[3] === "CRYPT" && prefs.palettes[4] === "NEON" && prefs.palettes[5] === "QUARK",
-     "editor: preference capabilities (palette, favorites) and palette names");
+  ok(info.uiCaps === 25 && prefs.palettes.length === 6 && prefs.palettes[0] === "SKIFF" && prefs.palettes[1] === "HI-CON" && prefs.palettes[2] === "PAPER" && prefs.palettes[3] === "CRYPT" && prefs.palettes[4] === "NEON" && prefs.palettes[5] === "QUARK",
+     "editor: preference capabilities (palette, favorites, (#27) COLORS) and palette names");
   const pal = E.parse[E.CMD.UI_SET](await rq(E.req.uiSet(0, 2)));
   ok(pal.rc === 0 && pal.palette === 2, "editor: display preference 0 (palette) round trip");
   ok(E.parse[E.CMD.UI_SET](await rq(E.req.uiSet(0, 6))).rc === 1, "editor: out-of-range palette refused");   /* (5: QUARK) */
@@ -194,13 +195,65 @@ async function editorMock() {
   }
   const none = await E.readDevicePreferences(() => { throw new Error("unexpected request"); }, { uiCaps: 0 }, []);
   ok(none === null, "editor: old firmware receives no unsupported preference requests");
+  {   /* (Skiff #27) COLORS (39): THEME CUSTOM on the mock as the firmware has it (tests/editor_test.c custom_colors) */
+    const set = E.PAL_BUILTIN[5].c.map((x, i) => (i === 0 ? 0x0841 : x));
+    let c = E.parse[E.CMD.COLORS](await rq(E.req.colors()));
+    ok(E.CMD.COLORS === 39 && c.rc === 0 && !c.stored && !c.active && c.c.length === 11,
+       "editor: COLORS (#27): none stored, eleven colours (22 bytes in pack7)");
+    c = E.parse[E.CMD.COLORS](await rq(E.req.colors(0, 5, set)));
+    ok(c.rc === 0 && !c.stored && m.state.custom.preview && m.state.custom.preview.look === 5 && m.state.palette === prefs.state.palette,
+       "editor: COLORS op 0 shows a set in a look, stores nothing");
+    c = E.parse[E.CMD.COLORS](await rq(E.req.colors(1, 4, set)));
+    ok(c.rc === 0 && c.stored && c.active && c.look === 4 && c.c.join() === set.join() && m.state.palette === 4,
+       "editor: COLORS op 1 stores the set and uses it, in its look (NEON)");
+    let pr = await E.readDevicePreferences(rq, info, names, prefs, true);
+    ok(pr.palettes.length === 7 && pr.palettes[6] === "CUSTOM" && pr.state.palette === 6 && pr.colors.stored && pr.colors.look === 4,
+       "editor: THEME CUSTOM listed last, in use after a store");
+    await rq(E.req.uiSet(0, 1));
+    pr = await E.readDevicePreferences(rq, info, names, pr);
+    ok(pr.state.palette === 1 && pr.palettes.length === 7 && pr.colors.stored && !pr.colors.active,
+       "editor: another THEME keeps the set (CUSTOM still listed)");
+    ok(E.parse[E.CMD.UI_SET](await rq(E.req.uiSet(0, 6))).palette === 6 && m.state.palette === 4,
+       "editor: UI_SET 6 is CUSTOM again, in its look");
+    const long = E.req.colors(1, 0, set);
+    long[1].push(0);                                        /* (a byte more) */
+    ok(E.req.colors(1, 0, set)[1].length === 28 && E.parse[E.CMD.COLORS](await rq([E.CMD.COLORS, [1, 0, 3]])).rc === 1 &&
+       E.parse[E.CMD.COLORS](await rq(E.req.colors(1, 6, set))).rc === 1 &&
+       E.parse[E.CMD.COLORS](await rq(long)).rc === 1 &&
+       E.parse[E.CMD.COLORS](await rq([E.CMD.COLORS, [2, 0]])).rc === 1 && m.state.custom.flags === 3,
+       "editor: a short or long COLORS, a look past the themes, op 2 with a byte more: rc 1, the set kept");
+    c = E.parse[E.CMD.COLORS](await rq(E.req.colors(2)));
+    pr = await E.readDevicePreferences(rq, info, names, pr, true);
+    ok(c.rc === 0 && !c.stored && pr.palettes.length === 6 && pr.state.palette === 4,
+       "editor: COLORS op 2 removes the set: CUSTOM gone, THEME the look's own");
+    ok(E.parse[E.CMD.UI_SET](await rq(E.req.uiSet(0, 6))).rc === 1, "editor: no set, no CUSTOM (UI_SET 6: rc 1)");
+    await rq(E.req.uiSet(0, prefs.state.palette));
+    const hp = join(FW_ROOT, "build/gen/ui_palettes.h");   /* each theme's colours to start from == the firmware's */
+    if (existsSync(hp)) {
+      const h = readFileSync(hp, "utf8");
+      const five = [...h.matchAll(/\{"([^"]+)", (0x[0-9a-f]{4}), (0x[0-9a-f]{4}), (0x[0-9a-f]{4}), (0x[0-9a-f]{4}), (0x[0-9a-f]{4})\}/g)]
+        .map((x) => [x[1], ...x.slice(2).map(Number)]);
+      const trk = [...h.matchAll(/\{((?:0x[0-9a-f]{4}, ){5}0x[0-9a-f]{4})\},\s+\/\* (\S+) \*\//g)].map((x) => [x[2], ...x[1].split(", ").map(Number)]);
+      ok(five.length === E.PAL_BUILTIN.length && E.PAL_BUILTIN.every((b, i) => b.name === five[i][0] && b.name === trk[i][0] &&
+         b.c.join() === [...five[i].slice(1), ...trk[i].slice(1)].join()), "editor: the themes' colours to start from == the firmware's");
+    } else console.log(`${"editor: the themes' colours (no build/gen/ui_palettes.h)".padEnd(64)} skip`);
+    ok(E.PAL_BUILTIN.every((b) => !E.colorWarnings(b.c).length) &&
+       E.colorWarnings([0x0841, 0x18c3, 0x0861, ...E.PAL_BUILTIN[0].c.slice(3)]).some((x) => x.a === "TEXT" && x.b === "BG"),
+       "editor: no theme of the device's gets a warning; TEXT on BG unreadable does");
+    const tk = E.customTokens(E.PAL_BUILTIN[2].c);
+    ok(tk["--bg"] === E.hex565(0xf77c) && tk["--t6"] === E.hex565(0x0aa8) && tk["--head"] === E.hex565(0x0aa8) &&
+       tk["color-scheme"] === "light" && E.customTokens(E.PAL_BUILTIN[5].c)["color-scheme"] === "dark" &&
+       [0, 0x0841, 0xffff, 0x4e9f, 0xf77c].every((x) => E.from565hex(E.hex565(x)) === x) && E.luma565(0xf77c) > 128 &&
+       E.mix565(0x0000, 0xffff, 50) === 0x8410,
+       "editor: CUSTOM's tokens (BG, the tracks, THEME for headings, light or dark), RGB565 <-> #rrggbb, gfx.c's mix and luma");
+  }
   if (!E.readDeviceMenu) console.log(`${"editor: MENU settings (this editor has none)".padEnd(64)} skip`);
   else {   /* the MENU settings (1.0.4): INFO 4E 01 count, MENU_DESC (72), MENU_SET (73) */
-    ok(info.menuCount === 16 && info.menuCount === E.MENU.length,
-       "editor: INFO advertises the MENU settings (4E 01 16: Skiff's; STYLE and FX LATCH gone)");
+    ok(info.menuCount === 17 && info.menuCount === E.MENU.length,
+       "editor: INFO advertises the MENU settings (4E 01 17: Skiff's; STYLE and FX LATCH gone, (#27) PLAYHEAD)");
     const items = await E.readDeviceMenu(rq, info);
     const byName = (n) => items.find((d) => d.name === n);
-    ok(items.length === 16 && items.map((d) => d.id).join() === E.MENU.map((x) => x.id).join() &&
+    ok(items.length === 17 && items.map((d) => d.id).join() === E.MENU.map((x) => x.id).join() &&
        items.map((d) => d.name).join() === E.MENU.map((x) => x.name).join() &&
        items.every((d) => d.kind === 0 && d.min === 0 && d.names.length === d.max - d.min + 1) &&
        items[0].name === "THEME" && eq(items[0].names, prefs.palettes) && items[0].value === m.state.palette &&
@@ -209,7 +262,7 @@ async function editorMock() {
        "editor: MENU_DESC lists every setting, its value names and value");
     ok(items.every((d, i) => d.tab === E.MENU[i].tab && d.tabName === E.MENU_TABS[d.tab]),
        "editor: MENU_DESC gives each setting's tab on the device, after its names");
-    ok(E.parse[E.CMD.MENU_DESC](await rq(E.req.menuDesc(16))).id === 127, "editor: MENU_DESC past the list answers id 127");
+    ok(E.parse[E.CMD.MENU_DESC](await rq(E.req.menuDesc(17))).id === 127, "editor: MENU_DESC past the list answers id 127");
     let r = E.parse[E.CMD.MENU_SET](await rq(E.req.menuSet(4, 3)));
     ok(r.rc === 0 && r.id === 4 && r.value === 3 && E.parse[E.CMD.MENU_DESC](await rq(E.req.menuDesc(3))).value === 3,
        "editor: MENU_SET round trip (LEDS INV)");
@@ -276,6 +329,26 @@ async function editorMock() {
   rc = rc || E.parse[E.CMD.SMP_END](await rq(E.req.smpEnd(1, hdr), { timeout: 2000, retries: 0 })).rc;
   const si = E.parse[E.CMD.SMP_INFO](await rq(E.req.smpInfo()));
   ok(rc === 0 && si.slots[1].zones === 1 && si.slots[1].name === "TEST", "editor: sample upload (CRC checked by the mock)");
+  {
+    /* (#21) SMP_MIX: the slot's sounds' LEVEL, REV, DLY as smpUpload / smpMixSet send them: in the slot's order (buildSlot
+       sorts by root, each sound's mix with it), the rest as uploaded; an empty slot refuses (rc 1) */
+    const two = E.buildSlot("two", [{ s, root: 64, mix: [64, 0, 90] }, { s, root: 60, mix: [127, 30, 0] }]);
+    ok(two.zones.map((z) => z.root).join() === "60,64" && two.zones[0].mix.join() === "127,30,0" && two.zones[1].mix.join() === "64,0,90" &&
+       E.buildSlot("two", [{ s, root: 64 }, { s, root: 60 }]).hdr.join() === two.hdr.join(),
+       "samples: buildSlot keeps each sound's LEVEL / REV / DLY through its sort (the header the same)");
+    let r = E.parse[E.CMD.SMP_MIX](await rq(E.req.smpMix(1)));
+    ok(info.skiff === 63 && r.slot === 1 && !r.rc && r.keys.length === 1 && r.mix.length === 1 && r.mix[0].join() === "127,0,0",
+       "editor: SMP_MIX reads a slot's sounds (as uploaded: 127, 0, 0)");
+    r = E.parse[E.CMD.SMP_MIX](await rq(E.req.smpMix(1, [[100, 20, 30]])));
+    const back = E.parse[E.CMD.SMP_MIX](await rq(E.req.smpMix(1)));
+    ok(!r.rc && r.mix[0].join() === "100,20,30" && back.mix[0].join() === "100,20,30" && r.keys[0].join() === "0,127",
+       "editor: SMP_MIX sets them, the device keeps them");
+    const a = E.req.smpMix(0, [[1, 2, 3], [4, 5, 6]])[1];
+    ok(a.length === 49 && a[1] === 1 && a[2] === 4 && a[3] === 127 && a[17] === 2 && a[18] === 5 && !a[19] && a[33] === 3 && a[34] === 6 && !a[35],
+       "editor: SMP_MIX's 48 values: LEVEL x 16, REV x 16, DLY x 16 (the sounds after the list as uploaded)");
+    r = E.parse[E.CMD.SMP_MIX](await rq(E.req.smpMix(2, [[1, 2, 3]])));
+    ok(r.rc === 1 && !r.mix.length, "editor: SMP_MIX on an empty slot: refused (rc 1)");
+  }
   /* a device that never answers */
   const dead = new E.Link(() => {}, { timeout: 30 });
   const err = await dead.request(E.req.info(), { retries: 1 }).then(() => null, (e) => e.message);
@@ -907,7 +980,7 @@ async function editorLists() {
   const C = E.CMD;
   const { rq, done } = attachMock({});
   const info = E.parse[C.INFO](await rq(E.req.info()));
-  ok(info.skiff === 31, "song: INFO 57 01 31 (POOL, LIST, PERFORM too)");
+  ok(info.skiff === 63, "song: INFO 57 01 63 (POOL, LIST, PERFORM, (#21) SMP_MIX too)");
   let q = E.parse[C.POOL](await rq(E.req.pool()));
   ok(q.pats.length === 64 && q.pats[0].len === 16 && q.pats[0].refs === 1 && q.pats[3].len === 8 && !q.pats[3].refs && !q.pats[63].len,
      "song: POOL: each pattern's LEN and uses");
@@ -917,6 +990,9 @@ async function editorLists() {
   l = E.parse[C.LIST](await rq(E.req.list(1, 1, 0, 2)));
   ok(!l.rc && l.tracks[1].ent[0].pat === 2, "song: SET T2 A 02");
   ok(E.parse[C.LIST](await rq(E.req.list(1, 1, 1, 9))).rc === 1, "song: SET a pattern not kept refused");
+  l = E.parse[C.LIST](await rq(E.req.list(1, 1, 9, 65)));
+  ok(!l.rc && l.tracks[1].ent[9].pat === 65 && E.parse[C.LIST](await rq(E.req.list(2, 1, 9))).rc === 1 &&
+     !E.parse[C.LIST](await rq(E.req.list(3, 1, 9))).rc, "song: (#28) SET T2 J REST (65), PLAY it; COPY of a REST refused");
   l = E.parse[C.LIST](await rq(E.req.list(5, 1, 0, 4)));
   ok(l.tracks[1].ent[0].reps === 4 && E.parse[C.LIST](await rq(E.req.list(5, 1, 5, 2))).rc === 1, "song: REPS (an empty entry refused)");
   l = E.parse[C.LIST](await rq(E.req.list(3, 1, 0)));
@@ -925,6 +1001,8 @@ async function editorLists() {
   l = E.parse[C.LIST](await rq(E.req.list(3, 0, 1)));
   ok(l.tracks[0].next === 1 && l.tracks[0].cur === 0, "song: PLAY playing: staged");
   ok(E.parse[C.LIST](await rq(E.req.list(4, 0, 1))).rc === 3, "song: CLEAR refused while playing");
+  l = E.parse[C.LIST](await rq(E.req.list(4, 1, 9)));
+  ok(!l.rc && !l.tracks[1].ent[9].pat, "song: (#28) CLEAR a REST: at once, playing too");
   let p = E.parse[C.PERFORM](await rq(E.req.perform(3, 2)));
   ok(p.tracks[2].staged === 2 && !p.tracks[2].muted, "song: MUTE playing: staged");
   p = E.parse[C.PERFORM](await rq(E.req.perform(4)));
@@ -1702,8 +1780,11 @@ const UPGRADE = [0xF0, 0x22, 0x24, 0x35, 0x7F, 0xF7];
 
 /* an FM-1 on WebMIDI: identity, then "device asks, host answers" reads of the image */
 class FakeFM1 {
-  constructor(image, { unplugAfter = Infinity } = {}) {
-    this.image = image; this.unplugAfter = unplugAfter; this.served = 0; this.bad = 0;
+  /* writeReads: the loader's [addr, len] reads (default: six of 512 B); drops: request counts at which it drops
+     off the bus and comes back in update mode 200 ms later (a pulled cable, a power cut, a loader reset) */
+  constructor(image, { unplugAfter = Infinity, back = ["FM-1_900", "Felucca"], writeReads = null, drops = [] } = {}) {
+    this.image = image; this.unplugAfter = unplugAfter; this.served = 0; this.bad = 0; this.back = back;
+    this.writeReads = writeReads; this.drops = new Set(drops);
     this.access = { inputs: new Map(), outputs: new Map() };
     this.boot("FM-1_015", "FM-1");
   }
@@ -1727,7 +1808,7 @@ class FakeFM1 {
       this.tx([0xF0, ...pack7(body), 0xF7]);
     } else if (eq(d, UPGRADE)) {
       this.queue = this.identity.startsWith("ota-")
-        ? [...Array.from({ length: 6 }, (_, k) => [k * 512, 512]), [0xF0000000, 8]]
+        ? [...(this.writeReads || Array.from({ length: 6 }, (_, k) => [k * 512, 512])), [0xF0000000, 8]]
         : [[0, 64], [0x40, 160], [0x1000, 512], [0xE0000000, 8]];
       this.next();
     } else if (this.waiting) {
@@ -1739,8 +1820,13 @@ class FakeFM1 {
       this.waiting = null;
       this.served++;
       if (this.served >= this.unplugAfter) { this.input.state = this.output.state = "disconnected"; return; }
+      if (this.drops.delete(this.served)) {
+        this.input.state = this.output.state = "disconnected";
+        setTimeout(() => this.boot("ota-" + this.back[0], "Felucca Update"), 200);
+        return;
+      }
       if (addr === 0xE0000000) setTimeout(() => this.boot("ota-FM-1_900", "Felucca Update"), 300);
-      else if (addr === 0xF0000000) setTimeout(() => this.boot("FM-1_900", "Felucca"), 300);
+      else if (addr === 0xF0000000) setTimeout(() => this.boot(...this.back), 300);
       else this.next();
     }
   }
@@ -1768,14 +1854,100 @@ async function updater() {
   const dev2 = new FakeFM1(image, { unplugAfter: 3 });
   dev2.boot("ota-FM-1_900", "Felucca Update");
   const t0 = Date.now();
-  const done = await new Updater(dev2.access).resume(image);
-  ok(done === false && Date.now() - t0 < 6000, "fm1ota.js: unplugged during the write -> stops at once");
+  const done = await new Updater(dev2.access, null, { resumeWaitMs: 500 }).resume(image, null, "FM-1_900");
+  ok(done === false && Date.now() - t0 < 6000, "fm1ota.js: unplugged during the write, never back -> stops after the wait");
+  /* resume() checks the loader's model against the package, as install() checks the running firmware */
+  const smkOta = new FakeFM1(image);
+  smkOta.boot("ota-SMK-37 Pro_900", "Felucca Update");
+  const m1 = await new Updater(smkOta.access).resume(image, null, "FM-1_900").then(() => null, (x) => x);
+  ok(m1 && m1.code === "model" && smkOta.served === 0, "fm1ota.js: an SMK-37 Pro in update mode is never given an FM-1 package ('model')");
+  const fm1Ota = new FakeFM1(image);
+  fm1Ota.boot("ota-FM-1_900", "Felucca Update");
+  const m3 = await new Updater(fm1Ota.access).resume(image, null, "SMK-37 Pro_900").then(() => null, (x) => x);
+  ok(m3 && m3.code === "model" && fm1Ota.served === 0, "fm1ota.js: an FM-1 in update mode is never given an SMK package ('model')");
+  const noPkg = new FakeFM1(image);
+  noPkg.boot("ota-FM-1_900", "Felucca Update");
+  const m2 = await new Updater(noPkg.access).resume(image).then(() => null, (x) => x);
+  ok(m2 && m2.code === "model" && noPkg.served === 0, "fm1ota.js: resume without the package's identity writes nothing");
+  const elite = new FakeFM1(image);
+  elite.boot("ota-SMK-37 Elite_900", "Felucca Update");
+  const m4 = await new Updater(elite.access).resume(image, null, "SMK-37 Pro_900").then(() => null, (x) => x);
+  ok(m4 && m4.code === "model" && elite.served === 0, "fm1ota.js: an SMK-37 Elite in update mode is never given an SMK-37 Pro package ('model')");
+  const smkPro = new FakeFM1(image, { back: ["SMK-37 Pro_900", "Felucca"] });
+  smkPro.boot("ota-SMK-37 Pro_900", "Felucca Update");
+  const r3 = await new Updater(smkPro.access).resume(image, null, "SMK-37 Pro_900");
+  ok(r3 === true && smkPro.served > 0 && smkPro.bad === 0, "fm1ota.js: resume: an SMK-37 Pro in update mode takes an SMK-37 Pro package");
 
   const dev3 = new FakeFM1(image, { unplugAfter: 2 });
   const e = await new Updater(dev3.access).install(image, "FM-1_900").then(() => null, (x) => x);
   ok(e && e.code === "lost", "fm1ota.js: unplugged in step 1 -> error code 'lost'");
   const e2 = await new Updater({ inputs: new Map(), outputs: new Map() }).install(image, "FM-1_900").then(() => null, (x) => x);
   ok(e2 && e2.code === "notfound", "fm1ota.js: no device -> error code 'notfound'");
+
+  /* (launch hardening) a drop during the write waits for the same model's loader and resumes, up to resumeMax */
+  const flaky = new FakeFM1(image, { drops: [2, 5] });
+  flaky.boot("ota-FM-1_900", "Felucca Update");
+  const fsteps = [];
+  const fr = await new Updater(flaky.access, null, { resumeWaitMs: 3000 }).resume(image, (k, a) => fsteps.push(k === "resume" ? `resume ${a}` : k), "FM-1_900");
+  ok(fr === true && flaky.bad === 0 && fsteps.filter((k) => k === "dropped").length === 2 && fsteps.includes("resume 3") && fsteps.at(-1) === "done",
+    "fm1ota.js: dropped twice during the write -> waits, resumes, finishes");
+  const always = new FakeFM1(image, { drops: Array.from({ length: 40 }, (_, i) => i + 1) });
+  always.boot("ota-FM-1_900", "Felucca Update");
+  const asteps = [];
+  const ar = await new Updater(always.access, null, { resumeWaitMs: 3000, resumeMax: 5 }).resume(image, (k) => asteps.push(k), "FM-1_900");
+  ok(ar === false && asteps.filter((k) => k === "dropped").length === 4, "fm1ota.js: dropping on every try -> gives up after 5 tries");
+  /* an FM-1 and an SMK-37 Pro on one computer, the SMK listed first and running: an FM-1 package goes to the FM-1
+     and its return is the FM-1's, not the SMK's identity */
+  const twoSmk = new FakeFM1(image), twoFm1 = new FakeFM1(image);
+  twoSmk.boot("SMK-37 Pro_016", "SMK-37 Pro");
+  const both = { get inputs() { return new Map([...twoSmk.access.inputs, ...twoFm1.access.inputs]); },
+                 get outputs() { return new Map([...twoSmk.access.outputs, ...twoFm1.access.outputs]); } };
+  const tw = await new Updater(both).install(image, "FM-1_900").then((v) => v, (x) => x);
+  ok(tw === "FM-1_900" && twoFm1.bad === 0 && twoFm1.served > 0 && twoSmk.served === 0,
+    "fm1ota.js: two units, the other one listed first: the package's own unit and its return");
+  const flaky2 = new FakeFM1(image, { drops: [9] });
+  const ir = await new Updater(flaky2.access, null, { resumeWaitMs: 3000 }).install(image, "FM-1_900");
+  ok(ir === "FM-1_900" && flaky2.bad === 0, "fm1ota.js: install() resumes a dropped write too");
+
+  /* the write's progress moves forward only: Skiff's loader (check pass, write pass, header sector last) and
+     M-VAVE's (one pass, top down), counted in flash.bin bytes (a synthetic image with a file list) */
+  const encIt = (b, off, size) => { let key = 0xFFFF; for (let i = 0; i < size; i++) { b[off + i] ^= key & 0xFF; key = ((key * 2) ^ (key & 0x8000 ? 0x1021 : 0)) & 0xFFFF; } };
+  const big = Uint8Array.from({ length: 0x20000 }, (_, i) => (i * 13) & 0xFF);
+  const hdr = new Uint8Array(0x40), ent = new Uint8Array(0x50), lo = 0x400, size = 0x20000 - 0x400;
+  hdr[8] = 1; ent[8] = lo & 0xFF; ent[9] = lo >> 8; ent[12] = size & 0xFF; ent[13] = (size >> 8) & 0xFF; ent[14] = size >> 16;
+  encIt(hdr, 0, 0x40); encIt(ent, 0, 0x50); big.set(hdr, 0); big.set(ent, 0x40);
+  const span = flashSpan(big);
+  ok(span && span.off === lo && span.size === size, "fm1pkg.js: flashSpan finds flash.bin in the file list");
+  const range = (a, b, s) => { const r = []; for (let x = a; s > 0 ? x < b : x > b; x += s) r.push(x); return r; };
+  const ours = [[lo + 0x4000, 32], ...range(0, size, 512).map((o) => [lo + o, 512]),
+    ...range(0x5000, size, 512).map((o) => [lo + o, 512]), ...range(0x4000, 0x5000, 512).map((o) => [lo + o, 512])];
+  const mvave = [[0, 64], ...range(size - 512, -1, -512).map((o) => [lo + o, 512])];
+  for (const [name, reads] of [["Skiff's loader: check pass, write pass, header last", ours], ["M-VAVE's loader: one pass, top down", mvave]]) {
+    const m = new WriteMeter(big), v = reads.map(([a, n]) => m.add(a, n));
+    ok(v.every((x, i) => i === 0 || x >= v[i - 1]) && v.at(-1) >= 90 && v.at(-1) <= 99, `fm1ota.js: progress forward only, to ${v.at(-1)} %: ${name}`);
+  }
+  const pdev = new FakeFM1(big, { writeReads: ours });
+  pdev.boot("ota-FM-1_900", "Felucca Update");
+  const pv = [];
+  await new Updater(pdev.access).resume(big, (k, a) => { if (k === "write") pv.push(a); }, "FM-1_900");
+  ok(pv.length > 400 && pv.every((x, i) => i === 0 || x >= pv[i - 1]) && pdev.bad === 0, "fm1ota.js: the write's step('write', %) moves forward only");
+
+  /* the site's packages: one per model; a stock SMK older than V016 is sent to M-VAVE's updater first */
+  const pk = [{ product: "FM-1_714", pkg: "a" }, { product: "SMK-37 Pro_714", pkg: "b" }, { product: "SMK-37 Elite_714", pkg: "c" }, { product: "MKE-P37_714", pkg: "d" }];
+  ok(packageFor(pk, "FM-1").pkg === "a" && packageFor(pk, "ota-SMK-37 Pro").pkg === "b" && packageFor(pk, "SMK-37 Elite").pkg === "c"
+     && packageFor(pk, "MKE-P37").pkg === "d" && packageFor(pk, "STARRYKEY-37 PLAY") === null && packageFor(pk, "SMK-37") === null,
+    "installer: the package for the connected model, never another model's");
+  const idOf = (txt) => { const m = /^([^_]+)_(\d+)$/.exec(txt); return { text: txt, model: m[1], version: parseInt(m[2], 10) }; };
+  ok(needsStockUpdate(idOf("SMK-37 Pro_012")) && needsStockUpdate(idOf("SMK-37 Elite_015")) && needsStockUpdate(idOf("MKE-P37_013"))
+     && !needsStockUpdate(idOf("SMK-37 Pro_016")) && !needsStockUpdate(idOf("SMK-37 Pro_714")) && !needsStockUpdate(idOf("SMK-37 Pro_900"))
+     && !needsStockUpdate(idOf("SMK-37 Pro_000")) && !needsStockUpdate(idOf("FM-1_015")), "installer: a stock SMK below V016 is updated with M-VAVE's tool first");
+  const v016 = process.env.SMK_STOCK_DIR && join(process.env.SMK_STOCK_DIR, "SMK-37_Pro_016.fwsc");
+  if (v016 && existsSync(v016)) {
+    const st = await validateStockPackage(new Uint8Array(readFileSync(v016)));
+    ok(st.product === "SMK-37 Pro_016" && st.image.length > 0x9D000, "fm1pkg.js: the official SMK-37 Pro V016 is accepted for the return to stock");
+  } else console.log("official SMK-37 Pro V016: skipped (SMK_STOCK_DIR not set)");
+  const notStock = await validateStockPackage(new Uint8Array(705252)).then(() => null, (x) => x);
+  ok(notStock && /official firmware/.test(notStock.message), "fm1pkg.js: a file of V016's size that is not V016 is refused");
 }
 
 await editorMock();

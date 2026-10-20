@@ -192,7 +192,7 @@ static int preferences(void)
     bad += check("INFO explicitly tags display capabilities after SONG without changing command 33",
         ED_SONG == 33 && ED_UI_STATE == 34 && ED_FAV_SET == 38 &&
         host_wire[n - 9 - 37] == CHAIN_ROWS && host_wire[n - 9 - 36] == 0x55 &&
-        host_wire[n - 9 - 35] == 1 && host_wire[n - 9 - 34] == 9 &&
+        host_wire[n - 9 - 35] == 1 && host_wire[n - 9 - 34] == 25 &&   /* ((Skiff #27) bit 4: COLORS) */
         host_wire[n - 9 - 33] == 0x4d && host_wire[n - 9 - 32] == 1 &&
         host_wire[n - 9 - 31] == MOTION_MAX && host_wire[n - 9 - 30] == 1 &&
         host_wire[n - 9 - 29] == 0x42 && host_wire[n - 9 - 28] == 1 && host_wire[n - 9 - 27] == 3 &&
@@ -200,14 +200,14 @@ static int preferences(void)
         host_wire[n - 9 - 23] == 0 &&                        /* (no bank since 1.0.3) */
         host_wire[n - 9 - 22] == 0x53 && host_wire[n - 9 - 21] == 1 && host_wire[n - 9 - 20] == 3 &&
         host_wire[n - 9 - 19] == 0x50 && host_wire[n - 9 - 18] == 1 && host_wire[n - 9 - 17] == 3 &&   /* FM6 v2: no bank, preset patches */
-        host_wire[n - 9 - 16] == 0x4E && host_wire[n - 9 - 15] == 1 && host_wire[n - 9 - 14] == 16 &&   /* MENU settings: 16 items ((Skiff U2) STYLE, FX LATCH gone) */
+        host_wire[n - 9 - 16] == 0x4E && host_wire[n - 9 - 15] == 1 && host_wire[n - 9 - 14] == 17 &&   /* MENU settings: 17 items ((Skiff U2) STYLE, FX LATCH gone; #27 PLAYHEAD) */
         host_wire[n - 9 - 13] == 0x52 && host_wire[n - 9 - 12] == 1 && host_wire[n - 9 - 11] == 4 &&   /* RATCH */
         host_wire[n - 9 - 10] == 0x4C && host_wire[n - 9 - 9] == 1 && host_wire[n - 9 - 8] == 1 &&   /* 1.1 parameter locks */
         host_wire[n - 9 - 7] == 0x54 && host_wire[n - 9 - 6] == 1 && host_wire[n - 9 - 5] == 0x30 &&  /* (Skiff phase 6) T5, T6 */
         host_wire[n - 9 - 4] == 0 && host_wire[n - 9 - 3] == 6 && host_wire[n - 9 - 2] == 0 &&         /* light: no GRAIN, PHYS */
         host_wire[n - 10] == 0x43 && host_wire[n - 9] == 1 && host_wire[n - 8] == TC_COUNT &&
         host_wire[n - 7] == 0x4B && host_wire[n - 6] == 1 && host_wire[n - 5] == 8 &&    /* (Skiff W3) the kit, */
-        host_wire[n - 4] == 0x57 && host_wire[n - 3] == 1 && host_wire[n - 2] == 31);    /* TRANSPORT .. PERFORM */   /* (Skiff W1) the step's FLAM
+        host_wire[n - 4] == 0x57 && host_wire[n - 3] == 1 && host_wire[n - 2] == 63);    /* TRANSPORT .. PERFORM, (#21) SMP_MIX */   /* (Skiff W1) the step's FLAM
                                                                                           * COND NUDGE */
     request(ED_UI_SET, a, 2);
     bad += check("UI_SET updates the actual palette and reports RAM-only saving",
@@ -216,7 +216,7 @@ static int preferences(void)
     bad += check("out-of-range palette leaves the display unchanged", host_wire[5] == 1 && settings.palette == 3);
     a[0] = 1; a[1] = 1; request(ED_UI_SET, a, 2);
     bad += check("the retired font weight is not supported (rc 2), UI_STATE says 127",
-        host_wire[5] == 2 && host_wire[8] == 9 && host_wire[10] == 127);
+        host_wire[5] == 2 && host_wire[8] == 25 && host_wire[10] == 127);
     a[0] = 2; request(ED_UI_SET, a, 2);
     bad += check("unsupported preference is reported without applying it", host_wire[5] == 2);
     a[0] = ENGI_DRUM; a[1] = 0; a[2] = 64; a[3] = 1;
@@ -454,6 +454,57 @@ static int samples(void)
                  request(ED_UP_STORE, a, 2) == 8u && host_wire[6] == 2 && !up_used(0));
     bad += check("user-preset ERASE reports failure when audio cannot stop",
                  request(ED_UP_ERASE, a, 1) == 8u && host_wire[6] == 2);
+    return bad;
+}
+
+/* (Skiff, #21) SMP_MIX (81): a slot's sounds' LEVEL REV DLY: read (slot, rc, nz, nz x (lo, hi), 16 + 16 + 16 values), set (the
+ * 48 values: applied, the slot marked to save), refused on an empty slot (rc 1), set but not kept when the sample fills
+ * the slot's last sector (rc 2); other arguments: no reply */
+static int smp_mix(void)
+{
+    uint8_t a[64];
+    uint32_t n, i;
+    int bad = 0, ok;
+    smp_user_hdr_t *h = (smp_user_hdr_t *)host_samples[0];
+    reset(); memset(host_samples, 0, sizeof host_samples);
+    smp_user_scan(0);
+    a[0] = 0;
+    n = request(ED_SMP_MIX, a, 1);
+    bad += check("(#21) SMP_MIX of an empty slot: nz 0, every sound LEVEL 127, REV 0, DLY 0",
+                 n == 5u + 3u + 48u + 1u && host_wire[4] == ED_SMP_MIX && !host_wire[5] && !host_wire[6] && !host_wire[7] &&
+                 host_wire[8] == 127 && host_wire[8 + 15] == 127 && !host_wire[8 + 16] && !host_wire[8 + 47]);
+    for (i = 0; i < 48u; i++)
+        a[1 + i] = (uint8_t)(i + 1u);
+    n = request(ED_SMP_MIX, a, 49);
+    bad += check("  a set on it: rc 1, nothing changes", n == 57u && host_wire[6] == 1 && usr_mix[0][SMX_LVL][0] == 127 && !smx_save);
+    memset(h, 0, sizeof *h); h->magic = SMP_USER_MAGIC; h->version = 1; h->nz = 2; h->data_len = 256;
+    for (i = 0; i < 2u; i++) {
+        h->zone[i].n = 256; h->zone[i].le = 255; h->zone[i].rate = 65536;
+        h->zone[i].lo = h->zone[i].hi = (uint8_t)(60u + 2u * i);
+    }
+    smp_user_scan(0);
+    a[0] = 0;
+    n = request(ED_SMP_MIX, a, 1);
+    bad += check("  a slot of two sounds: nz 2, their keys, the values as uploaded",
+                 n == 5u + 3u + 4u + 48u + 1u && usr_nz[0] == 2 && host_wire[7] == 2 && host_wire[8] == 60 && host_wire[9] == 60 &&
+                 host_wire[10] == 62 && host_wire[11] == 62 && host_wire[12] == 127 && host_wire[12 + 16] == 0);
+    for (i = 0; i < 48u; i++)
+        a[1 + i] = (uint8_t)(i * 2u + 1u);
+    n = request(ED_SMP_MIX, a, 49);
+    ok = n == 61u && !host_wire[6] && smx_save == 1u;
+    for (i = 0; i < 48u; i++)
+        ok &= usr_mix[0][i / 16u][i % 16u] == (int16_t)(i * 2u + 1u) && host_wire[12 + i] == i * 2u + 1u;
+    bad += check("  a set: rc 0, the 48 values in, the slot marked to be kept, the reply the values now", ok);
+    h->data_len = SMP_USER_SIZE - 0x1000u - SMP_USER_DATA + 1u;
+    smx_save = 0; a[1] = 50;
+    n = request(ED_SMP_MIX, a, 49);
+    bad += check("  a sample into the slot's last sector: rc 2, set (until the power goes)",
+                 n == 61u && host_wire[6] == 2 && usr_mix[0][SMX_LVL][0] == 50 && smx_save == 1u);
+    a[0] = 3;
+    ok = !request(ED_SMP_MIX, a, 1);
+    a[0] = 0;
+    ok &= !request(ED_SMP_MIX, a, 2) && !request(ED_SMP_MIX, a, 48) && !request(ED_SMP_MIX, a, 50) && !request(ED_SMP_MIX, a, 0);
+    bad += check("  no reply to another slot or another length", ok);
     return bad;
 }
 
@@ -846,16 +897,16 @@ static uint32_t menu_set(uint32_t id, int32_t v)            /* -> rc; host_wire[
 }
 static int menu_protocol(void)
 {
-    static const char *const WANT[16][2] = {   /* ((Skiff U2) STYLE, id 1, and FX LATCH, id 7, retired) */
+    static const char *const WANT[17][2] = {   /* ((Skiff U2) STYLE, id 1, and FX LATCH, id 7, retired) */
         {"THEME", 0}, {"LARGE", "OFF,ON"}, {"ANIM", "ON,OFF"}, {"LEDS", "OFF,DIM LO,DIM HI,INV"},
         {"HOLD", "0.3 s,0.4 s,0.5 s,0.6 s"}, {"KNOB ACCEL", "OFF,ON"}, {"BPM LOCK", "OFF,ON"},
         {"SPEAKER EQ", "FLAT,LOWCUT,BASS+"}, {"USB LEVEL", "MASTER,FIXED"}, {"USB SERIAL", "ON,OFF"},
         {"CLICK", "OFF,REC,ON"}, {"CLICK LEVEL", "LOW,MID,HIGH"}, {"COUNT-IN", "OFF,1 BAR,2 BARS"},   /* (1.1: appended) */
         {"RESTORE LAST", "ON,OFF"}, {"SCALE LEDS", "OFF,ON"},                                        /* (1.2) */
-        {"SCREEN OFF", "NEVER,5 MIN,15 MIN,30 MIN,60 MIN"}};
-    static const int32_t DEF[16] = {-1, 0, 0, 2, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 3};   /* (COLOR: the default palette) */
-    static const uint8_t TAB[16] = {0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 2, 2, 2, 3, 1, 0};      /* DISPLAY CONTROL AUDIO SYSTEM */
-    static const uint8_t ID[16] = {0, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17};   /* (1, 7: retired) */
+        {"SCREEN OFF", "NEVER,5 MIN,15 MIN,30 MIN,60 MIN"}, {"PLAYHEAD", "THEME,LINE"}};   /* ((Skiff #27) id 19) */
+    static const int32_t DEF[17] = {-1, 0, 0, 2, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 3, 0};   /* (COLOR: the default palette) */
+    static const uint8_t TAB[17] = {0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 2, 2, 2, 3, 1, 0, 0};      /* DISPLAY CONTROL AUDIO SYSTEM */
+    static const uint8_t ID[17] = {0, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19};   /* (1, 7, 18: none here) */
     static const char *const TABN[4] = {"DISPLAY", "CONTROL", "AUDIO", "SYSTEM"};
     int bad = 0, ok = 1;
     uint32_t i, k, n;
@@ -865,7 +916,7 @@ static int menu_protocol(void)
     FILE *jf = json ? fopen(json, "w") : 0;
     reset();
     if (jf) fprintf(jf, "[");
-    for (i = 0; i < 16u; i++) {
+    for (i = 0; i < 17u; i++) {
         n = menu_desc(i, &it);
         joined[0] = 0;
         for (k = 0; k < it.nnames; k++) { if (k) strcat(joined, ","); strcat(joined, it.names[k]); }
@@ -885,7 +936,7 @@ static int menu_protocol(void)
         }
     }
     if (jf) { fprintf(jf, "]\n"); fclose(jf); }
-    bad += check("MENU_DESC: 16 items (1.0.4's 12 in the menu's order less STYLE and FX LATCH, then 1.1's CLICK, CLICK LEVEL, COUNT-IN, 1.2's RESTORE LAST, SCALE LEDS, SCREEN OFF), ids 0, 2..6, 8..17, names, defaults", ok);
+    bad += check("MENU_DESC: 17 items (1.0.4's 12 in the menu's order less STYLE and FX LATCH, then 1.1's CLICK, CLICK LEVEL, COUNT-IN, 1.2's RESTORE LAST, SCALE LEDS, SCREEN OFF, (Skiff #27) PLAYHEAD), ids 0, 2..6, 8..17, 19, names, defaults", ok);
     bad += check("MENU_DESC (1.0.5): after the names each item's tab, index and name (DISPLAY CONTROL AUDIO SYSTEM)", ok);
     {   /* an older editor reads the names and stops: the tab is past them, nothing it reads moved */
         uint32_t m = menu_desc(3, &it), p = 14, q;
@@ -895,12 +946,12 @@ static int menu_protocol(void)
         bad += check("MENU_DESC: the tab comes after every byte of the 1.0.4 reply (older editors ignore it)", ok);
     }
     ok = 1;
-    for (i = 0; i < 16u; i++) {
+    for (i = 0; i < 17u; i++) {
         menu_desc(i, &it);
         ok &= strcmp(it.name, "CALIBRATION") && strcmp(it.name, "ABOUT");
     }
-    n = menu_desc(16, &it);
-    ok &= n == 2u && it.index == 16 && it.id == 127;
+    n = menu_desc(17, &it);
+    ok &= n == 2u && it.index == 17 && it.id == 127;
     n = menu_desc(127, &it);
     bad += check("MENU_DESC: no CALIBRATION / ABOUT; an index past the list answers index, 127 (no item)",
                  ok && n == 2u && it.index == 127 && it.id == 127);
@@ -933,12 +984,13 @@ static int menu_protocol(void)
     ok &= menu_set(16, 1) == 3 && (ui_rec_prefs & 0x40u) && click_mode == CLICK_ON && cin_bars == 2u;   /* (its own bit) */
     ok &= menu_set(17, 0) == 3 && scr_get() == 0u && menu_set(17, 9) == 3 && scr_get() == 4u &&   /* (clamped) */
           menu_set(17, 2) == 3 && scr_get() == 2u && ui_scr == 1u;
-    for (i = 0; i < 16u; i++) {                         /* MENU_DESC reads them back */
-        static const int32_t SET[16] = {2, 1, 1, 1, 3, 1, 1, 2, 1, 0, 2, 0, 2, 1, 1, 2};
+    ok &= menu_set(19, 1) == 3 && ui_ph_line == 1u;    /* ((Skiff #27) PLAYHEAD LINE) */
+    for (i = 0; i < 17u; i++) {                         /* MENU_DESC reads them back */
+        static const int32_t SET[17] = {2, 1, 1, 1, 3, 1, 1, 2, 1, 0, 2, 0, 2, 1, 1, 2, 1};
         menu_desc(i, &it);
         ok &= it.value == SET[i];
     }
-    bad += check("MENU_SET: every setting applied as the menu does (palette, EQ, USB LEVEL, CLICK, COUNT-IN at once, RESTORE LAST, SCALE LEDS, SCREEN OFF), read back", ok);
+    bad += check("MENU_SET: every setting applied as the menu does (palette, EQ, USB LEVEL, CLICK, COUNT-IN at once, RESTORE LAST, SCALE LEDS, SCREEN OFF, PLAYHEAD), read back", ok);
     ok = menu_set(3, 0) == 3 && !(ui_prefs & PREF_ANIM_OFF) && (ui_prefs & PREF_LARGE) && menu_set(10, 0) == 3 &&
          !fx_usb_fixed;
     bad += check("MENU_SET: a flag back to its default leaves the other flags", ok);
@@ -1263,6 +1315,15 @@ static int song_cmds(void)
     a[0] = 7; a[1] = 0;
     ok &= !request(ED_LIST, a, 3);
     bad += check("LIST: CLEAR (refused playing, then done); bad track, entry, REPS, SONG, op unanswered", ok);
+    a[0] = 1; a[1] = 0; a[2] = 5; a[3] = PAT_REST;
+    ok = request(ED_LIST, a, 4) && !host_wire[6] && host_wire[21] == PAT_REST && ent_rest(0, 5);   /* SET F REST */
+    song.playing = 1;
+    a[0] = 4;
+    ok &= request(ED_LIST, a, 3) && !host_wire[6] && !host_wire[21] && !lists.ent[0][5][0];        /* CLEAR it, playing */
+    song.playing = 0;
+    a[0] = 1; a[3] = PAT_REST + 1u;
+    ok &= !request(ED_LIST, a, 4);
+    bad += check("(#28) LIST: SET a REST (65), CLEAR it at once (playing too); 66 unanswered", ok);
     ed_fresh(0, 70); ok = !bank_put(0, 4, 0);        /* E: 04, the track on it; then E names A's: 04 unused */
     p4 = ent_pat(0, 4);
     a[0] = 1; a[1] = 0; a[2] = 4; a[3] = (uint8_t)(p3 + 1u);
@@ -1309,11 +1370,150 @@ static int song_cmds(void)
     return bad;
 }
 
+/* ---- (Skiff #27) COLORS (39): THEME CUSTOM's colours; CUSTOM in THEME's list (UI_PALETTES, UI_SET, UI_STATE, MENU) ---- */
+#define CPAL_N 11u
+static const uint16_t CC[CPAL_N] = {0x0841, 0x2104, 0xFFFF, 0xF800, 0x07E0,                  /* BG SURF TEXT THEME ACCENT */
+                                    0x001F, 0xF81F, 0xFFE0, 0x07FF, 0x8410, 0xFC00};         /* the six tracks' */
+static uint32_t colors_req(uint32_t op, uint32_t look, const uint16_t *c, uint32_t n)   /* -> rc (99: no reply / wrong) */
+{
+    uint8_t a[2 + 26], raw[22];
+    uint32_t i, k = 0;
+    if (op < 128u) a[k++] = (uint8_t)op;
+    if (op <= 1u) {
+        a[k++] = (uint8_t)look;
+        for (i = 0; i < CPAL_N; i++) { raw[2 * i] = (uint8_t)c[i]; raw[2 * i + 1] = (uint8_t)(c[i] >> 8); }
+        k += pack7(raw, sizeof raw, a + k);
+    }
+    k = request(ED_COLORS, a, n < k ? n : k);
+    return k == 5u + 3u + 26u + 1u && host_wire[4] == ED_COLORS ? host_wire[5] : 99u;
+}
+static int colors_are(const uint16_t *c)                    /* the reply's colours (pack7: 22 bytes, low byte first) */
+{
+    uint8_t raw[22];
+    uint32_t i;
+    if (ed_unpack7(host_wire + 8, 26, raw, sizeof raw) != sizeof raw) return 0;
+    for (i = 0; i < CPAL_N; i++)
+        if ((raw[2 * i] | raw[2 * i + 1] << 8) != c[i]) return 0;
+    return 1;
+}
+static int tokens_are(const uint16_t *c)                    /* the screen's tokens: c, the rest derived from it */
+{
+    uint32_t k, ok = T_BG == c[0] && T_SURF == c[1] && T_TEXT == c[2] && T_THEME == c[3] && T_ACCENT == c[4] &&
+        T_MID == ux_mix(c[0], c[2], UI_MID_PCT) && T_SEL == ux_mix(c[0], c[3], UI_SEL_PCT) && T_INK == c[0] &&
+        T_RAISE == ux_mix(c[1], c[2], UI_RAISE_PCT) && T_REC == (ux_luma(c[0]) > 128u ? UI_REC_LIGHT : UI_REC_DARK);
+    for (k = 0; k < UI_NTRK; k++)
+        ok &= T_TRK(k) == c[5 + k];
+    return ok;
+}
+static int tokens_builtin(uint32_t p)                       /* palette p's own */
+{
+    uint16_t c[CPAL_N];
+    uint32_t k;
+    c[0] = UI_PALETTES[p].bg; c[1] = UI_PALETTES[p].surf; c[2] = UI_PALETTES[p].text; c[3] = UI_PALETTES[p].theme;
+    c[4] = UI_PALETTES[p].accent;
+    for (k = 0; k < UI_NTRK; k++) c[5 + k] = UI_TRACKS[p][k];
+    return tokens_are(c) && ux.crypt == (p == UI_CRYPT_INDEX) && ux.neon == (p == UI_NEON_INDEX) && ux.quark == (p == UI_QUARK_INDEX);
+}
+static uint32_t palettes_listed(void)                       /* UI_PALETTES: the count; the last name CUSTOM or not */
+{
+    uint32_t n = request(ED_UI_PALETTES, 0, 0), p = 6, k = 0;
+    if (n < 8u) return 99u;
+    while (p < n - 1u && k + 1u < host_wire[5]) { while (host_wire[p]) p++; p++; k++; }
+    return host_wire[5] | (uint32_t)!strcmp((const char *)host_wire + p, "CUSTOM") << 8;
+}
+static int custom_colors(void)
+{
+    int bad = 0, ok;
+    uint16_t bad_c[CPAL_N];
+    uint8_t a[4] = {0, 0, 0, 0};
+    menu_item_t it;
+    persist_t p;
+    uint32_t i;
+    reset();
+    SCENE_FREED = SCENE_FREED_V;                            /* (every unit since phase 5) */
+    ok = colors_req(255, 0, 0, 0) == 0 && host_wire[6] == 0 && host_wire[7] == 0;
+    ok &= palettes_listed() == NPALETTES && menu_n(MI_COLOR) == NPALETTES && (request(ED_UI_STATE, 0, 0), host_wire[5] & ED_UI_COLORS);
+    bad += check("(#27) COLORS: none stored (flags 0), the 22 bytes in pack7; THEME lists its six; UI_STATE's caps say COLORS", ok);
+
+    ok = colors_req(0, UI_QUARK_INDEX, CC, 99) == 0 && tokens_are(CC) && ux.quark && !ux.neon && settings.palette == 0u &&
+         host_wire[6] == 0 && !CPAL_BYTE && !favorites.factory[14][8] && ui.force;
+    bad += check("(#27) COLORS op 0: shown at once in its look (QUARK's widgets, the colours as sent), nothing stored", ok);
+    ok = colors_req(3, 0, 0, 1) == 0 && tokens_builtin(0) && settings.palette == 0u;
+    bad += check("(#27) COLORS op 3: the preview dropped, SKIFF again", ok);
+
+    ok = colors_req(1, UI_NEON_INDEX, CC, 99) == 3 && host_wire[6] == 3 && host_wire[7] == UI_NEON_INDEX && colors_are(CC) &&
+         tokens_are(CC) && ux.neon && settings.palette == UI_NEON_INDEX && CPAL_BYTE == (3u | UI_NEON_INDEX << 2) &&
+         favorites.factory[14][8] == (CC[0] & 255u) && favorites.factory[14][9] == CC[0] >> 8 &&
+         favorites.factory[14][28] == (CC[10] & 255u) && favorites.factory[14][29] == CC[10] >> 8 &&
+         !favorites.factory[14][30] && !favorites.factory[14][7];
+    bad += check("(#27) COLORS op 1: stored ([14][8..29], low byte first; [15][14] 3 | look << 2) and in use (rc 3: RAM only here)", ok);
+    ok = palettes_listed() == (NPALETTES + 1u | 256u) && (request(ED_UI_STATE, 0, 0), host_wire[6] == NPALETTES);
+    menu_desc(0, &it);
+    ok &= it.max == (int32_t)NPALETTES && it.value == (int32_t)NPALETTES && !strcmp(it.names[NPALETTES], "CUSTOM") &&
+          menu_get(MI_COLOR) == NPALETTES && !strcmp(menu_vname(MI_COLOR, NPALETTES), "CUSTOM");
+    bad += check("(#27) THEME CUSTOM, last while stored: UI_PALETTES 7 names, UI_STATE and MENU_DESC say it is in use", ok);
+
+    a[0] = 0; a[1] = 1; request(ED_UI_SET, a, 2);           /* HI-CON */
+    ok = host_wire[5] == 3 && settings.palette == 1u && tokens_builtin(1) && cpal_stored() && !cpal_on() &&
+         colors_req(255, 0, 0, 0) == 0 && host_wire[6] == 1 && host_wire[7] == UI_NEON_INDEX && colors_are(CC) &&
+         menu_n(MI_COLOR) == NPALETTES + 1u;
+    a[1] = NPALETTES; request(ED_UI_SET, a, 2);             /* CUSTOM again: in its look */
+    ok &= host_wire[5] == 3 && settings.palette == UI_NEON_INDEX && cpal_on() && tokens_are(CC) && ux.neon;
+    menu_put(MI_COLOR, UI_QUARK_INDEX);                     /* the MENU's THEME: QUARK, then a step on is CUSTOM */
+    ok &= settings.palette == UI_QUARK_INDEX && tokens_builtin(UI_QUARK_INDEX) && menu_step(MI_COLOR, 1) == NPALETTES;
+    menu_put(MI_COLOR, menu_step(MI_COLOR, 1));
+    ok &= cpal_on() && settings.palette == UI_NEON_INDEX && tokens_are(CC) && menu_step(MI_COLOR, 1) == 0u &&
+          menu_step(MI_COLOR, -1) == UI_QUARK_INDEX;
+    bad += check("(#27) THEME: CUSTOM and back by UI_SET and the MENU (it wraps round seven), the set kept, CUSTOM in its look", ok);
+
+    for (i = 0; i < CPAL_N; i++) bad_c[i] = (uint16_t)~CC[i];
+    ok = colors_req(1, 0, bad_c, 1) == 1 && colors_req(1, 0, bad_c, 2 + 26 - 1) == 1 &&
+         colors_req(1, NPALETTES, bad_c, 99) == 1 && colors_req(4, 0, 0, 1) == 1;
+    {
+        uint8_t big[2 + 26 + 1] = {2, 0};
+        ok &= request(ED_COLORS, big, 2) && host_wire[5] == 1;   /* (op 2 with a byte more: not a remove) */
+        big[0] = 1;
+        ok &= request(ED_COLORS, big, sizeof big) && host_wire[5] == 1;   /* (a byte more than 22 in pack7) */
+        big[2] = 0x7F;                                       /* (the last group's mask: a top bit with no byte) */
+        big[2 + 24] = 0x7F;
+        ok &= request(ED_COLORS, big, 2 + 26) && host_wire[5] == 1;
+    }
+    ok &= colors_are(CC) && cpal_on() && tokens_are(CC) && CPAL_BYTE == (3u | UI_NEON_INDEX << 2);
+    bad += check("(#27) COLORS: a wrong length, look, op or pack7 answers rc 1, nothing changed", ok);
+
+    settings_export(&p);                                    /* the settings record a unit keeps */
+    ok = p.palette == palette_to_stored(UI_NEON_INDEX) && p.favorites.factory[15][14] == CPAL_BYTE &&
+         !memcmp(&p.favorites.factory[14][8], &favorites.factory[14][8], 22);
+    memset(&favorites, 0, sizeof favorites); memset(&settings, 0, sizeof settings); settings_init();
+    ok &= tokens_builtin(0) && settings_import(&p, sizeof p) == 1 && settings_init() == 0 && cpal_on() && tokens_are(CC) &&
+          ux.neon;
+    bad += check("(#27) the set kept with the settings: its THEME field the look (firmware before shows NEON), read back in use", ok);
+
+    ok = colors_req(2, 0, 0, 1) == 3 && host_wire[6] == 0 && !CPAL_BYTE && settings.palette == UI_NEON_INDEX &&
+         tokens_builtin(UI_NEON_INDEX) && palettes_listed() == NPALETTES && menu_n(MI_COLOR) == NPALETTES;
+    a[1] = NPALETTES; request(ED_UI_SET, a, 2);
+    ok &= host_wire[5] == 1 && settings.palette == UI_NEON_INDEX;
+    bad += check("(#27) COLORS op 2: removed, the look's own colours; CUSTOM gone from THEME (UI_SET 6: rc 1)", ok);
+
+    colors_req(1, UI_CRYPT_INDEX, CC, 99);
+    ui_ph_line = 1;
+    settings_reset();
+    ok = settings.palette == UI_SKIFF_INDEX && tokens_builtin(0) && cpal_stored() && !cpal_on() && !ui_ph_line;
+    bad += check("(#27) RESET SETTINGS: THEME SKIFF, the set kept (CUSTOM still listed), PLAYHEAD THEME", ok);
+
+    SCENE_FREED = 0;                                        /* (a unit not migrated yet: those bytes may be old scenes) */
+    CPAL_BYTE = 3u | UI_QUARK_INDEX << 2; settings.palette = UI_QUARK_INDEX; theme_apply();
+    ok = !cpal_stored() && tokens_builtin(UI_QUARK_INDEX) && menu_n(MI_COLOR) == NPALETTES &&
+         colors_req(255, 0, 0, 0) == 0 && host_wire[6] == 0;
+    bad += check("(#27) before the old scenes are freed (SCENE_FREED) the bytes are no set", ok);
+    return bad;
+}
+
 int main(void)
 {
-    int bad = preferences() + motion_locks() + wide_ids() + framing() + uart_recovery() + steps() + samples() + song_protocol() + malformed_saves() +
+    int bad = preferences() + motion_locks() + wide_ids() + framing() + uart_recovery() + steps() + samples() + smp_mix() + song_protocol() + malformed_saves() +
               fm6_patches() + user_preset_roundtrip() + live_sync() + usb_burst() + menu_protocol() + drum_kit_retired() +
-              light_tracks() + preset_more() + transport_names() + song_cmds();
+              light_tracks() + preset_more() + transport_names() + song_cmds() + custom_colors();
     printf("%s\n", bad ? "EDITOR TEST FAILED" : "editor test passed");
     return bad != 0;
 }

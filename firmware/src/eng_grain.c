@@ -455,7 +455,7 @@ static const engine_t ENG_GRAIN = {
     .name = "GRAIN",
     .page_title = {"GRAIN", "SPRAY"},
     .edit = {
-        {"SOURCE", F_ENUM, 0, SMP_NALL - 1, 0, SMP_ALL_NAMES, 0},
+        {"SOURCE", F_ENUM, 0, SMP_PICK_MAX, 0, SMP_ALL_NAMES, 0},
         {"POS", F_PCT, 0, 127, 32, 0, 0},
         {"SIZE", F_PCT, 0, 127, 80, 0, 0},
         {"DENSITY", F_PCT, 0, 127, 80, 0, 0},

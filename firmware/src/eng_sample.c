@@ -43,8 +43,24 @@ static uint32_t pow2_q16(int32_t d16)
  * smp_zone_t layout (off relative to the slot's data at +512) + IMA ADPCM data. */
 #include "../hal/fm1_xip.h"   /* relative: hostsim includes this file too */
 #define SMP_USER_SLOTS 3
-#define SMP_USER_BASE 0xA0000u
 #define SMP_USER_SIZE 0x14000u
+#if BOARD_SMK37
+/* SMK-37 Pro: only USR1 has flash (FL_SLOT 0xC2000..0xD5FFF in USRFLASH, fm1_flash_map.h; the pattern pool has the
+ * rest); USR2 and USR3 stay empty: never scanned, their erase / write refused (SMP_USER_HAS). Their offsets are the
+ * pool's and the stock marker's sectors: never a slot */
+#include "../hal/fm1_flash_map.h"   /* FL_SLOT (relative, as fm1_xip.h) */
+#define SMP_USER_FLASH_SLOTS 1u
+#define SMP_USER_BASE FL_SLOT_LO
+#define SMP_USER_HAS(k) ((uint32_t)(k) < SMP_USER_FLASH_SLOTS)
+#define SMP_SHOWN SMP_USER_FLASH_SLOTS               /* (SMK37_UX.md question 11: USR2, USR3 not offered) */
+#define SMP_PICK_MAX (SMP_NSETS + SMP_USER_FLASH_SLOTS - 1)   /* SAMPLE's SET, GRAIN's SOURCE: up to USR1 */
+_Static_assert(SMP_USER_BASE + SMP_USER_FLASH_SLOTS * SMP_USER_SIZE <= FL_SLOT_HI, "SMK: the user slot past FL_SLOT");
+#else
+#define SMP_USER_BASE 0xA0000u
+#define SMP_USER_HAS(k) 1
+#define SMP_SHOWN SMP_USER_SLOTS                     /* the slots offered (the editor's SMP_INFO) */
+#define SMP_PICK_MAX SMP_NALL - 1                    /* SAMPLE's SET, GRAIN's SOURCE: the last value */
+#endif
 #define SMP_USER_DATA 512u
 #define SMP_USER_MAGIC 0x504D5346u                  /* "FSMP" */
 #define SMP_NALL (SMP_NSETS + SMP_USER_SLOTS)
@@ -58,6 +74,16 @@ typedef struct {
 } smp_user_hdr_t;                                   /* 32 + 16 x 28 = 480 B, data at +512 */
 static smp_zone_t usr_zone[SMP_USER_SLOTS][16];     /* RAM copy, off rebased onto SMP_DATA */
 static uint8_t usr_nz[SMP_USER_SLOTS];
+/* (Skiff, #21) each sound of a user slot (a zone) has its own LEVEL, and sends more to the REVERB and the DELAY than
+ * its track does by its REV and DLY: usr_mix[slot][0 LEVEL, 1 REV, 2 DLY][zone], 0..127. LEVEL 127 plays the sound as
+ * it was uploaded (square law, as DRUM's lanes: 64 a quarter), REV and DLY 0 leave the track's sends alone. Set on
+ * the unit, by the editor (SMP_MIX) and by tools/fm1_sample_upload.py; kept with the slot (slice_store.c: a record
+ * after SLICE's in the slot's last sector, for this header only). A slot of before, or a new upload: 127, 0, 0 */
+enum { SMX_LVL, SMX_REV, SMX_DLY };
+static int16_t usr_mix[SMP_USER_SLOTS][3][16];   /* (int16: the page's knobs turn them, params.c page_desc) */
+static void (*smx_load)(uint32_t k) __attribute__((section(".pool")));   /* slice_store.c: the slot's stored ones (a
+                                                                          * scan) */
+static uint8_t smx_save __attribute__((section(".pool")));   /* bit k: slot k's changed, to flash (slice_store.c) */
 static const char *const SMP_ALL_NAMES[SMP_NALL] = {SMP_SET_NAMES_INIT, "USR1", "USR2", "USR3"};
 
 #ifndef SMP_USER_XIP                                /* host tests: a RAM image of the slots */
@@ -82,7 +108,7 @@ static void smp_user_scan(uint32_t k)
     smp_user_gen++;
     usr_nz[k] = 0;
     slc_user_scan(k, 0);
-    if (h->magic == SMP_USER_MAGIC && h->version == 1 && h->nz && h->nz <= 16u &&
+    if (SMP_USER_HAS(k) && h->magic == SMP_USER_MAGIC && h->version == 1 && h->nz && h->nz <= 16u &&
         h->data_len <= SMP_USER_SIZE - SMP_USER_DATA) {
         base = (uint32_t)(uintptr_t)(smp_user_xip(k) + SMP_USER_DATA) - (uint32_t)(uintptr_t)SMP_DATA;
         for (nz = h->nz, i = 0; i < nz; i++) {
@@ -96,11 +122,16 @@ static void smp_user_scan(uint32_t k)
             z->off += base;
         }
     }
-    for (i = 0; i < 16u; i++)
+    for (i = 0; i < 16u; i++) {
         usr_zone[k][i] = i < nz ? zt[i] : (smp_zone_t){0};
+        usr_mix[k][SMX_LVL][i] = 127;               /* ((#21) every sound as uploaded, then the stored: smx_load) */
+        usr_mix[k][SMX_REV][i] = usr_mix[k][SMX_DLY][i] = 0;
+    }
     if (!nz)
         return;
     usr_nz[k] = (uint8_t)nz;
+    if (smx_load)
+        smx_load(k);
     slc_user_scan(k, 1);
 }
 
@@ -245,7 +276,7 @@ static const engine_t ENG_SAMPLE = {
     .name = "SAMPLE",
     .page_title = {"SET", "TONE"},
     .edit = {
-        {"SET", F_ENUM, 0, SMP_NALL - 1, 0, SMP_ALL_NAMES, 0},
+        {"SET", F_ENUM, 0, SMP_PICK_MAX, 0, SMP_ALL_NAMES, 0},
         {"PITCH", F_SEMI, -24, 24, 0, 0, 0},
         {"BITS", F_INT, 0, 127, 0, 0, 0},
         {"LOOP", F_ENUM, 0, 1, 1, N_ONOFF_E, 0},

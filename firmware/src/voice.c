@@ -690,6 +690,7 @@ static void lfo_pitch(int32_t lfo, int32_t d, int32_t *p16, int32_t *fine)
     *fine = ((o & 255) * 3787 + 32768) >> 16;       /* 1/4096 semitone -> 1/4096 of the rate (1 ct = 2.367), to the
                                                      * nearest (1 is then 0.42 ct, not 0) */
 }
+static void smx_render(track_t *t, voice_t *v, uint32_t k, int32_t *dst, uint32_t n, const vmod_t *m);   /* (fx.c) */
 static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
 {
     const engine_t *e = ENGINES[t->engine];
@@ -789,7 +790,11 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
                 env2_tick(t, v);
             mod_voice(t, v, &m, v->fine + tune_fine + bend_fine);
         }
-        e->render(t, v, t->spread_on > v->side ? sb : out, n, &m);   /* ((1.3) SPREAD: the left ones) */
+        if (t->engine == ENGI_SAMPLE && v->s[4] >= 0x8000)   /* ((Skiff, #21) a user sample's sound: its LEVEL and
+                                                                * sends, fx.c) */
+            smx_render(t, v, ti, t->spread_on > v->side ? sb : out, n, &m);
+        else
+            e->render(t, v, t->spread_on > v->side ? sb : out, n, &m);   /* ((1.3) SPREAD: the left ones) */
         nr++;
     }
     if (t->spread_on)

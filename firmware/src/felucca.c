@@ -3,6 +3,8 @@
 /* FELUCCA: one compilation unit (the HAL is header-only). Each file uses what the files above it
  * define, so the order matters. */
 
+#include "fm1_cc.h"              /* BOARD_SMK37, SMK_MODEL: the board this build is for */
+
 /* ---------------------------------------------------- build options --- */
 /* build.py: FELUCCA_<NAME>=0 / 1 in the environment overrides these. Elsewhere: FELUCCA_SLICE, FELUCCA_FM4
  * (core.h: the SLICE engine, the DIGITAL engine), FELUCCA_ICONS (icons.c, the parameter icons; on by default),
@@ -26,13 +28,25 @@
 #define FELUCCA_UAC_TONE 0       /* bench: the USB input sends test triangles instead of the music */
 #endif
 #ifndef FELUCCA_UART
+#if BOARD_SMK37
+#define FELUCCA_UART 0           /* SMK-37 Pro: the TRS jack is MIDI OUT (UART1 TX, PC7), no MIDI IN; PH8 is a key-matrix
+                                  * row there and must never become UART RX */
+#else
 #define FELUCCA_UART 1           /* TRS MIDI IN on UART1 / PH8 */
 #endif
+#endif
+#if BOARD_SMK37 && FELUCCA_UART
+#error "BOARD_SMK37: midi_uart.c is the FM-1 MIDI IN driver (RX on PH8, a key-matrix row on the SMK)"
+#endif
 #ifndef FELUCCA_ID
+#if BOARD_SMK37
+#define FELUCCA_ID SMK_MODEL "_700"   /* package identity (build.py: the .fwsc marker string) */
+#else
 #define FELUCCA_ID "FM-1_700"    /* package identity (build.py: the .fwsc marker string) */
 #endif
+#endif
 #ifndef FELUCCA_VERSION
-#define FELUCCA_VERSION "v1.3.3"     /* Skiff's; shown in the menu, the console and the editor; build.py --release X.Y */
+#define FELUCCA_VERSION "v1.4"     /* Skiff's; shown in the menu, the console and the editor; build.py --release X.Y */
 #endif
 #if FELUCCA_OTA && !FELUCCA_FLASH
 #error "FELUCCA_OTA needs FELUCCA_FLASH"
@@ -69,10 +83,18 @@ static inline __attribute__((always_inline)) void *audio_far(void *p) { void *vo
 #define C1_RUN(fn, arg) fm1_cpu1_run(fn, arg)
 #define C1_WAIT() fm1_cpu1_wait()
 #endif
+#if BOARD_SMK37
+#include "smk_input.h"           /* SMK-37 Pro: keys, buttons, knobs, button LEDs, pads, faders, wheels, battery */
+#include "smk_compat.h"          /* (the FM-1's LED glow and power-on sweep: none on the SMK) */
+#include "smk_uart_tx.h"         /* the TRS jack: MIDI OUT (UART1 TX, PC7) */
+#else
 #include "fm1_input.h"
+#endif
 #include "fm1_timer.h"
 #include "fm1_audio.h"
-#include "fm1_adc.h"
+#if !BOARD_SMK37
+#include "fm1_adc.h"             /* (the SMK's battery and MASTER: smk_input.h) */
+#endif
 #include "fm1_lcd_hw.h"
 #include "fm1_clk.h"             /* (Skiff) the core clock; MENU > CPU CLOCK 320 MHZ's switch (main.c) */
 #define CLK_MHZ() fm1_clk_mhz()  /* the core clock now (ui.c: 360 elsewhere) */
@@ -127,6 +149,9 @@ static inline __attribute__((always_inline)) void *audio_far(void *p) { void *vo
 #endif
 #if FELUCCA_CDC
 #include "console.c"
+#endif
+#if BOARD_SMK37
+#include "smk_ui.c"              /* the SMK-37's own controls: pads, faders, wheels, pedal, < >, KEY VELOCITY */
 #endif
 #include "master.c"              /* the MASTER pot (#137: read before the audio starts) */
 #include "main.c"

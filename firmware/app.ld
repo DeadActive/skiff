@@ -14,6 +14,7 @@
  * STACKS with 256-byte guard bands (Skiff: the main loop's 11.75 KiB, about 3x the deepest use measured in
  * the emulator, 4.1 KiB; its other 12 KiB went to the POOL; the interrupts' 7.75 KiB as they were: they carry USB
  * and updates too); NOINIT survives resets and UBOOT entry.
+ * 0x01C7FD20..0x01C7FD4F: the SMK update loader's start record (loader/ldr_crumb.h), kept out of NOINIT.
  * 0x01C7FD50.. is reserved: boot_info, boot-state mailbox, vector table. */
 MEMORY
 {
@@ -21,7 +22,7 @@ MEMORY
     RAMTEXT (rwx): ORIGIN = 0x01C00000, LENGTH = 0x6000
     RAM    (rwx) : ORIGIN = 0x01C08000, LENGTH = 96K
     POOL   (rw)  : ORIGIN = 0x01C20000, LENGTH = 0x57000
-    NOINIT (rw)  : ORIGIN = 0x01C7C000, LENGTH = 0x3D50
+    NOINIT (rw)  : ORIGIN = 0x01C7C000, LENGTH = 0x3D20
 }
 SECTIONS
 {

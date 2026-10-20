@@ -5,18 +5,33 @@
 /* ----------------------------------------------------------- LEDs --- */
 /* The LED picture is built off-line and copied one byte per column: clearing
  * and relighting would let the 10 kHz scan catch the dark gap and flicker. */
-static uint8_t led_pos[41];                        /* (col << 3) | row bit, 0xFF = none */
+#if BOARD_SMK37
+/* (SMK-37 Pro) no key matrix LEDs: the picture is drawn in a plain id space, place = id (byte id / 8, bit id % 8),
+ * the buttons 0..17, PLAY's red half 18, the 27 keys from LED_KEY0; smk_leds_out reads the buttons' back */
+#define LED_KEY0 24u                                /* key k's LED id (the FM-1's 14 + k: its button ids end at 13) */
+#define LED_NID (LED_KEY0 + 27u)
+#else
+#define LED_KEY0 14u
+#define LED_NID 41u
+#endif
+static uint8_t led_pos[LED_NID];                   /* (col << 3) | row bit, 0xFF = none */
 
 static void led_pos_init(void)
 {
+#if BOARD_SMK37
+    uint32_t id;
+    for (id = 0; id < LED_NID; id++)
+        led_pos[id] = (uint8_t)id;
+#else
     uint32_t id, p, r;
-    for (id = 0; id < 41u; id++) {
+    for (id = 0; id < LED_NID; id++) {
         led_pos[id] = 0xFF;
         for (p = 0; p < FM1_NCOL; p++)
             for (r = 1; r < 5u; r++)
                 if (FM1_KEYMAP[r][p] == (int8_t)id)
                     led_pos[id] = (uint8_t)((p << 3) | r);
     }
+#endif
 }
 
 static void led_put(uint8_t *nl, uint32_t id, int on)
@@ -27,7 +42,11 @@ static void led_put(uint8_t *nl, uint32_t id, int on)
 }
 
 /* PLAY's second, green LED: not in the key matrix (no key there), found on the hardware at column 8, row PA9 (bit 1) */
+#if BOARD_SMK37
+#define LED_PLAY_GREEN 16u                          /* (SMK) SEQ PLAY's green half, LED 16 (smk_input.h SMK_LEDC) */
+#else
 #define LED_PLAY_GREEN ((8u << 3) | 1u)
+#endif
 static void led_clear(uint8_t *nl, uint32_t id)
 {
     uint8_t q = led_pos[id];
@@ -339,6 +358,22 @@ static uint32_t key_leds(uint32_t *br)                 /* (*br: a layer's keys t
  * rest: the root's keys lit, the scale's at the mid level, the others glowing; the keys held and playing as ever
  * (lit, INV dark). Each picture is built off-line and copied one byte per column, the
  * glow first: an LED going from lit to dim never has a dark frame */
+#if BOARD_SMK37
+/* (SMK-37 Pro, SMK37_UX.md button LEDs A) the picture's button LEDs: on or off only, so lit or breathing = on, the glow
+ * and the mid level dark; KNOB BANK lit while it is SHIFT, FADER BANK off the LEVEL bank (smk_ui.c). The keys' picture
+ * (LED_KEY0 + k) goes to the pads (smk_ui.c smk_pads_out: no LEDs under the keys) */
+static uint8_t smk_fbank;
+static void smk_pads_out(const uint8_t *nl, const uint8_t *nd, const uint8_t *nb, const uint8_t *nm);
+static void smk_leds_out(const uint8_t *nl, const uint8_t *nd, const uint8_t *nb, const uint8_t *nm)
+{
+    uint32_t i;
+    for (i = 0; i < SMK_NLED; i++)
+        fm1_led_key(i, (int)(((nl[i >> 3] | nb[i >> 3]) >> (i & 7u)) & 1u));
+    fm1_led_key(SMK_BTN_KNOB_BANK, (int)((fm1_in.buttons >> SMK_BTN_KNOB_BANK) & 1u));
+    fm1_led_key(SMK_BTN_FADER_BANK, smk_fbank != 0u);
+    smk_pads_out(nl, nd, nb, nm);
+}
+#endif
 static void ui_leds(void)
 {
     uint8_t nl[FM1_NCOL] = {0}, nd[FM1_NCOL] = {0}, own[FM1_NCOL] = {0}, og[FM1_NCOL] = {0}, nb[FM1_NCOL] = {0};
@@ -373,14 +408,14 @@ static void ui_leds(void)
     sc = keys_map ? 0u : scale_leds(&sr);               /* SCALE LEDS: the scale's keys glow, the root's brighter */
     for (k = 0; k < 27u; k++) {
         uint32_t in = (sc >> k) & 1u, rt = (sr >> k) & 1u, idle = !((c >> k) & 1u);
-        led_put(nm, 14u + k, (int)((beat >> k) & 1u));
-        led_put(keys_map ? own : nl, 14u + k, (int)((c >> k) & 1u));
-        led_put(keys_map ? og : nd, 14u + k, keys_map ? (int)((g >> k) & 1u) : !sc || (mode == LEDS_INV && rt));
-        led_put(nb, 14u + k, (int)((br >> k) & 1u));
+        led_put(nm, LED_KEY0 + k, (int)((beat >> k) & 1u));
+        led_put(keys_map ? own : nl, LED_KEY0 + k, (int)((c >> k) & 1u));
+        led_put(keys_map ? og : nd, LED_KEY0 + k, keys_map ? (int)((g >> k) & 1u) : !sc || (mode == LEDS_INV && rt));
+        led_put(nb, LED_KEY0 + k, (int)((br >> k) & 1u));
         if (!sc)
             continue;
-        led_put(sg, 14u + k, mode == LEDS_INV ? !in && idle : (int)in);   /* (INV: the active ones dark) */
-        led_put(sm, 14u + k, mode == LEDS_INV ? in && !rt && idle : (int)rt);
+        led_put(sg, LED_KEY0 + k, mode == LEDS_INV ? !in && idle : (int)in);   /* (INV: the active ones dark) */
+        led_put(sm, LED_KEY0 + k, mode == LEDS_INV ? in && !rt && idle : (int)rt);
     }
     for (k = 0; k < NB; k++)
         led_put(nd, panel.btn[k], 1);
@@ -401,6 +436,9 @@ static void ui_leds(void)
     }
     if (song.playing || (seq_counting() && cin_pos < click_beat_len() / 4u))   /* counting in: green on each beat */
         nl[LED_PLAY_GREEN >> 3] |= (uint8_t)(1u << (LED_PLAY_GREEN & 7u));
+#if BOARD_SMK37
+    smk_leds_out(nl, nd, nb, nm);
+#else
     fm1_led_dim_level(mode == LEDS_DIM_LO);
     for (c = 0; c < FM1_NCOL; c++) {
         fm1_led_dim[c] = nd[c];
@@ -409,6 +447,7 @@ static void ui_leds(void)
     }
     for (c = 0; c < FM1_NCOL; c++)
         fm1_led[c] = nl[c];
+#endif
 }
 
 /* ---------------------------------------------------------- input --- */
@@ -517,12 +556,14 @@ static int live_rec_sel(void)
 }
 
 /* (Skiff phase 5) SEQ > SONG's EDIT: the entry picked cleared, after its dialog (bank.c song_clear; stopped: it may
- * erase a pattern, empty the track) */
+ * erase a pattern, empty the track); (#28) a REST at once (nothing goes with it) */
 static void song_edit(void)
 {
     uint32_t k = song.sel % NTRK, e = sg.entry % NENT;
     char b[8] = {'T', (char)('1' + k), ' ', (char)('A' + e), 0};
-    if (ent_pat(k, e) == PAT_NONE)
+    if (ent_rest(k, e))
+        (void)song_clear_at(k, e);
+    else if (ent_pat(k, e) == PAT_NONE)
         ui_say(b, " EMPTY");
     else if (transport_busy())
         ui_message("STOP TO CLEAR");
@@ -750,32 +791,40 @@ static void step_gate(track_t *t, uint32_t s, int32_t steps)
 }
 
 /* (Skiff phase 5) SEQ > SONG's knobs (ui.c sg): 1 the selected track's entry (A..P), 2 a pattern for it, put in by
- * OCT+ (the used ones in order, then COPY: a copy of its own; an empty entry's "--" first), 3 its repeats (1..16),
- * 4 SONG on / off (right on, left off) */
-static int song_pick_ok(uint32_t v, uint32_t cur)
+ * OCT+ (an empty entry's "--" first, (#28) REST, the used ones in order, then COPY: a copy of its own), 3 its repeats
+ * (1..16), 4 SONG on / off (right on, left off). own: what the entry holds (0 empty, a pattern id + 1, PAT_REST) */
+static int song_pick_ok(uint32_t v, uint32_t own)
 {
     if (!v)
-        return cur == PAT_NONE;
-    if (v == SPICK_COPY || v == SPICK_CLEAR)          /* ((Skiff U2) CLEAR after COPY: was EDIT) */
-        return cur != PAT_NONE;
+        return !own;
+    if (v == PAT_REST)
+        return 1;
+    if (v == SPICK_COPY)
+        return own && own <= NPAT;
+    if (v == SPICK_CLEAR)                             /* ((Skiff U2) CLEAR after COPY: was EDIT) */
+        return own != 0u;
     return v <= NPAT && pool_used(v - 1u);
 }
+/* .. KNOB 2's turn order: --, REST, 01 .. 64, COPY, CLEAR (a pick's place, and back) */
+static uint32_t spick_pos(uint32_t v) { return v == PAT_REST ? 1u : v && v <= NPAT ? v + 1u : v; }
+static uint32_t spick_val(uint32_t p) { return p == 1u ? PAT_REST : p > 1u && p <= NPAT + 1u ? p - 1u : p; }
 static void song_knob(uint32_t slot, int32_t steps)
 {
-    uint32_t k = song.sel % NTRK, e = sg.entry % NENT, cur = ent_pat(k, e), v, n, own = cur == PAT_NONE ? 0u : cur + 1u;
+    uint32_t k = song.sel % NTRK, e = sg.entry % NENT, v, n, own = lists.ent[k][e][0];
     if (slot == 0u) {
         sg.entry = (uint8_t)clamp((int32_t)sg.entry + steps, 0, NENT - 1);
     } else if (slot == 1u) {
-        v = song_pick() ? song_pick() : own;
+        v = spick_pos(song_pick() ? song_pick() : own);
         for (; steps; steps += steps > 0 ? -1 : 1) {
             n = v;
             do
-                n = steps > 0 ? n + 1u : n - 1u;    /* (below 0: past SPICK_CLEAR, out) */
-            while (n <= SPICK_CLEAR && !song_pick_ok(n, cur));
+                n = steps > 0 ? n + 1u : n - 1u;    /* (below 0: past CLEAR's, out) */
+            while (n <= SPICK_CLEAR && !song_pick_ok(spick_val(n), own));
             if (n > SPICK_CLEAR)
                 break;
             v = n;
         }
+        v = spick_val(v);
         sg.pick = (uint8_t)(v == own ? 0u : v);
         sg.pick_at = (uint8_t)(1u + k * 16u + e);
     } else if (slot == 2u) {                              /* ((1.2.1, #12) an empty entry's too: a rest's length) */
@@ -1269,6 +1318,9 @@ static void ui_notices(void)
     }
 }
 
+#if BOARD_SMK37
+static uint32_t smk_sh_t0;                              /* KNOB BANK as SHIFT (ui_input) */
+#endif
 static void ui_input(void)
 {
     uint32_t pressed = fm1_input_edges(0), notes = fm1_input_note_edges(), now = fm1_ticks(), id, b, k;
@@ -1330,6 +1382,21 @@ static void ui_input(void)
         home_long = 0;
         take_commit(song.sel);
     }
+#if BOARD_SMK37
+    /* (SMK-37 Pro, SMK37_UX.md extra buttons A) KNOB BANK is SHIFT: HOME held, as a button of its own. Its combos are
+     * HOME's (+ SAVE TAKE, + a layer's button its lock, pressed with a layer's button held: that layer locked) and its
+     * map comes after the same moment; let go it does nothing (HOME still taps home, and held opens the MENU).
+     * smk_sh_t0: its press time | 1, | 2 once a combo used it */
+    if (!((fm1_in.buttons >> SMK_BTN_KNOB_BANK) & 1u))
+        smk_sh_t0 = 0;
+    else if (!smk_sh_t0)
+        smk_sh_t0 = (now | 1u) & ~2u;
+    if (smk_sh_t0 && !ui.home_t0 && ((pressed >> panel.btn[B_SAVE]) & 1u) && !ui.menu && !ui.confirm && !name_on()) {
+        smk_sh_t0 |= 2u;
+        ui.save_t0 |= 2u;
+        take_commit(song.sel);
+    }
+#endif
     rec_own = ui.lock == LAYER_REC;                     /* (its press closes the REC layer: no arming) */
     if (ui.home_t0 && !ui.menu && !ui.confirm && !name_on() && (pressed & layer_bits_all())) {
         uint32_t lb = pressed & layer_bits_all();       /* (Skiff U2) SHIFT + a layer's button: locked open (again: */
@@ -1338,6 +1405,14 @@ static void ui_input(void)
         layer_shift_lock(lb, now);
         pressed &= ~lb;
     }
+#if BOARD_SMK37
+    if (smk_sh_t0 && !ui.home_t0 && !ui.menu && !ui.confirm && !name_on() && (pressed & layer_bits_all())) {
+        uint32_t lb = pressed & layer_bits_all();       /* (KNOB BANK as SHIFT + a layer's button: locked open) */
+        smk_sh_t0 |= 2u;
+        layer_shift_lock(lb, now);
+        pressed &= ~lb;
+    }
+#endif
     layer_lock_input(pressed);                          /* (a button closes a locked layer) */
     layer_arm(pressed, now);
     layer_oct_open(pressed);                            /* (OCT± with a SET layer's button down: it opens now) */
@@ -1372,6 +1447,12 @@ static void ui_input(void)
             ui.home_t0 |= 2u;                          /* as always, SHIFT, its tap closing the lock); (#13) the layer */
             layer_home_lock();                         /* locked, as SHIFT + its button */
         }
+#if BOARD_SMK37
+        if (((pressed >> SMK_BTN_KNOB_BANK) & 1u) && !ui.lock) {   /* (KNOB BANK: as HOME there) */
+            smk_sh_t0 |= 2u;
+            layer_home_lock();
+        }
+#endif
         for (k = 0; k < 4u; k++)                        /* KNOB 1..4: the layer's (ui_layer.c layer_knob) */
             if ((ks[k] = panel_enc(EN_K1 + k)) != 0)
                 combo = 1;
@@ -1422,6 +1503,10 @@ static void ui_input(void)
                                                          * (home_long: let go, the MENU), a combo ends it */
         uint8_t sh = ui.home_t0 && (!(ui.home_t0 & 2u) || home_long) && !ui.menu && !ui.confirm && !name_on() && !ui.layer &&
                      !ui_hints_off && now - (ui.home_t0 & ~3u) > 250u * 1000u * FM1_TICKS_PER_US;
+#if BOARD_SMK37
+        sh = sh || (smk_sh_t0 && !(smk_sh_t0 & 2u) && !ui.menu && !ui.confirm && !name_on() && !ui.layer &&
+                    !ui_hints_off && now - (smk_sh_t0 & ~3u) > 250u * 1000u * FM1_TICKS_PER_US);
+#endif
         if (sh != ui.shift) {
             ui.shift = sh;
             ui.force = 1;
@@ -1521,7 +1606,7 @@ static void ui_input(void)
     } else if (home == BT_TAP)                          /* HOME acts on release: a hold opens the menu */
         go_home();
     cursor_fix();                                       /* LEN may have changed (knob, editor, load) */
-    for (id = 0; id < 14u; id++) {
+    for (id = 0; id < FM1_NBTN; id++) {
         if (!((pressed >> id) & 1u))
             continue;
         b = panel_btn_of(id);
@@ -1723,7 +1808,7 @@ static void panel_setup(void)
             if (SETUP_GIVE_UP(t0))
                 goto timeout;
         }
-        for (id = 0; id < 14u; id++)
+        for (id = 0; id < FM1_NBTN; id++)
             if (((p & ~used) >> id) & 1u)
                 break;
         panel.btn[i] = (uint8_t)id;
@@ -1734,17 +1819,17 @@ static void panel_setup(void)
         uint32_t e;
         int32_t st = 0;
         setup_show("TURN RIGHT", E_NAME[i]);
-        for (e = 0; e < 7u; e++)
+        for (e = 0; e < FM1_NENC; e++)
             fm1_enc_take(e);
         t0 = fm1_ms;
         for (;;) {
             fm1_wdt_feed();
             if (SETUP_GIVE_UP(t0))
                 goto timeout;
-            for (e = 0; e < 7u; e++)
+            for (e = 0; e < FM1_NENC; e++)
                 if (!((used >> e) & 1u) && (st = fm1_enc_take(e)) != 0)
                     break;
-            if (e < 7u)
+            if (e < FM1_NENC)
                 break;
         }
         panel.enc[i] = (uint8_t)e;

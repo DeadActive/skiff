@@ -17,7 +17,11 @@ static void name_draw(void);
 
 static int32_t batt_level(void)                         /* thresholds 531 / 561 / 591 on ADC ch3 */
 {
+#if BOARD_SMK37
+    return song.batt_raw >= 602 ? 3 : song.batt_raw >= 560 ? 2 : song.batt_raw >= 530 ? 1 : 0;   /* (the SMK's own) */
+#else
     return song.batt_raw >= 591 ? 3 : song.batt_raw >= 561 ? 2 : song.batt_raw >= 531 ? 1 : 0;
+#endif
 }
 /* A USB host powers us; there is no separate charger status line.
  * 4 means external power (a steady bolt inside the battery), otherwise its level. */
@@ -303,7 +307,11 @@ static void draw_column_tall(uint32_t c, const char *label, const char *val, con
     uint16_t lc = hot ? T_ACCENT : mot ? T_THEME : T_MID;
     const aafont_t *lf = &AF_M, *vf = &AF_L;
     int32_t ly = LG_LY, vy, lw = 0, mw;
+#if BOARD_SMK37
+    char k[3] = {'K', (char)('5' + c), 0};          /* (SMK-37 Pro: KNOB 1..4 are K5..K8, SMK37_UX.md question 10) */
+#else
     char k[3] = {'K', (char)('1' + c), 0};
+#endif
     uint32_t ic = mot ? ICON_X_MOTION : icon, isz = 16u;
     cv_begin(COL_W, LG_CARD_H, T_BG);
     cv_rrect(0, 0, COL_W, LG_CARD_H, 4, T_SURF, T_BG);
@@ -700,7 +708,11 @@ static void draw_foot(void)
         tx = r - text_w(&AF_S, ti) - (pi != ICON_NONE ? 16 : 0);
         (void)need;
         if (home_lanes() && !ui_hints_off)             /* Skiff BLOCKS on HOME: the lanes name the sounds; the hint */
+#if BOARD_SMK37
+            cv_free_hint(8, ly, "HOLD [KNOB BANK] SHIFT", T_MID, T_BG, 160);   /* (SMK37_UX.md extra buttons A) */
+#else
             cv_free_hint(8, ly, "HOLD [HOME] SHIFT", T_MID, T_BG, 160);
+#endif
         if ((home_lanes() && !ui_hints_off) || hints) {   /* (an action page's or a grid's hints: the title) */
             if (pi != ICON_NONE) {
                 GFX_HOOK_ALIGN(0, ly + AF_S_CAP_Y, 0, ly + AF_S_CAP_Y + AF_S_CAP_H, AL_V, "footer icons on the names' line");
@@ -891,19 +903,19 @@ static void draw_columns(void)
     if (cur_page()->graph == GR_SONG) {                  /* (Skiff phase 5) ENTRY PATTERN REPS SONG (ui_input.c song_knob):
                                                          * the selected track's entry picked; its pattern (KNOB 2's pick
                                                          * while there is one), its repeats; SONG */
-        uint32_t k = song.sel % NTRK, e = sg.entry % NENT, id = ent_pat(k, e), p = song_pick();
-        uint32_t v = p ? p : id == PAT_NONE ? 0u : id + 1u, r = (uint32_t)lists.ent[k][e][1] + 1u;
+        uint32_t k = song.sel % NTRK, e = sg.entry % NENT, p = song_pick();
+        uint32_t v = p ? p : lists.ent[k][e][0], r = (uint32_t)lists.ent[k][e][1] + 1u;
         val[0] = (char)('A' + e);
         val[1] = 0;
         draw_column(0, "ENTRY", val, "", VAL(0u), ((int32_t)e * 2 + 1) * 1000 / 32, ICON_AUTO);
-        if (v == SPICK_COPY || v == SPICK_CLEAR)
-            str_cpy(val, v == SPICK_COPY ? "COPY" : "CLEAR", sizeof val);
+        if (v == SPICK_COPY || v == SPICK_CLEAR || v == PAT_REST)   /* ((#28) REST: below 01, its gauge empty) */
+            str_cpy(val, v == SPICK_COPY ? "COPY" : v == PAT_REST ? "REST" : "CLEAR", sizeof val);
         else if (v)
             pat_num(val, v - 1u);
         else
             str_cpy(val, "--", sizeof val);
-        draw_column(1, "PATTERN", val, "", v ? VAL(1u) : T_DIM, v >= SPICK_COPY ? 1000 : v ? (int32_t)(v * 1000u / NPAT) : -1,
-                    ICON_AUTO);
+        draw_column(1, "PATTERN", val, "", v ? VAL(1u) : T_DIM,
+                    v >= SPICK_COPY ? 1000 : v == PAT_REST ? 0 : v ? (int32_t)(v * 1000u / NPAT) : -1, ICON_AUTO);
         fmt_int(val, (int32_t)r);                        /* ((1.2.1, #12) an empty entry's too: a rest's length) */
         draw_column(2, "REPS", val, "x", VAL(2u), (int32_t)(r * 1000u / 16u), ICON_AUTO);
         draw_column(3, "SONG", lists.song ? "ON" : "OFF", "", VAL(3u), lists.song ? 1000 : 0, ICON_AUTO);

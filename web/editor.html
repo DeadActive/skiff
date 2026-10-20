@@ -123,6 +123,7 @@
   .smp table { margin: 4px 0; }
   .smp input.name { width: 80px; text-transform: uppercase; }
   .smp input.root { width: 48px; }
+  .smp input.pct { width: 52px; }
   .smp .bad { text-decoration: underline wavy; }
   footer { margin-top: 24px; font-size: 11px; color: var(--dim); }
   .row.pushed .v { font-weight: 600; }
@@ -243,6 +244,11 @@
   .lists button.next { outline-color: var(--s); }
   #trec[aria-pressed="true"] { background: var(--rec); color: var(--on-trk); }
   .list tr.sel td { background: var(--trk); color: var(--on-trk); }
+  /* (Skiff #27) THEME CUSTOM: the colour wells, each role under its well */
+  .wells { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+  .wells label { display: grid; justify-items: center; gap: 2px; font-size: 11px; color: var(--dim); }
+  .wells input[type=color] { width: 34px; height: 26px; padding: 0; border: 1px solid var(--line); background: none; }
+  .wellbox { margin-top: 10px; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -479,14 +485,61 @@ const CMD = { INFO: 1, GET: 2, SET: 3, DUMP: 4, DESC: 5, STEP_GET: 6, STEP_SET: 
   WATCH: 22, CHANGED: 23, RELOAD: 24, PING: 25, STEP_CHANGED: 26,
   TRACK: 27, TRACK_MIX: 28, TRACK_DUMP: 29, TRACK_STEP: 30,
   TRACK_PARAM: 31, TRACK_CHANGED: 32, SONG: 33,
-  UI_STATE: 34, UI_SET: 35, UI_PALETTES: 36, FAV_GET: 37, FAV_SET: 38,
+  UI_STATE: 34, UI_SET: 35, UI_PALETTES: 36, FAV_GET: 37, FAV_SET: 38, COLORS: 39,
   MOTION: 64, BACKUP_LIST: 65, BACKUP_GET: 66, BACKUP_PUT: 67,
-  FM6_GET: 68, FM6_PUT: 69, FM6_LIST: 70, FM6_ERASE: 71, MENU_DESC: 72, MENU_SET: 73, KIT_GET: 74, KIT_PUT: 75, TRANSPORT: 76, PROJ_NAME: 77, POOL: 78, LIST: 79, PERFORM: 80 };
+  FM6_GET: 68, FM6_PUT: 69, FM6_LIST: 70, FM6_ERASE: 71, MENU_DESC: 72, MENU_SET: 73, KIT_GET: 74, KIT_PUT: 75, TRANSPORT: 76, PROJ_NAME: 77, POOL: 78, LIST: 79, PERFORM: 80,
+  SMP_MIX: 81 };
 /* frames the device sends on its own (while WATCH is on); never replies */
 const PUSH = new Set([CMD.CHANGED, CMD.RELOAD, CMD.STEP_CHANGED, CMD.TRACK_CHANGED]);
 /* user preset bank: name 1..12 printable ASCII, a 16-step pattern of (note, flags 1 acc 2 slide 4 tie) */
 const UP = { NAME_MAX: 12, PAT: 16, LIST_MAX: 16 };
+const PAT_REST = 65;                              /* (#28) LIST: an entry that is a REST (patterns 1..64, 0 empty) */
 const F = { INT: 0, PCT: 1, BIPCT: 2, TIME: 3, LFOHZ: 4, CUTOFF: 5, DB: 6, SEMI: 7, ENUM: 8, BPM: 9, NOTE: 10, ONOFF: 11, OCT: 12, STEPS: 13, ST16: 14 };
+/* (Skiff #27) THEME CUSTOM: the colours a set holds (COLORS, cmd 39), each theme's own to start from (tools/gen_ui_palettes.py:
+   BG SURF TEXT THEME ACCENT, then the six tracks', RGB565; test_web.mjs checks them against build/gen/ui_palettes.h), the
+   tokens the editor wears while CUSTOM is in use, and the contrast it warns by (WCAG; below the generator's minimums, so
+   no theme of the device's warns). After Felucca 1.6's custom palette (palette.js, Leo Kuroshita) */
+const PAL_ROLES = ["BG", "SURF", "TEXT", "THEME", "ACCENT", "T1", "T2", "T3", "T4", "T5", "T6"];
+const PAL_BUILTIN = [
+  ["SKIFF", 0x0841, 0x18c3, 0xffdf, 0xffdf, 0xffdf, 0xfac6, 0x2616, 0xfde0, 0x941f, 0xfb75, 0xa726],
+  ["HI-CON", 0x0000, 0x2945, 0xffdf, 0xff40, 0x073f, 0xff40, 0xff40, 0xff40, 0xff40, 0xff40, 0xff40],
+  ["PAPER", 0xf77c, 0xe6d9, 0x20e3, 0x0aa8, 0xa9c1, 0x0aa8, 0x0aa8, 0x0aa8, 0x0aa8, 0x0aa8, 0x0aa8],
+  ["CRYPT", 0x0820, 0x20c2, 0xeeb5, 0xfd84, 0xfeef, 0xeb66, 0xf5a7, 0xde74, 0xeac8, 0xad6b, 0xcc36],
+  ["NEON", 0x0823, 0x1866, 0xf77f, 0xfad7, 0x371f, 0xfa16, 0x371f, 0xfeeb, 0xfc07, 0xab3f, 0x57f5],
+  ["QUARK", 0x0021, 0x08a4, 0xdf9f, 0x4e9f, 0xff0c, 0xfaac, 0x46f0, 0x5c7f, 0x3efe, 0xe31c, 0xfeea],
+].map(([name, ...c]) => ({ name, c }));
+const rgb8 = (c) => [(c >> 11) * 255 / 31 | 0, ((c >> 5) & 63) * 255 / 63 | 0, (c & 31) * 255 / 31 | 0];   /* (as the generator's) */
+const hex565 = (c) => "#" + rgb8(c).map((x) => x.toString(16).padStart(2, "0")).join("");
+const from565hex = (s) => {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(s));
+  return m ? (parseInt(m[1], 16) >> 3) << 11 | (parseInt(m[2], 16) >> 2) << 5 | parseInt(m[3], 16) >> 3 : 0;
+};
+/* gfx.c ux_mix: a + (b - a) * pct / 100 per channel, rounded half away from zero; ux_luma: 0..255 */
+const mix565 = (a, b, pct) => [[11, 31], [5, 63], [0, 31]].reduce((o, [sh, mk]) => {
+  const x = (a >> sh) & mk, d = (((b >> sh) & mk) - x) * pct;
+  return o | (x + Math.trunc((d + (d >= 0 ? 50 : -50)) / 100)) << sh;
+}, 0);
+const luma565 = (c) => { const [r, g, b] = rgb8(c); return (r * 54 + g * 183 + b * 19) >> 8; };
+const contrast565 = (a, b) => {
+  const lum = (c) => rgb8(c).map((v) => (v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)
+    .reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const x = lum(a), y = lum(b);
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+};
+/* [role, on role, the least contrast]: words, values and curves, the one active thing, a lane (and its number on it) */
+const PAL_RULE = [[2, 0, 4.5], [2, 1, 4.5], [3, 0, 3], [4, 0, 3], ...[5, 6, 7, 8, 9, 10].map((k) => [k, 0, 3])];   /* (symmetric) */
+const colorWarnings = (c) => PAL_RULE.map(([a, b, min]) => ({ a: PAL_ROLES[a], b: PAL_ROLES[b], r: contrast565(c[a], c[b]), min }))
+  .filter((x) => x.r < x.min);
+/* the editor in THEME CUSTOM: its tokens from the set (as the device derives its own: MID and DIM from BG to TEXT, a
+   raised tile SURF to TEXT); the look's faces stay data-theme's */
+const customTokens = (c) => {
+  const light = luma565(c[0]) > 128;
+  return { "--bg": hex565(c[0]), "--tile": hex565(c[1]), "--raise": hex565(mix565(c[1], c[2], 8)),
+    "--hover": hex565(mix565(c[1], c[2], 16)), "--fg": hex565(c[2]), "--dim": hex565(mix565(c[0], c[2], 62)),
+    "--line": hex565(mix565(c[0], c[2], 42)), "--head": hex565(c[3]), "--on-trk": hex565(c[0]),
+    "--txmix": light ? "62%" : "100%", "color-scheme": light ? "light" : "dark",
+    ...Object.fromEntries([1, 2, 3, 4, 5, 6].map((k) => [`--t${k}`, hex565(c[4 + k])])) };
+};
 
 const v14enc = (v) => { const u = Math.max(-8192, Math.min(8191, Math.round(v))) + 8192; return [u & 0x7F, (u >> 7) & 0x7F]; };
 const v14dec = (lo, hi) => (lo | (hi << 7)) - 8192;
@@ -541,7 +594,8 @@ const MENU = [
   { id: 12, name: "CLICK", names: ["OFF", "REC", "ON"], def: 0, tab: 2 }, { id: 13, name: "CLICK LEVEL", names: ["LOW", "MID", "HIGH"], def: 1, tab: 2 },
   { id: 14, name: "COUNT-IN", names: ["OFF", "1 BAR", "2 BARS"], def: 0, tab: 2 }, { id: 15, name: "RESTORE LAST", names: ["ON", "OFF"], def: 0, tab: 3 },
   { id: 16, name: "SCALE LEDS", names: ["OFF", "ON"], def: 0, tab: 1 },
-  { id: 17, name: "SCREEN OFF", names: ["NEVER", "5 MIN", "15 MIN", "30 MIN", "60 MIN"], def: 3, tab: 0 }];
+  { id: 17, name: "SCREEN OFF", names: ["NEVER", "5 MIN", "15 MIN", "30 MIN", "60 MIN"], def: 3, tab: 0 },
+  { id: 19, name: "PLAYHEAD", names: ["THEME", "LINE"], def: 0, tab: 0 }];   /* ((Skiff #27) HOME's figure at the playhead, or the line) */
 /* (Skiff W1) a step's trig condition (core.h TC_NAME; INFO 43 01 says how many) */
 const TC_NAMES = ["--", "FILL", "!FILL", "1:2", "2:2", "1:3", "2:3", "3:3", "1:4", "2:4", "3:4", "4:4"];
 /* (Skiff W3) the DRUM-X kit: the factory's (drumx_voice.c DX_KIT_INIT: {mode, A, B}, A and B PITCH P MOD DECAY NOISE
@@ -595,7 +649,8 @@ const parse = {
     const trailer = a.slice(r.i);
     if (trailer[0] === 16) o.chainRows = 16;       /* existing v6 SONG capability */
     if (trailer.length >= 4 && trailer[0] === 16 && trailer[1] === 0x55 && trailer[2] === 1)
-      o.uiCaps = trailer[3] & 15;                 /* tagged preferences; never interpret old PR bytes as SONG */
+      o.uiCaps = trailer[3] & 31;                 /* tagged preferences; never interpret old PR bytes as SONG ((Skiff #27)
+                                                     bit 4: COLORS) */
     o.motionMax = 0; o.chance = false; o.backupCaps = 0;
     if (o.uiCaps && trailer[4] === 0x4d && trailer[5] === 1 && trailer[6] === 64) {
       o.motionMax = 64; o.chance = trailer[7] === 1;
@@ -609,7 +664,7 @@ const parse = {
     o.menuCount = 0;                              /* (1.0.4, INFO 4E 01 count) the MENU settings MENU_DESC offers */
     o.kitLanes = 0;                               /* (Skiff W3, INFO 4B 01 8) KIT_GET / KIT_PUT: the DRUM-X kit's lanes */
     o.skiff = 0;                                  /* (Skiff W3, INFO 57 01 caps) bits: 0 TRANSPORT, 1 PROJ_NAME, 2 POOL, 3 LIST,
-                                                     4 PERFORM */
+                                                     4 PERFORM, (#21) 5 SMP_MIX */
     for (const p of [8, 11]) if (o.motionMax && trailer[p] === 0x46 && trailer[p + 1] === 1) {   /* for the editor's */
       o.fm6 = { factory: trailer[p + 2], bank: trailer[p + 3], caps: 0 };                         /* PRESET / G_ENGSEL */
       if (trailer[p + 4] === 0x53 && trailer[p + 5] === 1) o.syncCaps = trailer[p + 6] & 3;
@@ -626,7 +681,7 @@ const parse = {
       }
       if (trailer[r] === 0x43 && trailer[r + 1] === 1) { o.stepx = trailer[r + 2]; r += 3; }   /* (Skiff W1) FLAM COND NUDGE */
       if (trailer[r] === 0x4B && trailer[r + 1] === 1) { o.kitLanes = trailer[r + 2]; r += 3; }   /* (Skiff W3) the DRUM-X kit */
-      if (trailer[r] === 0x57 && trailer[r + 1] === 1) { o.skiff = trailer[r + 2] & 31; r += 3; }   /* (Skiff W3) TRANSPORT .. PERFORM */
+      if (trailer[r] === 0x57 && trailer[r + 1] === 1) { o.skiff = trailer[r + 2] & 63; r += 3; }   /* (Skiff W3) TRANSPORT .. (#21) SMP_MIX */
       if (trailer[r] === 0x49 && trailer[r + 1] === 1) {                                  /* (Skiff 1.3) wide ids: */
         o.pcount = trailer[r + 2] | trailer[r + 3] << 7;                                 /* P_COUNT and P_E0 whole */
         o.pe0 = trailer[r + 4] | trailer[r + 5] << 7;
@@ -642,6 +697,13 @@ const parse = {
   },
   [CMD.UI_SET](a) { const r = new Reader(a); return { rc: r.b(), id: r.b(), value: r.b(), ...parse[CMD.UI_STATE](a.slice(3)) }; },
   [CMD.UI_PALETTES](a) { const r = new Reader(a), n = r.b(); return Array.from({ length: n }, () => r.s()); },
+  /* (Skiff #27) COLORS: rc, flags (bit 0 a set stored, bit 1 in use), its look, then pack7 of the set's 22 bytes: PAL_ROLES
+     as RGB565, low byte first */
+  [CMD.COLORS](a) {
+    const raw = unpack7(a.slice(3));
+    return { rc: a[0], stored: !!(a[1] & 1), active: !!(a[1] & 2), look: a[2],
+      c: Array.from({ length: raw.length >> 1 }, (_, i) => raw[2 * i] | raw[2 * i + 1] << 8) };
+  },
   [CMD.FAV_GET](a) {
     const r = new Reader(a), rc = r.b(); if (rc) return { rc };
     const o = { rc, engine: r.b(), start: r.v(), count: r.b() };
@@ -716,7 +778,7 @@ const parse = {
   },
   /* (Skiff W3) LIST: op, rc (0 done, 1 empty, 2 without its automation, 3 playing, 4 PATTERNS FULL, 5 failed), SONG, each
      track: the entry it is on, the one staged (-1: none), its pattern (0..63, -1 none), its 16 entries (pattern 1..64,
-     0 empty; REPS 1..16) */
+     (#28) PAT_REST a REST, 0 empty; REPS 1..16) */
   [CMD.LIST](a) {
     const r = new Reader(a), o = { op: r.b(), rc: r.b(), song: !!r.b(), tracks: [] }, n = (v) => (v === 127 ? -1 : v);
     while (r.i < a.length) {
@@ -770,6 +832,15 @@ const parse = {
     const r = new Reader(a);
     const o = { nslots: r.b(), slotKiB: r.b(), slots: [] };
     for (let i = 0; i < o.nslots; i++) o.slots.push({ zones: r.b(), name: r.s(), kib: r.b() });
+    return o;
+  },
+  /* (#21) slot, rc (0, 1 nothing set: an empty slot, 2 set but not kept: the sample fills the slot), each sound's keys,
+     then LEVEL x 16, REV x 16, DLY x 16 (0..127) -> {slot, rc, keys: [[lo, hi]], mix: [[LEVEL, REV, DLY]] per sound} */
+  [CMD.SMP_MIX](a) {
+    const r = new Reader(a), o = { slot: r.b(), rc: r.b(), keys: [], mix: [] }, n = r.b();
+    for (let i = 0; i < n; i++) o.keys.push([r.b(), r.b()]);
+    const v = Array.from({ length: 48 }, () => r.b());
+    for (let i = 0; i < n; i++) o.mix.push([v[i], v[16 + i], v[32 + i]]);
     return o;
   },
   [CMD.UP_LIST](a) {
@@ -847,6 +918,8 @@ const req = {
   uiState: () => [CMD.UI_STATE, []],
   uiSet: (id, value) => [CMD.UI_SET, [id, value]],
   uiPalettes: () => [CMD.UI_PALETTES, []],
+  /* (Skiff #27) none: the state; 0 show, 1 store (a look, 11 RGB565); 2 remove, 3 drop what is shown */
+  colors: (o, look, c) => [CMD.COLORS, o === undefined ? [] : o > 1 ? [o] : [o, look, ...pack7(c.flatMap((x) => [x & 255, x >> 8]))]],
   favGet: (engine, start, count) => [CMD.FAV_GET, [engine, ...v14enc(start), count]],
   favSet: (engine, preset, on) => [CMD.FAV_SET, [engine, ...v14enc(preset), on ? 1 : 0]],
   info: () => [CMD.INFO, []],
@@ -883,6 +956,9 @@ const req = {
   smpEnd: (s, hdr) => [CMD.SMP_END, [s & 0x7F, ...pack7(hdr)]],
   smpErase: (s) => [CMD.SMP_ERASE, [s & 0x7F]],
   smpInfo: () => [CMD.SMP_INFO, []],
+  /* (#21) the slot's sounds' mix; mix: [[LEVEL, REV, DLY] (0..127)] per sound sets it (the sounds past it: as uploaded) */
+  smpMix: (s, mix) => [CMD.SMP_MIX, mix ? [s & 0x7F, ...[0, 1, 2].flatMap((w) => Array.from({ length: 16 },
+    (_, i) => (i < mix.length ? mix[i][w] : [127, 0, 0][w]) & 0x7F))] : [s & 0x7F]],
   upList: (start, count) => [CMD.UP_LIST, [start & 0x7F, Math.max(1, Math.min(UP.LIST_MAX, count | 0))]],
   upGet: (s) => [CMD.UP_GET, [s & 0x7F]],
   /* patch: {engine, name, p: P_COUNT values, pattern: 16 x [note, flags] or grid: 16 x [hit, acc] (v5: kind 1)} */
@@ -946,7 +1022,7 @@ function replyMatches(cmd, args, a) {
       return ![0, 3, 4].includes(a[0]) || (a[1] === args[0] && a[2] === args[1] && a[3] === args[2] && a[4] === args[3]);
     case CMD.GET: case CMD.SET: case CMD.DESC: return a[0] === args[0] && a[1] === args[1];
     case CMD.STEP_GET: case CMD.STEP_SET: case CMD.NAMES:
-    case CMD.SMP_BEGIN: case CMD.SMP_END: case CMD.SMP_ERASE: return a[0] === args[0];
+    case CMD.SMP_BEGIN: case CMD.SMP_END: case CMD.SMP_ERASE: case CMD.SMP_MIX: return a[0] === args[0];
     case CMD.SMP_WRITE: return a[0] === args[0] && a[1] === args[1] && a[2] === args[2] && a[3] === args[3];
     case CMD.SONG: return a[0] === args[0];
     case CMD.FM6_GET: case CMD.FM6_PUT: return a[0] === args[0] && a[1] === args[1];
@@ -1088,7 +1164,8 @@ function fmtValue(d, v) {
 /* ---------------------------------------------------------- user samples --- */
 /* A port of tools/sampleio.py (read_any_wav, resample, to_int16, ima_encode, user_slot),
    byte for byte: web/test_web.mjs compares them. */
-const SMP = { SLOT_SIZE: 0x14000, DATA_OFF: 512, RATE: 22050, HDR_LEN: 32 + 16 * 28, MAX_ZONES: 16 };
+const SMP = { SLOT_SIZE: 0x14000, DATA_OFF: 512, RATE: 22050, HDR_LEN: 32 + 16 * 28, MAX_ZONES: 16,
+  MIX0: () => [...new Array(16).fill(127), ...new Array(32).fill(0)] };   /* ((#21) every sound as uploaded) */
 SMP.MAX_DATA = SMP.SLOT_SIZE - SMP.DATA_OFF;
 
 /* groups of up to 7 bytes, each preceded by their top bits */
@@ -1264,7 +1341,8 @@ function buildSlot(name, zonesIn) {
   let len = 0;
   for (const z of zonesIn) {
     const e = imaEncode(z.s, 0);
-    zones.push({ off: len, n: z.s.length, ls: 0, le: z.s.length - 1, root: z.root, lo: z.lo ?? null, hi: z.hi ?? null, pred: e.pred, idx: e.idx });
+    zones.push({ off: len, n: z.s.length, ls: 0, le: z.s.length - 1, root: z.root, lo: z.lo ?? null, hi: z.hi ?? null, pred: e.pred, idx: e.idx,
+      mix: z.mix });                                 /* ((#21) its LEVEL, REV, DLY: in the slot's order after the sort) */
     parts.push(e.data);
     len += e.data.length;
   }
@@ -2260,9 +2338,11 @@ function makeMockDevice(opt = {}) {
     lists: Array.from({ length: NTRK }, (_, k) => Array.from({ length: 16 }, (_, e) => [k === 0 && e < 2 ? e + 1 : k === 3 && !e ? 3 : 0, 0])),
     cur: new Array(NTRK).fill(0), pid: [1, 0, 0, 3, 0, 0], staged: new Array(NTRK).fill(127), song: 0,
     scenes: new Array(16).fill(null), sceneLast: -1, launch: 0, muteArm: new Array(NTRK).fill(0),
-    smp: [0, 1, 2].map(() => ({ flash: new Uint8Array(SMP.SLOT_SIZE).fill(0xFF), zones: 0, name: "", len: 0, next: SMP.DATA_OFF })),
+    smp: [0, 1, 2].map(() => ({ flash: new Uint8Array(SMP.SLOT_SIZE).fill(0xFF), zones: 0, name: "", len: 0, next: SMP.DATA_OFF,
+      mix: SMP.MIX0() })),                            /* ((#21) LEVEL x 16, REV x 16, DLY x 16) */
     bank: new Array(opt.slots || 32).fill(null),     /* user presets: {engine, name, p, pattern, grid, fm6 (FM6: its patch)} */
-    uiCaps: opt.legacy || opt.v3 || opt.v5 ? 0 : opt.uiCaps ?? 9,
+    uiCaps: opt.legacy || opt.v3 || opt.v5 ? 0 : opt.uiCaps ?? 25,   /* ((Skiff #27) 16: COLORS) */
+    custom: { flags: 0, look: 0, c: new Array(11).fill(0), preview: null },   /* ((Skiff #27) THEME CUSTOM's set) */
     palette: 0, font: 0, monitor: 0, filter: 0, bankSig: 0,
     palettes: ["SKIFF", "HI-CON", "PAPER", "CRYPT", "NEON", "QUARK"],   // (Skiff, R1) THEME: the device's list (tools/gen_ui_palettes.py)
     favorites: Array.from({ length: ENG.length + 1 }, () => []),
@@ -2389,10 +2469,10 @@ function makeMockDevice(opt = {}) {
   const bankCur = (k) => { const p = st.lists[k][st.cur[k]][0]; return p && p === st.pid[k] ? st.cur[k] : 127; };
   const refsOf = (id) => st.lists.reduce((n, l) => n + l.filter((x) => x[0] === id + 1).length, 0) +
     st.pid.filter((p, k) => p === id + 1 && bankCur(k) === 127).length;
-  const entryGo = (k, e) => {
+  const entryGo = (k, e) => {                   /* ((#28) a REST too: the track on no pattern) */
     const p = st.lists[k][e][0];
-    if (!p || !st.pool[p - 1]) return 1;
-    if (st.playing) st.staged[k] = e; else { st.cur[k] = e; st.pid[k] = p; st.staged[k] = 127; }
+    if (!p || (p !== PAT_REST && !st.pool[p - 1])) return 1;
+    if (st.playing) st.staged[k] = e; else { st.cur[k] = e; st.pid[k] = p === PAT_REST ? 0 : p; st.staged[k] = 127; }
     return 0;
   };
   const muteTo = (k, m) => {
@@ -2402,7 +2482,9 @@ function makeMockDevice(opt = {}) {
     else if (!!tp[40] !== !!m) st.muteArm[k] = m ? 2 : 1;
   };
   const landStaged = () => {
-    st.staged.forEach((e, k) => { if (e !== 127) { st.cur[k] = e; st.pid[k] = st.lists[k][e][0]; st.staged[k] = 127; } });
+    st.staged.forEach((e, k) => {
+      if (e !== 127) { const p = st.lists[k][e][0]; st.cur[k] = e; st.pid[k] = p === PAT_REST ? 0 : p; st.staged[k] = 127; }
+    });
     st.muteArm.forEach((m, k) => { if (m) st.tracks[k].p[40] = m - 1; st.muteArm[k] = 0; });
   };
 
@@ -2414,7 +2496,7 @@ function makeMockDevice(opt = {}) {
       [0x54, 1, 0x30, e, e >> 7, e >> 14].forEach(b);
       if (stepxOn()) [0x43, 1, TC_NAMES.length].forEach(b);   /* (Skiff W1) */
       if (kitOn()) [0x4B, 1, 8].forEach(b);                    /* (Skiff W3) */
-      if (projOn()) [0x57, 1, songOn() ? 31 : 3].forEach(b);
+      if (projOn()) [0x57, 1, songOn() ? 63 : 3].forEach(b);   /* ((#21) 32: SMP_MIX, with the song's) */
       if (projOn()) [0x49, 1, P_COUNT & 127, P_COUNT >> 7, P_E0 & 127, P_E0 >> 7].forEach(b);   /* ((Skiff 1.3) wide ids) */
     };
     const wid = (s, i) => (s === 2 ? [0, i + 128] : [s, i]);   /* ((1.3) scope 2: a track id from 128 on) */
@@ -2424,10 +2506,16 @@ function makeMockDevice(opt = {}) {
     if (!st.uiCaps && cmd >= CMD.UI_STATE) return null;
     const uiState = () => {
       const sig = JSON.stringify(st.favorites).split("").reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0, st.filter);
-      [st.uiCaps, st.palette, st.uiCaps & 2 ? st.font : 127, st.uiCaps & 4 ? st.monitor : 127, st.uiCaps & 8 ? st.filter : 127].forEach(b);
+      [st.uiCaps, palCur(), st.uiCaps & 2 ? st.font : 127, st.uiCaps & 4 ? st.monitor : 127, st.uiCaps & 8 ? st.filter : 127].forEach(b);
       for (const n of [sig, st.bankSig]) for (let i = 0; i < 4; i++) b(n >>> (i * 7));
     };
     const NB = st.bank.length;
+    /* ((Skiff #27) THEME: CUSTOM last while a set is stored, in use: the look in st.palette, as menu_items.c) */
+    const palNames = () => st.custom.flags & 1 ? [...st.palettes, "CUSTOM"] : st.palettes;
+    const palCur = () => st.custom.flags & 2 ? st.palettes.length : st.palette;
+    const palChoose = (x) => {
+      if (x >= st.palettes.length) { st.custom.flags |= 2; st.palette = st.custom.look; } else { st.custom.flags &= ~2; st.palette = x; }
+    };
     switch (cmd) {
       case CMD.UP_LIST: {
         if (a.length < 2) return null;
@@ -2518,11 +2606,11 @@ function makeMockDevice(opt = {}) {
         b(0);
         break;
       case CMD.UI_STATE: uiState(); break;
-      case CMD.UI_PALETTES: b(st.palettes.length); st.palettes.forEach(s); break;
+      case CMD.UI_PALETTES: b(palNames().length); palNames().forEach(s); break;
       case CMD.UI_SET: {
         const id = a[0], val = a[1], key = ["palette", "font", "monitor", "filter"][id];
-        const rc = a.length !== 2 || !key ? 1 : !(st.uiCaps & 1 << id) ? 2 : val >= (id === 0 ? st.palettes.length : id === 2 ? 3 : 2) ? 1 : 0;
-        if (!rc) st[key] = val;
+        const rc = a.length !== 2 || !key ? 1 : !(st.uiCaps & 1 << id) ? 2 : val >= (id === 0 ? palNames().length : id === 2 ? 3 : 2) ? 1 : 0;
+        if (!rc && !id) palChoose(val); else if (!rc) st[key] = val;
         b(rc || (opt.noFlash ? 3 : opt.deferSettings ? 4 : 0)); b(id ?? 127); b(val ?? 127); uiState(); break;
       }
       case CMD.FAV_GET: case CMD.FAV_SET: {
@@ -2539,8 +2627,8 @@ function makeMockDevice(opt = {}) {
       case CMD.MENU_DESC: case CMD.MENU_SET: {   /* (Skiff W3) editor_menu.c */
         if (opt.noMenu || !st.uiCaps || !syncCaps()) return null;
         st.menu = st.menu || Object.fromEntries(MENU.map((x) => [x.id, x.def]));
-        const names = (x) => x.names || st.palettes;
-        const val = (x) => x.id === 0 ? st.palette : st.menu[x.id];
+        const names = (x) => x.names || palNames();
+        const val = (x) => x.id === 0 ? palCur() : st.menu[x.id];
         if (cmd === CMD.MENU_DESC) {
           const x = MENU[a[0]];
           b(a[0]);
@@ -2550,7 +2638,7 @@ function makeMockDevice(opt = {}) {
           const x = MENU.find((m) => m.id === a[0]);
           if (!x) { b(1); b(a[0]); v(0); break; }
           const w = Math.max(0, Math.min(names(x).length - 1, v14dec(a[1], a[2])));
-          if (x.id === 0) st.palette = w; else st.menu[x.id] = w;
+          if (x.id === 0) palChoose(w); else st.menu[x.id] = w;
           b(0); b(x.id); v(w);
         }
         break;
@@ -2594,17 +2682,18 @@ function makeMockDevice(opt = {}) {
       case CMD.LIST: {                         /* (Skiff W3) editor_song.c */
         const [op, k, e, v] = a, L = st.lists;
         if (!songOn() || (a.length && !(op === 6 ? a.length === 2 && k <= 1 : a.length >= 3 && k < NTRK && e < 16 &&
-          (op === 1 || op === 5 ? a.length === 4 && v >= 1 && v <= (op === 1 ? 64 : 16) : a.length === 3 && op >= 2 && op <= 4)))) return null;
+          (op === 1 || op === 5 ? a.length === 4 && v >= 1 && v <= (op === 1 ? PAT_REST : 16) : a.length === 3 && op >= 2 && op <= 4)))) return null;
         let rc = 0;
-        if (op === 1) { if (!st.pool[v - 1]) rc = 1; else { L[k][e][0] = v; if (st.cur[k] === e) rc = entryGo(k, e); } }
+        if (op === 1) { if (v !== PAT_REST && !st.pool[v - 1]) rc = 1; else { L[k][e][0] = v; if (st.cur[k] === e) rc = entryGo(k, e); } }
         else if (op === 2) {
           const id = L[k][e][0] - 1, n = st.pool.findIndex((x) => !x);
-          if (id < 0) rc = 1;
+          if (id < 0 || id >= 64) rc = 1;               /* ((#28) a REST: nothing to copy) */
           else if (n < 0) rc = 4;
           else { st.pool[n] = st.pool[id]; L[k][e][0] = n + 1; if (st.cur[k] === e && st.pid[k] === id + 1) st.pid[k] = n + 1; }
         } else if (op === 3) rc = entryGo(k, e);
         else if (op === 4) {
-          if (st.playing) rc = 3;
+          if (L[k][e][0] === PAT_REST) L[k][e][0] = 0;  /* ((#28) a REST: at once, playing too) */
+          else if (st.playing) rc = 3;
           else {
             const id = L[k][e][0] - 1, on = st.cur[k] === e && st.pid[k] === id + 1;
             L[k][e] = [0, 0];
@@ -2618,6 +2707,22 @@ function makeMockDevice(opt = {}) {
           b(bankCur(t)); b(st.staged[t]); b(st.pid[t] ? st.pid[t] - 1 : 127);
           L[t].forEach(([p, r]) => { b(p); b(r); });
         }
+        break;
+      }
+      case CMD.COLORS: {                       /* (Skiff #27) editor_preferences.c ed_colors */
+        if (!(st.uiCaps & 16)) return null;
+        const cu = st.custom, save = opt.noFlash ? 3 : opt.deferSettings ? 4 : 0, o = a[0];
+        let rc = 0;
+        if (a.length === 1 && o === 2) { cu.flags = 0; rc = save; }
+        else if (a.length === 1 && o === 3) cu.preview = null;
+        else if (a.length) {
+          const raw = unpack7(a.slice(2)), c = Array.from({ length: 11 }, (_, i) => raw[2 * i] | raw[2 * i + 1] << 8);
+          if (a.length !== 28 || raw.length !== 22 || o > 1 || a[1] >= st.palettes.length) rc = 1;
+          else if (!o) cu.preview = { look: a[1], c };
+          else { Object.assign(cu, { c, look: a[1], flags: 3, preview: null }); st.palette = a[1]; rc = save; }
+        }
+        b(rc); b(cu.flags & 3); b(cu.flags & 1 ? cu.look : 0);
+        pack7(cu.c.flatMap((x) => [x & 255, x >> 8])).forEach(b);
         break;
       }
       case CMD.PERFORM: {                      /* (Skiff W3) editor_song.c */
@@ -2839,7 +2944,7 @@ function makeMockDevice(opt = {}) {
         if (a.length < 1 || a[0] >= 3) return null;
         const u = st.smp[a[0]];
         if (cmd === CMD.SMP_ERASE) u.flash.fill(0xFF); else u.flash.fill(0xFF, 0, 4096);
-        u.zones = 0; u.name = ""; u.len = 0; u.next = SMP.DATA_OFF;
+        u.zones = 0; u.name = ""; u.len = 0; u.next = SMP.DATA_OFF; u.mix = SMP.MIX0();
         b(a[0]); b(0);
         break;
       }
@@ -2873,6 +2978,16 @@ function makeMockDevice(opt = {}) {
           }
         }
         b(a[0]); b(rc);
+        break;
+      }
+      case CMD.SMP_MIX: {                             /* (#21) as editor.c ed_smp_mix */
+        if (!songOn() || a.length < 1 || a[0] >= 3 || (a.length !== 1 && a.length !== 49)) return null;
+        const u = st.smp[a[0]];
+        const rc = a.length === 49 ? (u.zones ? 0 : 1) : 0;
+        if (a.length === 49 && !rc) u.mix = a.slice(1);
+        b(a[0]); b(rc); b(u.zones);
+        for (let i = 0; i < u.zones; i++) { b(u.flash[32 + i * 28 + 25]); b(u.flash[32 + i * 28 + 26]); }
+        u.mix.forEach(b);
         break;
       }
       case CMD.SMP_INFO:
@@ -2982,10 +3097,13 @@ function makeMockDevice(opt = {}) {
   };
 }
 /* Optional preferences: old firmware is never probed with unknown commands. */
-async function readDevicePreferences(rq, info, names, previous = null) {
+async function readDevicePreferences(rq, info, names, previous = null, fresh = false) {   /* (fresh: THEME CUSTOM changed) */
   if (!info.uiCaps) return null;
   const state = parse[CMD.UI_STATE](await rq(req.uiState()));
-  const palettes = previous ? previous.palettes : parse[CMD.UI_PALETTES](await rq(req.uiPalettes()));
+  const palettes = previous && !fresh && state.palette < previous.palettes.length ? previous.palettes :   /* ((Skiff #27) */
+    parse[CMD.UI_PALETTES](await rq(req.uiPalettes()));                                         /* CUSTOM comes, goes) */
+  const colors = !(state.caps & 16) ? null : previous && previous.colors && !fresh && state.palette === previous.state.palette ?
+    previous.colors : parse[CMD.COLORS](await rq(req.colors()));
   let favorites = previous ? previous.favorites : [], slots = previous ? previous.slots : null;
   if (state.caps & 8) {
     if (!previous || state.bankSig !== previous.state.bankSig) slots = await bank.list(rq);
@@ -3003,7 +3121,7 @@ async function readDevicePreferences(rq, info, names, previous = null) {
       }
     }
   }
-  return { state, palettes, favorites, slots };
+  return { state, palettes, favorites, slots, colors };
 }
 /* an enum value or a preset named like another is an alias kept for stored numbers: the device loads the original,
    the lists hide the alias (shown when set). The original: the first entry when it has that name (SAMPLE / GRAIN 1
@@ -3139,6 +3257,9 @@ const TEXT = {
     deviceFavorites: "お気に入りのみ",
     deviceEmpty: "お気に入りはまだありません。「すべてのプリセット」から追加してください。",
     dxKitHelp: "DRUM-X のキット: すべての DRUM-X トラックで共通の 8 音で、プロジェクトと一緒に保存されます。EDIT の MORPH で A から B へ移ります。",
+    customColors: "カスタムカラー", customHelp: "THEME › CUSTOM の色を自分で選べます。選んだ見た目のまま、変えるとすぐ本体に表示され、保存で本体に残ります。",
+    customLook: "見た目", customFrom: "ここから始める…", customLive: "本体に表示", customSave: "保存", customRevert: "元に戻す",
+    customRemove: "削除", customRemoveConfirm: "カスタムカラーを削除しますか? テーマはその見た目の色に戻ります。", customHard: "読みにくい色: ",
     deviceTheme: "テーマ", deviceMenu: "本体のメニュー", deviceMenuHelp: "本体の MENU の設定です。変えるとすぐ本体に反映され、本体に保存されます。",
     deviceFont: "フォント",
     deviceMonitor: "MIDI モニター",
@@ -3196,6 +3317,9 @@ const TEXT = {
     file: "ファイル", root: "ルート", keys: "鍵盤", length: "長さ", remove: "外す",
     record: "録音", stopRec: "停止", recInput: "入力", recDenied: "録音できません", recFull: "スロットがいっぱいです", recSilent: "無音でした。入力を確かめてください",
     preview: "試聴", autoTrim: "自動トリム", trim: "切り取り",
+    smpSound: "音", smpLevel: "レベル %", smpRev: "リバーブ %", smpDly: "ディレイ %",
+    smpMixHelp: "本体の音: レベル 100 % は読み込んだままの音量。リバーブとディレイはトラックのセンドに足されます。",
+    smpMixTooLong: "設定しました。サンプルがスロットいっぱいのため、電源を切るまでの設定です。",
     smpTooBig: "大きすぎます", smpDecodeFail: "読み込めません: ", smpUploading: "書き込み中 USR", smpDone: "書き込みました USR",
     smpFail: "サンプルの書き込みに失敗しました: ", smpErased: "消去しました USR",
     confirmErase: "USR{n} を消去しますか？", confirmUpload: "USR{n} に書き込みますか？ 今の内容は消えます。",
@@ -3262,6 +3386,9 @@ const TEXT = {
     deviceFavorites: "Favorites only",
     deviceEmpty: "No favorites yet. Choose All presets to add some.",
     dxKitHelp: "The DRUM-X kit: 8 sounds shared by every DRUM-X track, kept with the project. EDIT's MORPH moves each from A to B.",
+    customColors: "Custom colours", customHelp: "Your own colours for THEME › CUSTOM, in the look you pick. The device shows them as you change them; Save keeps them there.",
+    customLook: "Look", customFrom: "Start from…", customLive: "Show on the device", customSave: "Save", customRevert: "Revert",
+    customRemove: "Remove", customRemoveConfirm: "Remove the custom colours? THEME goes back to the look's own colours.", customHard: "Hard to read: ",
     deviceTheme: "Theme", deviceMenu: "Device menu", deviceMenuHelp: "The device's MENU settings. A change applies on the device at once and is kept there.",
     deviceFont: "Font",
     deviceMonitor: "MIDI monitor",
@@ -3319,6 +3446,9 @@ const TEXT = {
     file: "File", root: "Root", keys: "Keys", length: "Length", remove: "Remove",
     record: "Record", stopRec: "Stop", recInput: "Input", recDenied: "Cannot record", recFull: "The slot is full", recSilent: "Silence: check the input",
     preview: "Play", autoTrim: "Auto trim", trim: "Trim",
+    smpSound: "Sound", smpLevel: "Level %", smpRev: "Reverb %", smpDly: "Delay %",
+    smpMixHelp: "On the device: Level 100 % plays a sound as loaded; Reverb and Delay are added to the track's sends.",
+    smpMixTooLong: "Set, but the sample fills the slot: these values last until the power goes off.",
     smpTooBig: "too large", smpDecodeFail: "Cannot read: ", smpUploading: "Uploading USR", smpDone: "Uploaded USR",
     smpFail: "Sample upload failed: ", smpErased: "Erased USR",
     confirmErase: "Erase USR{n}?", confirmUpload: "Write to USR{n}? Its current contents will be replaced.",
@@ -3519,9 +3649,9 @@ function renderSong() {
         ...x.ent.map((en, e) => el("td", {}, el("button", {
           type: "button", "data-key": `l${k}:${e}`, "aria-pressed": String(sgPick.k === k && sgPick.e === e),
           class: [en.pat ? "" : "empty", x.cur === e ? "on" : "", x.next === e ? "next" : "", sgPick.k === k && sgPick.e === e ? "pick" : ""].filter(Boolean).join(" ") || null,
-          "aria-label": `T${k + 1} ${ENTS[e]}: ${en.pat ? pat2(en.pat) : t("sgEmptyEntry")}`,
+          "aria-label": `T${k + 1} ${ENTS[e]}: ${en.pat === PAT_REST ? "REST" : en.pat ? pat2(en.pat) : t("sgEmptyEntry")}`,
           onclick: () => { sgPick = { k, e }; renderSong(); }, ondblclick: () => songOp(req.list(3, k, e), "list"),
-        }, en.pat ? pat2(en.pat) : "·", ...(en.pat && en.reps > 1 ? [el("sub", { text: "×" + en.reps })] : [])))),
+        }, en.pat === PAT_REST ? "–" : en.pat ? pat2(en.pat) : "·", ...(en.pat && en.reps > 1 ? [el("sub", { text: "×" + en.reps })] : [])))),
         ...(P && P.tracks[k] ? [el("td", {}, el("button", { type: "button", "data-key": `m${k}`, class: P.tracks[k].staged ? "tog next" : "tog",
           "aria-pressed": String(P.tracks[k].muted), "aria-label": `MUTE T${k + 1}`, onclick: () => songOp(req.perform(3, k), "perf") }, "M"))] : [])))))));
     renderEntry(L, Q);
@@ -3544,13 +3674,15 @@ function renderSong() {
         onclick: () => { if (confirm(t("sgConfirmPat").replace("{n}", pat2(poolPick + 1)))) songOp(req.pool(poolPick), "pool"); } }, t("sgClear")));
   }
 }
-/* the entry picked: its pattern (the kept ones), SET, COPY, PLAY, REPS, CLEAR (left alone while one of them has focus) */
+/* the entry picked: its pattern (REST, the kept ones: the device's KNOB 2 order), SET, COPY, PLAY, REPS, CLEAR (a REST's at
+   once: nothing goes with it); left alone while one of them has focus */
 function renderEntry(L, Q) {
   const box = $("sgentry"), { k, e } = sgPick, en = L.tracks[k] && L.tracks[k].ent[e];
   if (!en || box.contains(document.activeElement)) return;
-  const kept = Q ? Q.pats.map((p, i) => (p.len ? i + 1 : 0)).filter(Boolean) : [];
-  const sel = el("select", { "aria-label": t("sgPattern") }, ...kept.map((i) => el("option", { value: i, text: pat2(i) })));
-  if (en.pat) sel.value = String(en.pat);
+  const kept = Q ? Q.pats.map((p, i) => (p.len ? i + 1 : 0)).filter(Boolean) : [], rest = en.pat === PAT_REST;
+  const sel = el("select", { "aria-label": t("sgPattern") }, el("option", { value: PAT_REST, text: "REST" }),
+    ...kept.map((i) => el("option", { value: i, text: pat2(i) })));
+  sel.value = String(en.pat || kept[0] || PAT_REST);   /* (an empty entry: the first kept pattern, as before) */
   const reps = el("input", { type: "number", min: 1, max: 16, value: en.reps, "aria-label": "REPS", style: "width:4em" });   /* (1.2.1, #12: an empty entry's is a rest's length) */
   reps.addEventListener("change", () => songOp(req.list(5, k, e, Math.max(1, Math.min(16, +reps.value | 0))), "list"));
   const what = () => {
@@ -3559,12 +3691,12 @@ function renderEntry(L, Q) {
   };
   box.replaceChildren(el("strong", { text: `T${k + 1} ${ENTS[e]}` }), " ",
     el("label", {}, el("span", { class: "dim", text: t("sgPattern") }), " ", sel),
-    el("button", { type: "button", disabled: !kept.length, onclick: () => songOp(req.list(1, k, e, +sel.value), "list") }, t("sgSet")),
-    el("button", { type: "button", disabled: !en.pat, onclick: () => songOp(req.list(2, k, e), "list") }, t("sgCopy")),
+    el("button", { type: "button", onclick: () => songOp(req.list(1, k, e, +sel.value), "list") }, t("sgSet")),
+    el("button", { type: "button", disabled: !en.pat || rest, onclick: () => songOp(req.list(2, k, e), "list") }, t("sgCopy")),
     el("button", { type: "button", disabled: !en.pat, onclick: () => songOp(req.list(3, k, e), "list") }, t("sgPlay")),
     el("label", {}, el("span", { class: "dim", text: "REPS" }), " ", reps),
     el("button", { type: "button", disabled: !en.pat, onclick: () => {
-      if (confirm(t("sgConfirmEntry").replace("{e}", `T${k + 1} ${ENTS[e]}`).replace("{what}", what()))) songOp(req.list(4, k, e), "list");
+      if (rest || confirm(t("sgConfirmEntry").replace("{e}", `T${k + 1} ${ENTS[e]}`).replace("{what}", what()))) songOp(req.list(4, k, e), "list");
     } }, t("sgClear")));
 }
 function sceneClick(i, kept) {
@@ -3786,7 +3918,7 @@ async function load(d) {
       try { d.slotUsed[k] = parse[CMD.PROJECT](await sessionRequest(d, req.project(2, k))).used; }
       catch (e) { if (e.message === "closed") throw e; }
     }
-    try { d.smp = parse[CMD.SMP_INFO](await sessionRequest(d, req.smpInfo())); }
+    try { await smpInfo(d); }
     catch (e) { if (e.message === "closed") throw e; d.smp = null; }   /* older firmware, or no flash */
     d.keys = paramKeys(d.pdesc, d.info.pe0, d.info.pcount);
     await libAdopt(d);
@@ -4802,6 +4934,44 @@ function recRow(k) {
     on ? el("span", { class: "rectime dim" }) : "");
 }
 
+/* (#21) a sound's LEVEL, REV and DLY: 0..127 inside, % as the unit shows them (params.c F_PCT; every % round trips) */
+const pctOf = (v) => Math.floor((v * 100 + 63) / 127), rawOf = (p) => Math.floor((p * 127 + 50) / 100);
+const MIX0 = [127, 0, 0], MIX_KEYS = ["smpLevel", "smpRev", "smpDly"];
+const mixOn = () => !!dev && !!dev.info && !!(dev.info.skiff & 32);
+function pctInput(v, key, on) {
+  const inp = el("input", { type: "number", class: "pct", min: 0, max: 100, step: 1, value: pctOf(v), title: t(key),
+    disabled: smpBusy || recActive() });
+  inp.addEventListener("change", () => {
+    const p = Math.max(0, Math.min(100, Math.round(Number(inp.value)) || 0));
+    inp.value = p;
+    on(rawOf(p));
+  });
+  return inp;
+}
+/* (#21) the slot's sounds on the device (lowest keys first): their keys, LEVEL, REV, DLY; a change goes at once (the
+   device keeps them with the slot once its transport stops) */
+function mixTable(k, u) {
+  const tb = el("table", {}, el("tr", {}, el("th", { text: t("smpSound") }), el("th", { text: t("keys") }),
+    ...MIX_KEYS.map((x) => el("th", { text: t(x) }))));
+  u.mix.mix.forEach((m, i) => tb.append(el("tr", {}, el("td", { text: String(i + 1) }),
+    el("td", { text: `${noteName(u.mix.keys[i][0])}–${noteName(u.mix.keys[i][1])}` }),
+    ...m.map((v, w) => el("td", {}, pctInput(v, MIX_KEYS[w], (x) => smpMixSet(k, i, w, x)))))));
+  return el("div", {}, el("p", { class: "dim", text: t("smpMixHelp") }), tb);
+}
+async function smpMixSet(k, i, w, v) {
+  const u = dev && dev.smp && dev.smp.slots[k];
+  if (!u || !u.mix || smpBusy) return;
+  const mix = u.mix.mix.map((m) => m.slice());
+  mix[i][w] = v;
+  try {
+    const r = parse[CMD.SMP_MIX](await rq(req.smpMix(k, mix)));
+    if (r.rc === 1) throw new Error("mix rc 1");
+    u.mix = r;
+    if (r.rc === 2) sayK("smpMixTooLong");
+  } catch (e) { if (e.message !== "closed") sayK("smpFail", e.message); }
+  renderSamples();
+}
+
 function renderSamples() {
   const box = $("smpslots");                        /* the tab says when there are no slots (renderPanels) */
   if (!dev || !dev.smp) { box.replaceChildren(); return; }
@@ -4831,10 +5001,13 @@ function renderSamples() {
         d.files.length ? el("button", { text: t("clearList"), disabled: smpBusy || recActive(), onclick: () => { d.files = []; renderSamples(); } }) : "",
         size, prog),
       recRow(k));
+    if (u.zones && u.mix) blk.append(mixTable(k, u));   /* ((#21) the sounds on the device) */
     if (d.files.length) {
       const keys = splitKeys(d.files);
+      const mx = mixOn();                           /* ((#21) each file's LEVEL, REV, DLY, sent after the upload) */
       const tb = el("table", {}, el("tr", {}, el("th", { text: t("file") }), el("th", { text: t("root") }),
-        el("th", { text: t("keys") }), el("th", { text: t("length") }), el("th")));
+        el("th", { text: t("keys") }), ...(mx ? MIX_KEYS.map((x) => el("th", { text: t(x) })) : []),
+        el("th", { text: t("length") }), el("th")));
       d.files.forEach((f, i) => {
         const root = el("input", { type: "text", class: "root", value: noteName(f.root), spellcheck: "false" });
         root.addEventListener("change", () => {
@@ -4845,10 +5018,11 @@ function renderSamples() {
         });
         tb.append(el("tr", {}, el("td", { text: f.fname }), el("td", {}, root),
           el("td", { text: `${noteName(keys[i][0])}–${noteName(keys[i][1])}` }),
+          ...(mx ? (f.mix || (f.mix = MIX0.slice())).map((v, w) => el("td", {}, pctInput(v, MIX_KEYS[w], (x) => { f.mix[w] = x; }))) : []),
           el("td", { text: `${(f.s.length / SMP.RATE).toFixed(2)} s` }),
           el("td", {}, el("button", { text: t("remove"), disabled: smpBusy || recActive(), onclick: () => { d.files.splice(i, 1); renderSamples(); } }))));
         if (f.raw)                                  /* the waveform: drag its ends to trim */
-          tb.append(el("tr", { class: "trimrow" }, el("td", { colspan: 4 }, trimCanvas(f)),
+          tb.append(el("tr", { class: "trimrow" }, el("td", { colspan: mx ? 7 : 4 }, trimCanvas(f)),
             el("td", {},
               el("button", { text: t("preview"), onclick: () => preview(f) }),
               el("button", { text: t("autoTrim"), disabled: smpBusy || recActive(), onclick: () => {
@@ -4870,12 +5044,22 @@ function renderSamples() {
   }));
 }
 
-async function smpInfo(d = dev) { d.smp = parse[CMD.SMP_INFO](await sessionRequest(d, req.smpInfo())); }
+/* the device's slots, and (#21) each one's sounds' LEVEL, REV, DLY (u.mix: SMP_MIX's reply) when its firmware has them */
+async function smpInfo(d = dev) {
+  const si = parse[CMD.SMP_INFO](await sessionRequest(d, req.smpInfo()));
+  if (d.info && d.info.skiff & 32)
+    for (const [k, u] of si.slots.entries()) {
+      if (!u.zones) continue;
+      try { u.mix = parse[CMD.SMP_MIX](await sessionRequest(d, req.smpMix(k))); }
+      catch (e) { if (e.message === "closed") throw e; }
+    }
+  d.smp = si;
+}
 
 async function smpUpload(k, prog) {
   const d = smpDraft[k];
   let built;
-  try { built = buildSlot(d.name, d.files.map((f) => ({ s: f.s, root: f.root }))); }
+  try { built = buildSlot(d.name, d.files.map((f) => ({ s: f.s, root: f.root, mix: f.mix || MIX0 }))); }
   catch (e) { sayK("smpFail", e.message); return; }
   if (!confirm(t("confirmUpload").replace("{n}", k + 1))) return;
   const { hdr, data } = built;
@@ -4898,7 +5082,13 @@ async function smpUpload(k, prog) {
     }
     r = parse[CMD.SMP_END](await rq(req.smpEnd(k, hdr), { timeout: 2000, retries: 0 }));
     if (r.rc) throw new Error(`end rc ${r.rc} (${SMP_RC[r.rc] || "?"})`);
-    sayK("smpDone", `${k + 1}  ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+    let note = "";
+    if (session.info.skiff & 32) {                  /* ((#21) each sound's LEVEL, REV, DLY, in the slot's order) */
+      const mix = built.zones.map((z) => z.mix || MIX0), m = parse[CMD.SMP_MIX](await rq(req.smpMix(k, mix)));
+      if (m.rc === 1) throw new Error("mix rc 1");
+      if (m.rc === 2 && mix.some((x) => x.join() !== MIX0.join())) note = " · " + t("smpMixTooLong");
+    }
+    sayK("smpDone", `${k + 1}  ${((performance.now() - t0) / 1000).toFixed(1)} s${note}`);
   } catch (e) {
     if (e.message !== "closed") sayK("smpFail", e.message);
   } finally {
@@ -5358,16 +5548,97 @@ function renderMenu() {
       return el("label", { class: "bar" }, el("span", { text: x.name + (x.unit ? ` (${x.unit})` : "") }), ctl);
     })]));
 }
+/* (Skiff #27, @tradiuz) THEME CUSTOM, after Felucca 1.6's custom palette (Leo Kuroshita): eleven colours and a look (the
+   THEME whose faces and widgets they wear), shown on the device as they change (COLORS op 0, RAM only, at most every
+   120 ms), kept by SAVE (op 1: THEME CUSTOM from then on), REVERT drops what is shown, REMOVE takes the set away (op 2).
+   Colours hard to read get a warning, nothing more (colorWarnings): the device keeps what it is given */
+const ced = { key: "", c: [], look: 0, live: true, last: 0, timer: 0 };
+function colorsBlock(d, p) {
+  const C = p.colors, inUse = p.palettes[p.state.palette] === "CUSTOM";
+  const from = inUse ? C.look : Math.min(p.state.palette, PAL_BUILTIN.length - 1);
+  const key = JSON.stringify([C.stored, C.look, C.c, from]);
+  if (ced.key !== key) {                             /* (the device's set; none: the THEME in use's to start from) */
+    ced.key = key;
+    ced.c = (C.stored ? C.c : PAL_BUILTIN[from].c).slice();
+    ced.look = C.stored ? C.look : from;
+  }
+  const names = PAL_BUILTIN.map((x, i) => el("option", { value: i, text: x.name }));
+  const look = el("select", { "aria-label": t("customLook") }, ...names);
+  const start = el("select", { "aria-label": t("customFrom") }, el("option", { value: "", text: t("customFrom") }),
+    ...PAL_BUILTIN.map((x, i) => el("option", { value: i, text: x.name })));
+  const wells = PAL_ROLES.map((role, i) => el("input", { type: "color", "aria-label": role,
+    oninput: (e) => { ced.c[i] = from565hex(e.target.value); changed(); } }));
+  const live = el("input", { type: "checkbox" });
+  const warn = el("p", { class: "dim", role: "status" });
+  function paint() {
+    wells.forEach((w, i) => { if (w !== document.activeElement) w.value = hex565(ced.c[i]); });   /* (not the one dragged) */
+    look.value = ced.look;
+    live.checked = ced.live;
+    const u = colorWarnings(ced.c);
+    warn.textContent = u.length ? t("customHard") + u.map((x) => `${x.a} / ${x.b} ${x.r.toFixed(1)}:1`).join(", ") : "";
+    warn.hidden = !u.length;
+  }
+  function changed() {                               /* (the last change always goes) */
+    paint();
+    if (!ced.live || dev !== d) return;
+    clearTimeout(ced.timer);
+    ced.timer = setTimeout(() => {
+      ced.last = Date.now();
+      sessionRequest(d, req.colors(0, ced.look, ced.c.slice()), { key: "colors" }).catch(() => {});
+    }, Math.max(0, 120 - (Date.now() - ced.last)));
+  }
+  look.addEventListener("change", () => { ced.look = +look.value; changed(); });
+  start.addEventListener("change", () => {
+    if (start.value === "") return;
+    ced.c = PAL_BUILTIN[+start.value].c.slice(); ced.look = +start.value; start.value = "";
+    changed();
+  });
+  live.addEventListener("change", () => { ced.live = live.checked; if (ced.live) changed(); else colorsOp(d, 3, true); });
+  paint();
+  return el("div", { class: "wellbox" }, el("h3", { text: t("customColors") }), el("p", { class: "dim", text: t("customHelp") }),
+    el("div", { class: "wells" }, ...PAL_ROLES.map((role, i) => el("label", {}, wells[i], el("span", { text: role })))),
+    el("div", { class: "bar" }, el("label", { class: "bar" }, el("span", { text: t("customLook") }), look), start,
+      el("label", {}, live, " " + t("customLive"))),
+    warn,
+    el("p", { class: "bar" }, el("button", { text: t("customSave"), onclick: () => colorsOp(d, 1) }),
+      el("button", { text: t("customRevert"), onclick: () => colorsOp(d, 3) }),
+      el("button", { text: t("customRemove"), disabled: !C.stored,
+        onclick: () => { if (confirm(t("customRemoveConfirm"))) colorsOp(d, 2); } })));
+}
+async function colorsOp(d, o, keep = false) {        /* 1 SAVE, 2 REMOVE, 3 what is shown dropped (keep: the edit stays) */
+  if (!d) return;
+  clearTimeout(ced.timer);
+  while (busy && d === dev) await sleep(20);
+  if (d !== dev) return;
+  await op(async () => {
+    const r = parse[CMD.COLORS](await sessionRequest(d, req.colors(o, ced.look, ced.c.slice()), o === 3 ? undefined : FLASH_OPT));
+    if (d !== dev) return;
+    if (!keep) ced.key = "";
+    d.preferences = await readDevicePreferences((x, opt) => sessionRequest(d, x, opt), d.info, d.names, d.preferences, o !== 3);
+    if (d === dev) renderPreferences(!keep);
+    preferenceResult(r.rc);
+  });
+}
+/* (Skiff #27) THEME CUSTOM in use: the editor wears its colours too, as inline tokens over the look's data-theme */
+const CUSTOM_KEYS = Object.keys(customTokens(PAL_BUILTIN[0].c));
+function applyCustom(c) {
+  const s = document.documentElement.style, tk = c && customTokens(c);
+  for (const k of CUSTOM_KEYS) if (tk) s.setProperty(k, tk[k]); else s.removeProperty(k);
+}
 function renderPreferences(force = false) {
   const d = dev, p = d && d.preferences;
-  const look = p && { SKIFF: "dark", "HI-CON": "dark", PAPER: "light", CRYPT: "crypt", NEON: "neon",   /* (Skiff 1.0) the */
-    QUARK: "quark" }[p.palettes[p.state.palette]];                                         /* unit's THEME; none: the system's */
+  const LOOK = { SKIFF: "dark", "HI-CON": "dark", PAPER: "light", CRYPT: "crypt", NEON: "neon", QUARK: "quark" };   /* (Skiff 1.0) */
+  const cu = p && p.palettes[p.state.palette] === "CUSTOM" && p.colors && p.colors.stored ? p.colors : null;
+  const lk = cu && LOOK[(PAL_BUILTIN[cu.look] || {}).name];
+  const look = !p ? null : cu ? (["crypt", "neon", "quark"].includes(lk) ? lk : luma565(cu.c[0]) > 128 ? "light" : "dark") :
+    LOOK[p.palettes[p.state.palette]];                                                     /* unit's THEME; none: the system's */
   if (look) document.documentElement.dataset.theme = look;
   else delete document.documentElement.dataset.theme;
+  applyCustom(cu ? cu.c : null);
   $("device-display").hidden = !p || !(p.state.caps & 7);
   $("device-presets").hidden = !p || !(p.state.caps & 8);
   if (!p) { renderPreferences.sig = null; return; }
-  const sig = JSON.stringify([p.state, p.palettes, lang, d.dump && d.dump.engine, d.sel]);   /* ((phase 6) the track: what it may play) */
+  const sig = JSON.stringify([p.state, p.palettes, p.colors, lang, d.dump && d.dump.engine, d.sel]);   /* ((phase 6) the track) */
   if (!force && sig === renderPreferences.sig) return;
   renderPreferences.sig = sig;
   const defs = [
@@ -5384,6 +5655,7 @@ function renderPreferences(force = false) {
     select.addEventListener("change", () => changePreference(id, +select.value));
     controls.push(el("label", { class: "bar" }, el("span", { text: t(key) }), select));
   }
+  if (p.state.caps & 16 && p.colors) controls.push(colorsBlock(d, p));   /* ((Skiff #27) THEME CUSTOM's colours) */
   $("device-display-controls").replaceChildren(...controls);
   if (!(p.state.caps & 8)) return;
   const filter = $("device-filter");

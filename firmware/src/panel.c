@@ -13,7 +13,21 @@ static const char *const B_NAME[NB] = {"FX", "SEL", "ENV", "LFO", "EDIT", "GLO",
                                         "ARP", "SEQ", "PLAY", "REC", "OCT-", "OCT+"};
 static const char *const E_NAME[NE] = {"SELECT", "ALGORITHM", "PRESETS", "KNOB 1", "KNOB 2",
                                         "KNOB 3", "KNOB 4"};
+#ifndef FM1_NBTN                        /* (host builds without a HAL: the FM-1's buttons and knobs) */
+#define FM1_NBTN 14u
+#endif
+#ifndef FM1_NENC
+#define FM1_NENC 7u
+#endif
+#if BOARD_SMK37
+#define PANEL_MAGIC 0x504E5331u          /* "PNS1" (SMK-37 Pro): bump when PANEL_DEFAULT changes */
+#define PANEL_NBTN FM1_NBTN              /* the matrix's buttons and knobs (panel_init): 18, 8 */
+#define PANEL_NENC FM1_NENC
+#else
 #define PANEL_MAGIC 0x50414E35u          /* "PAN5": bump when PANEL_DEFAULT changes */
+#define PANEL_NBTN NB                    /* (as written before: the FM-1 build stays the same) */
+#define PANEL_NENC NE
+#endif
 
 typedef struct {
     uint32_t magic;
@@ -23,22 +37,37 @@ typedef struct {
 } panel_t;
 panel_t panel __attribute__((section(".noinit")));
 
+#if BOARD_SMK37
+/* SMK-37 Pro (smk_input.h button ids, after genkigenki's layer): the printed SMK name -> the FM-1 function. FX = FX,
+ * SCALE = SEL, CHORD = ENV, NOTE REPEAT = LFO, PARA = EDIT, GLOBE = GLO, PATCH = HOME, BT = SAVE, ARP and SEQ as
+ * printed, SEQ PLAY = PLAY, SEQ REC = REC, OCTAVE- / + as printed; KNOB BANK, FADER BANK, < and > are not an FM-1
+ * button. The knobs as the FM-1's top row: K1 = MASTER (smk_input.h: a virtual pot), K2 = SELECT, K3 = ALGORITHM,
+ * K4 = PRESETS, K5..K8 = KNOB 1..4. A first mapping for bring-up, not the UX pass's; HARDWARE CALIBRATION (OCTAVE- +
+ * OCTAVE+ at power-on) teaches another */
+static const panel_t PANEL_DEFAULT = {
+    PANEL_MAGIC,
+    {14, 8, 9, 7, 13, 10, 12, 11, 6, 15, 16, 17, 4, 5},
+    {1, 2, 3, 4, 5, 6, 7},
+    {1, 1, 1, 1, 1, 1, 1},
+};
+#else
 static const panel_t PANEL_DEFAULT = {
     PANEL_MAGIC,
     {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0, 1},   /* PLAY = 12, REC = 13 (measured on hardware) */
     {0, 1, 6, 2, 3, 4, 5},                           /* SELECT = enc 0, ALGORITHM = enc 1, PRESETS = enc 6 (printed labels) */
     {1, 1, 1, 1, 1, 1, 1},
 };
+#endif
 
 static void panel_init(void)                     /* also after a flash load: ids are used as array indexes and shifts */
 {
     uint32_t i, buttons = 0, encoders = 0, ok = panel.magic == PANEL_MAGIC;
     for (i = 0; ok && i < NB; i++) {
-        ok = panel.btn[i] < NB && !(buttons & (1u << panel.btn[i]));
+        ok = panel.btn[i] < PANEL_NBTN && !(buttons & (1u << panel.btn[i]));
         if (ok) buttons |= 1u << panel.btn[i];
     }
     for (i = 0; ok && i < NE; i++) {
-        ok = panel.enc[i] < NE && !(encoders & (1u << panel.enc[i])) &&
+        ok = panel.enc[i] < PANEL_NENC && !(encoders & (1u << panel.enc[i])) &&
              (panel.dir[i] == 1 || panel.dir[i] == -1);
         if (ok) encoders |= 1u << panel.enc[i];
     }
@@ -72,6 +101,7 @@ static int32_t panel_enc(uint32_t role)
 struct { uint32_t magic, palette, lowcut, zoom; } settings __attribute__((section(".noinit")));
 
 static void settings_save(void);              /* project.c: flash copy (FELUCCA_FLASH) */
+static void theme_apply(void);                /* ui.c: the palette, (Skiff #27) THEME CUSTOM's colours over it */
 
 /* HOLD (menu): how long a button is held before its layer opens (ui_input.c). Saved in the settings record's
  * retired bold field as HOLD_TAG | index; any other value there (0 or 1 from older firmware) is the default */
@@ -127,7 +157,7 @@ static int settings_init(void)                 /* 1: no settings were kept (a ne
         settings.zoom = 0;                     /* (retired: the LEDS setting, settings_persist.c) */
         fresh = 1;
     }
-    palette_set(settings.palette);
+    theme_apply();
     fx_lowcut = (uint8_t)(settings.lowcut % 3u);
     return fresh;
 }

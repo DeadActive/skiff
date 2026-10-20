@@ -70,6 +70,12 @@ static const menu_credit_t MENU_CREDITS[] = {
     {"curist: the 320 MHz switch / MIT, after the JieLi AC79 SDK (Apache-2.0)", MC_TEXT},
     {"https://github.com/curist/fm1-clk320-probe", MC_URL},
     {"", MC_TEXT},
+#if BOARD_SMK37
+    {"SMK-37 PORT", MC_TITLE},                   /* (Skiff) the SMK-37 build: genkigenki's board layer (smk_input.h ..) */
+    {"genkigenki (M. Geisler): the SMK-37 board layer for Felucca / GPL-3.0", MC_TEXT},
+    {"https://github.com/genkigenki/Felucca", MC_URL},
+    {"", MC_TEXT},
+#endif
     {"BARLOW CONDENSED", MC_TITLE},              /* (Skiff U1) the face on the screen (Inter Tight: not in the build) */
     {"The Barlow Project Authors", MC_TEXT},
     {"SIL Open Font License 1.1", MC_TEXT},

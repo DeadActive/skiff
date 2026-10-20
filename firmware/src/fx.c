@@ -1001,6 +1001,45 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
     t->peak = pk;
 }
 
+/* (Skiff, #21) a voice on a user sample's sound (eng_sample.c usr_mix; voice.c track_render, track k): rendered at the
+ * sound's LEVEL (dsp.c vmod_level, as DRUM's lanes) into dst as any voice, and into the REVERB and DELAY sums mix_part
+ * adds track k into (vs_sm) as much as the sound's REV and DLY say more than the track's sends (127 at most in all), at
+ * the track's LEVEL and the gains its block ended on last time: the SLICER's gate and repeat, the FX layer's mute, the
+ * DUCK (a block late: 0.7 ms). The sound as it plays, before DRIVE and the INSERT. (Out of line: the voices' loop in
+ * mix_part stays as it was) */
+#if FELUCCA_CPU2
+static mixsum_t *vs_sm[NPART];                          /* (mix_part: mx[0] or the second core's mx[1]) */
+#define VS_R(k) (vs_sm[k]->v)
+#define VS_D(k) (vs_sm[k]->d)
+#else
+#define VS_R(k) send_r
+#define VS_D(k) send_d
+#endif
+static __attribute__((noinline)) void smx_render(track_t *t, voice_t *v, uint32_t k, int32_t *dst, uint32_t n,
+                                                 const vmod_t *m)
+{
+    const int16_t *sx = &usr_mix[((uint32_t)v->s[4] >> 5) & 3u][SMX_REV][v->s[4] & 15];   /* (sx[-16] its LEVEL, sx[16]
+                                                                                           * its DLY) */
+    int32_t vb[CTL], g, fr, fd, *r = VS_R(k), *d = VS_D(k);
+    uint32_t i;
+    vmod_t ml;
+    n = n > CTL ? CTL : n;                              /* (a block, as SPREAD's buffer) */
+    spread_clear(vb);
+    ENGINES[t->engine]->render(t, v, vb, n, vmod_level(m, &ml, sx[-16]));
+    g = (LEVEL_Q12[t->p[P_LEVEL] & 127] * (32768 - sl[k].gc)) >> 15;   /* Q12 */
+    g = (g * (32768 - sl[k].w)) >> 15;
+    g = (g * pf.mg[k]) >> 15;
+    g = (g * (32768 - duck[k].r1)) >> 15;
+    fr = (g * clamp(sx[0], 0, 127 - t->p[P_REV]) * 258) >> 15;
+    fd = (g * clamp(sx[16], 0, 127 - t->p[P_DLY]) * 258) >> 15;
+    for (i = 0; i < n; i++) {                           /* (|vb| < 2^16, f < 2^13: no overflow) */
+        int32_t x = vb[i] >> 2;
+        dst[i] += vb[i];
+        r[i] += (x * fr) >> 10;
+        d[i] += (x * fd) >> 10;
+    }
+}
+
 /* one synth part into the dry mix and the sends (of sm: mx[0]; mx[1] on the second core); a part with no voice sounding
  * costs the LFO tick and a cleared buffer only (after the DIST tail has run out) */
 #if FELUCCA_CPU2
@@ -1017,6 +1056,7 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
     mod_begin(t);                                       /* the matrix's per-block values into t->p (mod.c) */
     t->spread_on = t->p[P_SPRD] > 0 && (trk_vmode(t) == V_POLY || trk_vmode(t) == V_UNISON);   /* ((1.3) mix_spread) */
 #if FELUCCA_CPU2
+    vs_sm[(uint32_t)(t - trk) % NPART] = sm;            /* ((#21) smx_render's sums) */
     nr = track_render(t, b, n);
     part_cost[(uint32_t)(t - trk) % NPART] = (uint16_t)(nr * ENG_VCOST[t->engine % NENGINES] + (nr || t->tail ? 60u : 0u));
     if (nr)

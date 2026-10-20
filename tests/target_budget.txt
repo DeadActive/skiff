@@ -75,3 +75,4 @@ ins_swept 228
 mix_spread 73
 esync_coef 0
 mod_depth 25
+smx_render 17

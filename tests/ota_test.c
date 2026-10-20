@@ -4,13 +4,41 @@
  * the SysEx protocol (pack7, cmd 0x30 reads, 0xE0000000 -> "success") and a
  * simulated NOR plays the flash.
  *   cc -o ota_test tests/ota_test.c && ./ota_test FILE.fwsc
+ * SMK-37 (-DBOARD_SMK37=1): `./ota_test M-VAVE.fwsc official` takes M-VAVE's own package (its 36 interleave blocks):
+ * the app stages its own loader (SMK_LDR, made here) in place of the package's, under the stock record name.
  */
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#if BOARD_SMK37                          /* -DBOARD_SMK37=1: the SMK-37 Pro build of ota.c */
+#if T_MODEL == 1                         /* -DT_MODEL=1 / 2: the MODEL=elite / mke build */
+#define SMK_MODEL "SMK-37 Elite"
+#elif T_MODEL == 2
+#define SMK_MODEL "MKE-P37"
+#else
+#define SMK_MODEL "SMK-37 Pro"
+#endif
+#define FELUCCA_ID SMK_MODEL "_900"
+#define T_AREA 0xBB000u
+#define T_FL_LEN "0x9D000"               /* flash.bin: this board's [0, app area end) */
+#define T_FL_OTHER 0x93000u              /* the other board's (the FM-1's) */
+#define T_FL_OTHER_NAME "0x93000"
+#define T_PARM_ID "ota-" SMK_MODEL "_016"
+#define OTA_LDR_HOST 1                   /* ota.c: SMK_LDR from here, not build/gen's (made by make_own_ldr) */
+static uint8_t SMK_LDR[0x1F00];
+static uint32_t smk_ldr_len;
+#define SMK_LDR_LEN smk_ldr_len
+#else
 #define FELUCCA_ID "FM-1_900"
+#define T_AREA 0xE0000u
+#define T_PARM_ID "ota-FM-1_015"
+#define T_FL_LEN "0x93000"
+#define T_FL_OTHER 0x9D000u              /* an SMK-37 Pro package's */
+#define T_FL_OTHER_NAME "0x9D000"
+#endif
+#define T_AREA_HI (T_AREA + 0x5000u)
 #define FELUCCA_OTA_DRYRUN 0
 
 static uint8_t nor[0x100000];
@@ -96,7 +124,7 @@ static uint32_t ota_now_ms(void) { return now_ms; }
 static void ota_idle(void) { now_ms += 1; }
 static int ota_erase(uint32_t off)
 {
-    if (off < 0xE0000u || off >= 0xE5000u || (off & 0xFFFu)) { bad_erase++; return -8; }
+    if (off < T_AREA || off >= T_AREA_HI || (off & 0xFFFu)) { bad_erase++; return -8; }
     erases++;
     memset(nor + off, 0xFF, 4096);
     return 0;
@@ -105,7 +133,7 @@ static int ota_prog(uint32_t off, const void *src, uint32_t n)
 {
     const uint8_t *s = src;
     uint32_t i;
-    if (off < 0xE0000u || off + n > 0xE5000u) { bad_erase++; return -8; }
+    if (off < T_AREA || off + n > T_AREA_HI) { bad_erase++; return -8; }
     for (i = 0; i < n; i++) nor[off + i] &= s[i];
     return 0;
 }
@@ -158,10 +186,31 @@ static int check(const char *what, int ok)
     return ok ? 0 : 1;
 }
 
+#if BOARD_SMK37
+static void make_own_ldr(void)           /* a loader as build.py wraps one: outer head (CRC, 0x20, length, 0x41), body */
+{
+    uint32_t len = 7000u, i;
+    memset(SMK_LDR, 0, 0x20);
+    for (i = 0; i < len; i++)
+        SMK_LDR[0x20 + i] = (uint8_t)(i * 37u + 11u);
+    ota_wr16(SMK_LDR + 2, ota_crc16(SMK_LDR + 0x20, len, 0));
+    ota_wr32(SMK_LDR + 4, 0x20u);
+    ota_wr32(SMK_LDR + 8, len);
+    SMK_LDR[12] = 0x41;
+    ota_wr16(SMK_LDR, ota_crc16(SMK_LDR + 2, 30, 0));
+    smk_ldr_len = len + 0x20u;
+}
+#define T_EMB ota_emb
+#else
+#define T_EMB 0
+#define SMK_LDR ((uint8_t *)0)
+#define smk_ldr_len 0u
+#endif
+
 static int area_erased(void)
 {
     uint32_t i;
-    for (i = 0xE0000; i < 0xE5000; i++) if (nor[i] != 0xFF) return 0;
+    for (i = T_AREA; i < T_AREA_HI; i++) if (nor[i] != 0xFF) return 0;
     return 1;
 }
 
@@ -178,8 +227,12 @@ int main(int argc, char **argv)
     FILE *f;
     uint8_t *raw;
     size_t n, i;
-    int bad = 0, rc;
-    if (argc < 2) { printf("usage: ota_test FILE.fwsc\n"); return 2; }
+    int bad = 0, rc, official = argc > 2 && !strcmp(argv[2], "official");
+    size_t blocks = 20;
+    if (argc < 2) { printf("usage: ota_test FILE.fwsc [official]\n"); return 2; }
+#if BOARD_SMK37
+    make_own_ldr();
+#endif
     f = fopen(argv[1], "rb");
     if (!f) { perror(argv[1]); return 2; }
     raw = malloc(0x200000);
@@ -187,9 +240,11 @@ int main(int argc, char **argv)
     fclose(f);
     if (n < 20 * 48 + 0x4400) { printf("%s: too short for a package\n", argv[1]); return 2; }
     logical = malloc(n);
-    for (i = 0; i < 20; i++) memcpy(logical + i * 47, raw + i * 48, 47);   /* drop the marker bytes */
-    memcpy(logical + 20 * 47, raw + 20 * 48, n - 20 * 48);
-    logical_len = n - 20;
+    while (official && (blocks + 1) * 48 <= n && blocks < 64 && raw[blocks * 48 + 47] == 0x7D)
+        blocks++;                                          /* (M-VAVE's: more blocks, the unused marker 0x7D) */
+    for (i = 0; i < blocks; i++) memcpy(logical + i * 47, raw + i * 48, 47);   /* drop the marker bytes */
+    memcpy(logical + blocks * 47, raw + blocks * 48, n - blocks * 48);
+    logical_len = n - blocks;
 
     /* handshake outside a session */
     reset_dev();
@@ -206,18 +261,30 @@ int main(int argc, char **argv)
     reset_dev();
     rc = ota_session();
     printf("  %u requests\n", requests);
-    bad += check("session commits (flash.bin exactly 0x93000)", rc == 0 && committed);
-    bad += check("headers + loader + confirm, no head reads", requests >= 10 && requests <= 30);
+    bad += check("session commits (flash.bin exactly " T_FL_LEN ")", rc == 0 && committed);
+    bad += check(official ? "headers + the head check + confirm, no loader read" : "headers + loader + confirm, no head reads",
+                 requests >= (official ? 36u : 10u) && requests <= (official ? 40u : 30u));
     {
-        uint8_t *h = nor + 0xE0000, *p = committed_parm;
-        bad += check("staged body == the package's loader", !memcmp(nor + 0xE0020, logical + ota_body_off(), 64));
+        uint8_t *h = nor + T_AREA, *p = committed_parm;
+        uint32_t k, zero = 1;
+        for (k = 8u + sizeof T_PARM_ID - 1u; k < 0x28u; k++)
+            zero &= p[k] == 0;
+        if (official)
+            bad += check("M-VAVE's package: Skiff's own loader staged, whole", T_EMB &&
+                         !memcmp(nor + T_AREA + 0x20u, SMK_LDR + 0x20u, smk_ldr_len - 0x20u) &&
+                         ota_rd32(h + 8) == smk_ldr_len);
+        else
+            bad += check("staged body == the package's loader", !T_EMB &&
+                         !memcmp(nor + T_AREA + 0x20u, logical + ota_body_off(), 64));
         bad += check("LOADER.BIN head CRC",
                      (h[0] | h[1] << 8) == ota_crc16(h + 2, 30, 0) && !memcmp(h + 16, "LOADER.BIN", 10));
-        bad += check("record at 0xE4F00 == RAM record", !memcmp(nor + 0xE4F00, p, 112));
+        bad += check("record at the area end - 256 == RAM record", !memcmp(nor + T_AREA_HI - 0x100u, p, 112));
+        bad += check("parm identity " T_PARM_ID ", zero to +0x27",
+                     !memcmp(p + 8, T_PARM_ID, sizeof T_PARM_ID - 1u) && zero);
         bad += check("record CRC / type / magic / ota_addr",
                      (p[0] | p[1] << 8) == ota_crc16(p + 2, 78, 0) && (p[2] | p[3] << 8) == 0x5A0D &&
-                     (p[6] | p[7] << 8) == 0x5441 && ota_rd32(p + 72) == 0xE0000);
-        bad += check("nothing written outside 0xE0000..0xE4FFF", bad_erase == 0);
+                     (p[6] | p[7] << 8) == 0x5441 && ota_rd32(p + 72) == T_AREA);
+        bad += check("nothing written outside the staging area", bad_erase == 0);
     }
     /* boot cleanup erases it */
     bad += check("boot cleanup erases the area", ota_boot_cleanup() == 1 && area_erased());
@@ -228,9 +295,9 @@ int main(int argc, char **argv)
         uint8_t keep[0x40 + 11 * 0x50];
         memcpy(keep, logical, sizeof keep);
         reset_dev();
-        set_fl_size(logical, 0x9D000u);
+        set_fl_size(logical, T_FL_OTHER);
         rc = ota_session();
-        bad += check("another board's size (0x9D000): -15, no commit, no erase", rc == -15 && !committed && erases == 0 &&
+        bad += check("another board's size (" T_FL_OTHER_NAME "): -15, no commit, no erase", rc == -15 && !committed && erases == 0 &&
                      area_erased());
         memcpy(logical, keep, sizeof keep);
     }

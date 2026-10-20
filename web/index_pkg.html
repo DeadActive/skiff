@@ -36,6 +36,8 @@
   <p class="small" data-t="beta"></p>
   <p class="small"><span data-t="brick"></span>
     <a href="https://github.com/kurogedelic/FM-1-transporter" target="_blank" rel="noopener" style="color:inherit">FM-1-transporter</a></p>
+  <p class="small"><span data-t="smk"></span>
+    <a href="https://github.com/illuminus5/skiff/blob/main/SMK37.md" target="_blank" rel="noopener" style="color:inherit">SMK37.md</a></p>
   <p><button id="go" disabled data-t="install"></button></p>
   <details style="margin-top:24px">
     <summary data-t="stockTitle"></summary>
@@ -52,9 +54,9 @@
   <p><a href="../editor/" style="color:inherit" data-t="editor"></a></p>
   <p><a href="../../learn/" style="color:inherit" data-t="learn"></a></p>
   <p class="small">Skiff by illuminus5, built on Felucca by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener" style="color:inherit">Hügelton Instruments</a>, with its CrispyZebra waveforms, drum voices, Sample Pack and Fukiai icons (MIT).<br>
-    Font: Barlow Condensed (The Barlow Project Authors, SIL OFL 1.1). DRUM-X: JIANT FM by juanjiant-bit (GPL-3.0). Samples: Versilian Studios VSCO-2 Community Edition and VCSL (CC0 1.0).<br>
+    SMK-37 support after genkigenki's SMK-37 layer (GPL-3.0). Font: Barlow Condensed (The Barlow Project Authors, SIL OFL 1.1). DRUM-X: JIANT FM by juanjiant-bit (GPL-3.0). Samples: Versilian Studios VSCO-2 Community Edition and VCSL (CC0 1.0).<br>
     FM6 engine: msfa from Dexed (Google Inc., Pascal Gauthier, Apache-2.0). The package also holds three JieLi AC79 SDK files, uboot.boot, cfg_tool.bin and eq_cfg_hw.bin (JieLi Technology, Apache-2.0). <a href="../../firmware/LICENSING.md" style="color:inherit">Licences</a>: <a href="../../firmware/LICENSE" style="color:inherit">GPL-3.0</a>, <a href="../../firmware/LICENSES/Apache-2.0.txt" style="color:inherit">Apache-2.0</a>, <a href="../../firmware/LICENSES/" style="color:inherit">all</a>.<br>
-    M-VAVE and FM-1 are trademarks of their respective owners.<br>
+    M-VAVE, FM-1 and SMK-37 are trademarks of their respective owners.<br>
     <span data-t="license"></span> <a href="https://github.com/illuminus5/skiff" target="_blank" rel="noopener" style="color:inherit">github.com/illuminus5/skiff</a></p>
 </main>
 <script type="module">
@@ -62,69 +64,81 @@
 const $ = (id) => document.getElementById(id);
 const TEXT = {
   ja: {
-    intro: "FM-1 を USB で接続してください。（Chrome か Edge で使えます）",
-    warn: "書き込み中は USB を抜かないでください。",
+    intro: "FM-1 または SMK-37 を USB で接続してください。（Chrome か Edge で使えます）",
+    warn: "書き込み中は USB を抜かず、電源も切らないでください。途中で切れても書き込みモードのまま残るので、挿し直す（電源を入れる）と続きから再開します。",
     install: "インストール", other: "English",
     editor: "エディタ（インストール後、パソコンから音色やシーケンスを編集）",
     learn: "Learn Skiff（使い方ガイド。章ごとに解説動画つき・英語のみ）",
     direct: "USB ケーブルはパソコンに直接つないでください。Probe や Transporter などの機材は不要です。",
-    brick: "万一インストールに失敗して起動しなくなった場合は、復旧に Transporter が必要です:",
-    beta: "Skiff はカスタムファームウェアです。不具合は GitHub で知らせてください。このカスタムファームウェアを使ったことで FM-1 が壊れたり不具合が起きたりしても、作者は一切の責任を負いません。自己責任でお使いください。",
-    back: "M-VAVEから公式FM-1 V15を取得し、未変更のFM-1.fwscを選んでください。ファイルはこのブラウザ内で検証し、サーバーへ送りません。",
-    stockTitle: "公式V15に戻す", stockFile: "公式FM-1.fwsc", stockGo: "バックアップして公式V15へ戻す",
+    brick: "FM-1 で万一インストールに失敗して起動しなくなった場合は、復旧に Transporter が必要です:",
+    smk: "SMK-37 Pro は Skiff に新しく対応した機種です。インストール前にバックアップと公式への戻し方をお読みください:",
+    beta: "Skiff はカスタムファームウェアです。不具合は GitHub で知らせてください。このカスタムファームウェアを使ったことで機器が壊れたり不具合が起きたりしても、作者は一切の責任を負いません。自己責任でお使いください。",
+    back: "M-VAVE から公式ファームウェア（FM-1 は V15、SMK-37 Pro は V016）を取得し、未変更の FM-1.fwsc または SMK-37_Pro_016.fwsc を選んでください。ファイルはこのブラウザ内で検証し、サーバーへ送りません。",
+    stockTitle: "公式ファームウェアに戻す", stockFile: "公式 FM-1.fwsc または SMK-37_Pro_016.fwsc", stockGo: "バックアップして公式ファームウェアへ戻す",
     stockBackup: "現在の曲・保存曲・音色バンク・サンプル・設定を先に保存します。全体バックアップ非対応版は、Skiff を更新してから行ってください。復元は Skiff を再インストールしてエディタから行います。",
     stockRecovery: "更新中断の再開：全体バックアップはすでにパソコンへ保存済み",
-    stockValid: "公式V15を確認しました", stockConfirm: "全体バックアップファイルをパソコンに保存できましたか？ 続けると公式V15へ戻します。Skiff の曲は公式V15では開けません。",
+    stockValid: "公式ファームウェアを確認しました: ", stockConfirm: "全体バックアップファイルをパソコンに保存できましたか？ 続けると公式ファームウェアへ戻します。Skiff の曲は公式ファームウェアでは開けません。",
     stockNeedBackup: "書き込みモードからはバックアップできません。保存済みバックアップがある場合だけ、更新中断の再開にチェックしてください。",
-    stockUnsupported: "このファームウェアは Skiff の全体バックアップを作れません。古い Skiff なら先に最新版をインストールしてください。他のファームウェアから V15 へ戻すには M-VAVE のアップデーターを使ってください。",
-    stockIsV15: "この FM-1 はすでに公式 V15 です。",
-    stockNotSkiff: "この FM-1 は Skiff ではないため、バックアップする Skiff の曲はありません。他のファームウェアから V15 へ戻すには M-VAVE のアップデーターを使ってください。FM-1 の報告: ",
+    stockUnsupported: "このファームウェアは Skiff の全体バックアップを作れません。古い Skiff なら先に最新版をインストールしてください。他のファームウェアから戻すには M-VAVE のアップデーターを使ってください。",
+    stockIsStock: "この機器はすでにその公式ファームウェアです。",
+    stockNotSkiff: "この機器は Skiff ではないため、バックアップする Skiff の曲はありません。他のファームウェアから戻すには M-VAVE のアップデーターを使ってください。機器の報告: ",
+    stockWrongModel: "選んだファイルは、接続している機器とは別の機種用です。",
     backup: "全体バックアップ保存中 ", stockError: "公式ファイルを確認できません: ",
     nomidi: "このブラウザでは使えません。Chrome か Edge で開いてください。", loadfail: "読み込めませんでした: ",
     start: "開始します", verify: "確認中", loader: "書き込みモードに切り替え中", write: "書き込み中",
     reboot: "再起動中", done: "完了しました", stopped: "途中で止まりました。USB を挿し直してもう一度押してください。",
+    dropped: "接続が切れました。書き込みモードのまま残っています。USB を挿し直す（または電源を入れる）と続きから再開します。待機中…",
+    resume: "書き込みを再開しています。試行 ",
     error: "エラー: ",
     denied: "MIDI（SysEx）の使用が許可されませんでした。アドレスバーのサイト設定で MIDI を許可して、もう一度押してください。",
-    notfound: "FM-1 が見つかりません。USB ケーブル（データ通信用か）を確かめ、MIDI を使う他のアプリを閉じてから、もう一度押してください。",
-    model: "接続されている機器は FM-1 ではありません。",
+    notfound: "FM-1 / SMK-37 が見つかりません。USB ケーブル（データ通信用か）を確かめ、MIDI を使う他のアプリを閉じてから、もう一度押してください。",
+    model: "接続されている機器は、このファイルの機種ではありません。",
+    nopkg: "この機器向けの Skiff はありません。機器の報告: ",
+    needV016: "この SMK-37 は V016 より古い M-VAVE 公式ファームウェアです。先に M-VAVE のアップデーター（M-UPGRADE）で V016 に更新してから、Skiff をインストールしてください。機器の報告: ",
     lost: "USB の接続が切れました。挿し直してもう一度押してください。",
-    noloader: "書き込みモードの FM-1 が見つかりません。USB をハブや USB 共有ソフトを通さずパソコンに直接挿し直して、もう一度押してください（終わるまで書き込みモードのままです）。",
-    noreturn: "FM-1 が戻ってきません。電源を入れ直してください。",
-    mismatch: "書き込みは終わりましたが、FM-1 が別のバージョンを報告しています: ",
+    noloader: "書き込みモードの機器が見つかりません。USB をハブや USB 共有ソフトを通さずパソコンに直接挿し直して、もう一度押してください（終わるまで書き込みモードのままです）。",
+    noreturn: "機器が戻ってきません。電源を入れ直してください。",
+    mismatch: "書き込みは終わりましたが、機器が別のバージョンを報告しています: ",
     badpkg: "インストールするファイルが壊れています。ページを再読み込みしてください。",
     leave: "書き込み中です。ページを閉じないでください。",
     license: "GPL-3.0、無保証。ソース:",
   },
   en: {
-    intro: "Connect the FM-1 by USB. (Works in Chrome or Edge.)",
-    warn: "Do not unplug the USB cable while writing.",
+    intro: "Connect the FM-1 or SMK-37 by USB. (Works in Chrome or Edge.)",
+    warn: "Keep it plugged in and switched on while it writes. If the cable or the power is cut, it stays in update mode: plug it back in (or switch it on) and the install carries on.",
     install: "Install", other: "日本語",
     editor: "Editor (after installing: edit sounds and sequences from the computer)",
     learn: "Learn Skiff (the manual, with a video for every chapter)",
     direct: "Connect the USB cable directly to the computer. No probe or Transporter is needed.",
-    brick: "If an install fails and the FM-1 no longer starts, recovering it needs a Transporter:",
-    beta: "Skiff is custom firmware; please report problems on GitHub. The author accepts no responsibility if your FM-1 is damaged or misbehaves because of this custom firmware. Use it at your own risk.",
-    back: "Get official FM-1 V15 from M-VAVE and select the unmodified FM-1.fwsc. The browser validates it locally; it is not sent to a server.",
-    stockTitle: "Return to official V15", stockFile: "Official FM-1.fwsc", stockGo: "Back up and return to official V15",
+    brick: "If an install fails on an FM-1 and it no longer starts, recovering it needs a Transporter:",
+    smk: "The SMK-37 Pro is new to Skiff. Before installing, read about the backup and the way back to stock:",
+    beta: "Skiff is custom firmware; please report problems on GitHub. The author accepts no responsibility if your keyboard is damaged or misbehaves because of this custom firmware. Use it at your own risk.",
+    back: "Get the official firmware from M-VAVE (FM-1: V15, SMK-37 Pro: V016) and select the unmodified FM-1.fwsc or SMK-37_Pro_016.fwsc. The browser validates it locally; it is not sent to a server.",
+    stockTitle: "Return to the official firmware", stockFile: "Official FM-1.fwsc or SMK-37_Pro_016.fwsc", stockGo: "Back up and return to the official firmware",
     stockBackup: "Current music, saved music, sound banks, samples and settings are saved first. Older firmware needs a Skiff update for complete backups. To restore an archive later, reinstall Skiff and use the editor.",
     stockRecovery: "Resume an interrupted update: I already saved a complete backup to this computer",
-    stockValid: "Official V15 verified", stockConfirm: "Has the complete backup file been saved to this computer? Continue to return to official V15. Official V15 cannot open Skiff music.",
+    stockValid: "Official firmware verified: ", stockConfirm: "Has the complete backup file been saved to this computer? Continue to return to the official firmware. The official firmware cannot open Skiff music.",
     stockNeedBackup: "An update loader cannot export a backup. Only select resume if you already saved a complete backup.",
-    stockUnsupported: "This firmware cannot make a complete Skiff backup. An older Skiff: install the current Skiff first. Another firmware: return to V15 with M-VAVE's updater.",
-    stockIsV15: "This FM-1 already runs official V15.",
-    stockNotSkiff: "This FM-1 is not running Skiff, so there is no Skiff music to back up. To return to V15 from another firmware, use M-VAVE's updater. The FM-1 reports: ",
+    stockUnsupported: "This firmware cannot make a complete Skiff backup. An older Skiff: install the current Skiff first. Another firmware: return with M-VAVE's updater.",
+    stockIsStock: "This keyboard already runs that official firmware.",
+    stockNotSkiff: "This keyboard is not running Skiff, so there is no Skiff music to back up. To return from another firmware, use M-VAVE's updater. It reports: ",
+    stockWrongModel: "The selected file is for another model than the connected keyboard.",
     backup: "Saving complete backup ", stockError: "Cannot validate official firmware: ",
     nomidi: "This browser cannot do it. Open the page in Chrome or Edge.", loadfail: "Could not load: ",
     start: "Starting", verify: "Verifying", loader: "Switching to update mode", write: "Writing",
     reboot: "Restarting", done: "Done", stopped: "Stopped. Replug the USB cable and press Install again.",
+    dropped: "The connection dropped. The keyboard stays in update mode: plug the cable back in (or switch it back on) and the install carries on. Waiting…",
+    resume: "Resuming the write, try ",
     error: "Error: ",
     denied: "MIDI (SysEx) access was not allowed. Allow MIDI in the site settings (address bar) and press Install again.",
-    notfound: "FM-1 not found. Check the USB cable (a data cable), close other apps that use MIDI, and press Install again.",
-    model: "The connected device is not an FM-1.",
+    notfound: "No FM-1 or SMK-37 found. Check the USB cable (a data cable), close other apps that use MIDI, and press Install again.",
+    model: "The connected keyboard is not the model this file is for.",
+    nopkg: "There is no Skiff for this keyboard. It reports: ",
+    needV016: "This SMK-37 runs M-VAVE's firmware older than V016. Update it to V016 with M-VAVE's own updater (M-UPGRADE) first, then install Skiff. It reports: ",
     lost: "The USB connection was lost. Replug it and press Install again.",
-    noloader: "The FM-1 in update mode was not found. Replug the USB cable straight into the computer (not through a hub or USB-sharing software) and press Install again (it stays in update mode until it is finished).",
-    noreturn: "The FM-1 did not come back. Power-cycle it.",
-    mismatch: "Written, but the FM-1 reports another version: ",
+    noloader: "The keyboard in update mode was not found. Replug the USB cable straight into the computer (not through a hub or USB-sharing software) and press Install again (it stays in update mode until it is finished).",
+    noreturn: "The keyboard did not come back. Power-cycle it.",
+    mismatch: "Written, but the keyboard reports another version: ",
     badpkg: "The file to install is damaged. Reload the page.",
     leave: "Writing. Do not close the page.",
     license: "GPL-3.0, no warranty. Source:",
@@ -144,25 +158,41 @@ applyLang();
 const sayK = (k, arg = "") => { lastKey = k; lastArg = arg; $("status").textContent = t(k) + arg; };
 const say = (txt) => { lastKey = null; $("status").textContent = txt; };
 const log = (t) => { $("log").textContent += t + "\n"; };
-let image = null;
 const meta = /*META*/;
+// one package per model ({ product, pkg }); a site made before the SMK builds carries only product + pkg
+const packages = meta.packages || [{ product: meta.product, pkg: meta.pkg }];
+const images = new Map();             // product -> logical image, loaded on first use
 
 let writing = false, stock = null, stockFileEpoch = 0;
-const lockInstaller = (on) => { writing = on; $("go").disabled = on || !image; $("stock-go").disabled = on || !stock; $("stock-file").disabled = on; $("stock-recovery").disabled = on; };
+const lockInstaller = (on) => { writing = on; $("go").disabled = on || !navigator.requestMIDIAccess; $("stock-go").disabled = on || !stock; $("stock-file").disabled = on; $("stock-recovery").disabled = on; };
 window.addEventListener("beforeunload", (e) => { if (writing) { e.preventDefault(); e.returnValue = t("leave"); } });
 
-(async () => {
-  if (!navigator.requestMIDIAccess) { sayK("nomidi"); return; }
-  try {
-    const r = await fetch(meta.pkg);
-    if (!r.ok) throw new Error(`${meta.pkg}: HTTP ${r.status}`);
-    const pkg = new Uint8Array(await r.arrayBuffer());
-    if (productOf(pkg) !== meta.product) { sayK("badpkg"); return; }
-    image = logicalImage(pkg);
-    say(`Skiff ${meta.version}`);
-    $("go").disabled = false;
-  } catch (e) { sayK("loadfail", e.message); }
-})();
+if (!navigator.requestMIDIAccess) sayK("nomidi");
+else { say(`Skiff ${meta.version}`); $("go").disabled = false; }
+
+async function imageFor(entry) {
+  if (images.has(entry.product)) return images.get(entry.product);
+  const r = await fetch(entry.pkg);
+  if (!r.ok) throw Object.assign(new Error(`${entry.pkg}: HTTP ${r.status}`), { code: "loadfail" });
+  const pkg = new Uint8Array(await r.arrayBuffer());
+  if (productOf(pkg) !== entry.product) throw Object.assign(new Error(entry.product), { code: "badpkg" });
+  const image = logicalImage(pkg);
+  images.set(entry.product, image);
+  return image;
+}
+
+// the bar: the running firmware's check takes the first 5 %, the loader's write (forward only) the rest
+const stepper = () => (k, a) => {
+  log(`${k} ${a ?? ""}`);
+  if (k === "start") sayK("start");
+  if (k === "verify") { sayK("verify"); $("bar").value = Math.min(5, a * 5 / 80); }
+  if (k === "loader") sayK("loader");
+  if (k === "write") { if (lastKey !== "write") sayK("write"); $("bar").value = 5 + a * 0.95; }
+  if (k === "dropped") sayK("dropped");
+  if (k === "resume") sayK("resume", `${a}`);
+  if (k === "reboot") sayK("reboot");
+  if (k === "done") { $("bar").value = 100; sayK("done"); }
+};
 
 $("go").addEventListener("click", async () => {
   if (writing) return;
@@ -172,39 +202,31 @@ $("go").addEventListener("click", async () => {
   catch (e) { sayK("denied"); lockInstaller(false); return; }
   try {
     const up = new Updater(midi, log);
-    const total = 74 + 1167;
-    const step = (k, a) => {
-      log(`${k} ${a ?? ""}`);
-      if (k === "start") sayK("start");
-      if (k === "verify") { sayK("verify"); $("bar").value = (a / total) * 100; }
-      if (k === "loader") sayK("loader");
-      if (k === "write") { sayK("write"); $("bar").value = ((74 + a) / total) * 100; }
-      if (k === "reboot") sayK("reboot");
-      if (k === "done") { $("bar").value = 100; sayK("done"); }
-    };
-    const ota = await up.find((id) => /^ota-/i.test(id.model));
-    if (ota) {
-      ota.link.close();
-      sayK((await up.resume(image, step, meta.product)) ? "done" : "stopped");
-    } else {
-      await up.install(image, meta.product, step);
-    }
+    const dev = await up.find();
+    if (!dev) { sayK("notfound"); return; }
+    dev.link.close();
+    const entry = packageFor(packages, dev.id.model);
+    if (!entry) { sayK("nopkg", dev.id.text); return; }
+    if (!IS_OTA(dev.id) && needsStockUpdate(dev.id)) { sayK("needV016", dev.id.text); return; }
+    const image = await imageFor(entry);
+    const step = stepper();
+    if (IS_OTA(dev.id)) sayK((await up.resume(image, step, entry.product)) ? "done" : "stopped");
+    else await up.install(image, entry.product, step);
   } catch (e) {
-    if (e && e.code && TEXT[lang][e.code]) sayK(e.code, e.detail || "");
+    if (e && e.code && TEXT[lang][e.code]) sayK(e.code, e.detail || (e.code === "loadfail" ? e.message : ""));
     else sayK("error", e && e.message);
     log(String(e && e.stack || e));
-  }
-  lockInstaller(false);
+  } finally { lockInstaller(false); }
 });
 
 $("stock-file").addEventListener("change", async () => {
   const epoch = ++stockFileEpoch, file = $("stock-file").files[0]; stock = null; lockInstaller(false);
   if (!file) return;
   try {
-    if (file.size !== STOCK_V15_SIZE) throw new Error("FM-1 V15 / FM-1.fwsc");
+    if (![STOCK_V15_SIZE, STOCK_SMK016_SIZE].includes(file.size)) throw new Error("FM-1.fwsc / SMK-37_Pro_016.fwsc");
     const verified = await validateStockPackage(new Uint8Array(await file.arrayBuffer()));
     if (epoch !== stockFileEpoch) return;
-    stock = verified; sayK("stockValid"); lockInstaller(false);
+    stock = verified; sayK("stockValid", verified.product); lockInstaller(false);
   } catch (e) { if (epoch === stockFileEpoch) sayK("stockError", e.message); }
 });
 function saveArchive(archive) {
@@ -224,24 +246,25 @@ function archiveInfo(a) {
 }
 $("stock-go").addEventListener("click", async () => {
   if (!stock || writing) return;
-  const selected = stock; lockInstaller(true);
+  const selected = stock, model = selected.product.split("_")[0]; lockInstaller(true);
   let link = null;
   try {
     let midi;
     try { midi = await navigator.requestMIDIAccess({sysex:true}); } catch (e) { sayK("denied"); return; }
     const up = new Updater(midi, log);
-    const step = (k, n) => { log(`${k} ${n ?? ""}`); if (["start","verify","loader","write","reboot","done"].includes(k)) sayK(k); if (k === "done") $("bar").value = 100; };
-    const loader = await up.find(id => id.model === "ota-FM-1");
+    const step = stepper();
+    const loader = await up.find(id => IS_OTA(id) && sameModel(id.model, model));
     if (loader) {
       loader.link.close();
       if (!$("stock-recovery").checked) { sayK("stockNeedBackup"); return; }
       if (!confirm(t("stockConfirm"))) return;
       sayK(await up.resume(selected.image, step, selected.product) ? "done" : "stopped");
     } else {
-      const device = await up.find(id => id.model === "FM-1");
+      const device = await up.find(id => !IS_OTA(id) && sameModel(id.model, model)) || await up.find(id => !IS_OTA(id));
       if (!device) { sayK("notfound"); return; }
       const input = device.link.input, output = device.link.output; device.link.close();
-      if (device.id.text === "FM-1_015") { sayK("stockIsV15"); return; }   // (#23: it is official V15 already)
+      if (!sameModel(device.id.model, model)) { sayK("stockWrongModel"); return; }
+      if (device.id.text === selected.product) { sayK("stockIsStock"); return; }   // (#23: it is official already)
       link = new BackupConnection(input, output);
       let reply;   // every Skiff answers INFO: no answer, no Skiff (#23 read "Backup timed out")
       try { reply = await link.request([1,[]]); }

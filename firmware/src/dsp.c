@@ -130,6 +130,19 @@ static inline int32_t voice_amp(int32_t s, const vmod_t *m, uint32_t i)
     return mulq15(mulq15(s, amp_at(m, i)), VOICE_FS);
 }
 
+/* a level lv (0..127, square law: 127 as it is, 64 a quarter) on the block's amplitude ramp, not per sample: m itself
+ * at 127 (and out of range), else its copy in *ml. DRUM's lane LEVELs (#97), (Skiff, #21) a user sample's sounds' */
+static const vmod_t *vmod_level(const vmod_t *m, vmod_t *ml, int32_t lv)
+{
+    int32_t gl = lv * lv * 2 + (lv * lv >> 6);           /* Q15, 64: 8256 */
+    if ((uint32_t)lv >= 127u)
+        return m;
+    *ml = *m;
+    ml->amp0 = (m->amp0 >> 4) * gl >> 11;
+    ml->amp1 = (m->amp1 >> 4) * gl >> 11;
+    return ml;
+}
+
 /* linear up to k, then a soft knee: only the peaks above k saturate (|y| - k must stay < 2^30) */
 static inline int32_t soft_knee(int32_t y, int32_t k)
 {

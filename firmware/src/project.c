@@ -885,8 +885,8 @@ static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
     return 1;
 }
 
-/* (Skiff phase 5) the lists: id + 1 up to the pool (0 none), repeats - 1 up to 15, each track on one of its entries,
- * SONG 0 / 1 */
+/* (Skiff phase 5) the lists: id + 1 up to the pool (0 none; (#28) PAT_REST a REST: firmware before refuses a project
+ * holding one), repeats - 1 up to 15, each track on one of its entries, SONG 0 / 1 */
 static int proj_ent_ok(const project_t *q)
 {
     uint32_t t, e;
@@ -896,7 +896,7 @@ static int proj_ent_ok(const project_t *q)
         if (q->cur[t] >= NENT)
             return 0;
         for (e = 0; e < NENT; e++)
-            if (q->ent[t][e][0] > NPAT || q->ent[t][e][1] > 15u)
+            if (q->ent[t][e][0] > PAT_REST || q->ent[t][e][1] > 15u)
                 return 0;
     }
     return 1;
@@ -1378,12 +1378,19 @@ static void persist_boot(void)                    /* before settings_init / pane
 #if FELUCCA_FLASH
     persist_t p;
     uint32_t f = irq_save();
+#if BOARD_SMK37
+    flash_ok = FL_JEDEC_OK(FL_FAR(fl_jedec_ram)());      /* the SMK-37's part (or the FM-1's): fm1_flash_map.h */
+#else
     flash_ok = FL_FAR(fl_jedec_ram)() == 0x856014u;       /* the expected 1 MiB part, else stay RAM-only */
+#endif
     irq_restore(f);
     if (!flash_ok)
         return;
-    fl_plain_window_init();                        /* flash above 0x93000 reads as plaintext through XIP
+    fl_plain_window_init();                        /* flash above 0x93000 (SMK 0x9D000) reads as plaintext through XIP
                                                     * (user sample sets are played from there) */
+#if BOARD_SMK37
+    st_owner_check();                              /* never parse another firmware's store (storage.c) */
+#endif
 #if FELUCCA_SLICE
     slc_store_boot();                              /* (the scans read each slot's stored slices) */
 #endif

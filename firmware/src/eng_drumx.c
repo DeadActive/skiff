@@ -116,17 +116,11 @@ static void drumx_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
     const int16_t *p = t->p;
     drumx_lane_t *L = drumx_lane_of(t, v);
     uint32_t lane = (uint32_t)v->s[0] & (DV_NLANE - 1u), i;
-    int32_t y[CTL], drv = p[P_E7], g = 0, mk = 0, lv = clamp(p[P_LN0 + lane], 0, 127);
-    vmod_t ml;                                           /* (only its amplitude ramp is read: voice_amp) */
+    int32_t y[CTL], drv = p[P_E7], g = 0, mk = 0;
+    vmod_t ml;
     if (!L)
         return;
-    if (lv < 127) {                                      /* the lane's LEVEL (square law) on the block's amplitude
-                                                          * ramp, as DRUM's; 100 %: the ramp as it was */
-        int32_t gl = lv * lv * 2 + (lv * lv >> 6);
-        ml.amp0 = (m->amp0 >> 4) * gl >> 11;
-        ml.amp1 = (m->amp1 >> 4) * gl >> 11;
-        m = &ml;
-    }
+    m = vmod_level(m, &ml, clamp(p[P_LN0 + lane], 0, 127));   /* the lane's LEVEL, as DRUM's (dsp.c) */
     if (n > CTL)
         n = CTL;
     dx_run(&dx_kit[lane], &L->x, p[P_E0], L->st * 16 + (p[P_E1] - 64) * 3, p[P_E3] - 64, p[P_E2] - 64, p[P_E4] - 64,
@@ -245,6 +239,7 @@ static const dx_lane_t DX_KITS[][8] = {
 };
 static const uint8_t DRUMX_PKIT[] = {0, 0, 1, 2, 3, 4, 5, 6, 7, 8};
 _Static_assert(sizeof DRUMX_PKIT == NELEM(DRUMX_PRESETS), "a kit (or none) per DRUM-X preset");
+_Static_assert(NELEM(DRUMX_PRESETS) <= 64u, "its favourites end before THEME CUSTOM's colours (ui.c CPAL_COLS)");
 _Static_assert(sizeof DX_KITS[0] == sizeof dx_kit, "a factory kit is a kit");
 
 static const engine_t ENG_DRUMX = {

@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
 //
-// FM-1 .fwsc packages in the browser: the package identity and the image the
+// FM-1 (and SMK-37 Pro) .fwsc packages in the browser: the package identity and the image the
 // device reads during an update.
 
-const BLOCKS = 20, BLK = 0x30, KEEP = 0x2F;
+const BLOCKS = 20, BLK = 0x30, KEEP = 0x2F, MAX_BLOCKS = 64;
 export const STOCK_V15_SHA256 = "db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a";
 export const STOCK_APP_SIZE = 0x8DFBC;
 export const STOCK_V15_SIZE = 699956;
+// the unmodified official SMK-37 Pro V016 (SMK-37_Pro_016.fwsc, 36 interleave blocks): the return of an SMK-37 Pro
+// (the same pin as tools/fm1_install.py)
+export const STOCK_SMK016_SHA256 = "2d98ce72530e71d617384963423820536f094501299e2cfec0a8d3c3fb6bcfb0";
+export const STOCK_SMK016_SIZE = 705252;
 
 const T = new Uint16Array(256);
 for (let i = 0; i < 256; i++) {
@@ -208,7 +212,7 @@ export class Package {
   }
 }
 
-// the package identity ("FM-1_904"): one marker byte after each of the first 20 blocks
+// the package identity ("FM-1_904", "SMK-37 Pro_016"): one marker byte after each of the first 20 blocks
 export function productOf(fwsc) {
   if (fwsc.length < BLOCKS * BLK) throw new Error("not an FM-1 package (too short)");
   let s = "";
@@ -219,12 +223,65 @@ export function productOf(fwsc) {
   return s;
 }
 
-// the image the device addresses during an update: the .fwsc without the 20 marker bytes
-export function logicalImage(fwsc) {
-  const out = new Uint8Array(fwsc.length - BLOCKS);
-  for (let i = 0; i < BLOCKS; i++) out.set(fwsc.subarray(i * BLK, i * BLK + KEEP), i * KEEP);
-  out.set(fwsc.subarray(BLOCKS * BLK), BLOCKS * KEEP);
+// interleave blocks: 20, then more while the marker is the unused 0x7D (the stock SMK-37 Pro v016 has 36)
+export function blockCount(fwsc) {
+  let n = BLOCKS;
+  while (n < MAX_BLOCKS && (n + 1) * BLK <= fwsc.length && fwsc[n * BLK + KEEP] === 0x7D) n++;
+  return n;
+}
+
+function deinterleave(fwsc, blocks) {
+  const out = new Uint8Array(fwsc.length - blocks);
+  for (let i = 0; i < blocks; i++) out.set(fwsc.subarray(i * BLK, i * BLK + KEEP), i * KEEP);
+  out.set(fwsc.subarray(blocks * BLK), blocks * KEEP);
   return out;
+}
+
+// the logical image's flash.bin (type 0) and ota.bin (type 100) match their CRCs (as fm1_install.py files_ok)
+function filesOk(img) {
+  if (img.length < 0x40) return false;
+  const rd = (a, o, n) => a.slice(o, o + n).reduce((v, x, i) => v + x * 2 ** (8 * i), 0);
+  const h = Uint8Array.from(img.subarray(0, 0x40));
+  enc(h, 0, 0x40);
+  if (crc16(h.subarray(2, 0x40)) !== rd(h, 0, 2)) return false;
+  const count = rd(h, 8, 2);
+  if (count < 1 || count > 8 || img.length < 0x40 + 0x50 * count) return false;
+  for (let i = 0; i < count; i++) {
+    const e = Uint8Array.from(img.subarray(0x40 + i * 0x50, 0x90 + i * 0x50));
+    enc(e, 0, 0x50);
+    const typ = rd(e, 0, 2), off = rd(e, 8, 4), size = rd(e, 12, 4);
+    if (off + size > img.length) return false;
+    if ((typ === 0 || typ === 100) && crc16(img.subarray(off, off + size)) !== rd(e, 4, 2)) return false;
+  }
+  return true;
+}
+
+// where flash.bin (type 0) lies in a logical image: { off, size }, or null (no file list). For the write's
+// progress (fm1ota.js WriteMeter), as tools/fm1_install.py flash_span
+export function flashSpan(img) {
+  if (img.length < 0x40) return null;
+  const rd = (a, o, n) => a.slice(o, o + n).reduce((v, x, i) => v + x * 2 ** (8 * i), 0);
+  const h = Uint8Array.from(img.subarray(0, 0x40));
+  enc(h, 0, 0x40);
+  const count = rd(h, 8, 2);
+  for (let i = 0; i < Math.min(count, 8) && 0x90 + i * 0x50 <= img.length; i++) {
+    const e = Uint8Array.from(img.subarray(0x40 + i * 0x50, 0x90 + i * 0x50));
+    enc(e, 0, 0x50);
+    const off = rd(e, 8, 4), size = rd(e, 12, 4);
+    if (rd(e, 0, 2) === 0 && size && off + size <= img.length) return { off, size };
+  }
+  return null;
+}
+
+// the image the device addresses during an update: the .fwsc without the marker bytes (20 blocks, or the
+// detected count when the files' CRCs agree: a 20-block package can have 0x7D after block 20 by chance)
+export function logicalImage(fwsc) {
+  const n = blockCount(fwsc);
+  if (n !== BLOCKS) {
+    const img = deinterleave(fwsc, n);
+    if (filesOk(img) || !filesOk(deinterleave(fwsc, BLOCKS))) return img;
+  }
+  return deinterleave(fwsc, BLOCKS);
 }
 
 export async function sha256hex(bytes) {
@@ -232,11 +289,19 @@ export async function sha256hex(bytes) {
   return [...new Uint8Array(d)].map((x) => x.toString(16).padStart(2, "0")).join("");
 }
 
-// Only the user's unmodified official V15 is accepted for a return to stock.
-// The digest pins every file, loader and flash layout; filenames are not evidence.
+// Only the user's unmodified official firmware is accepted for a return to stock: FM-1 V15 (FM-1.fwsc) or
+// SMK-37 Pro V016 (SMK-37_Pro_016.fwsc). The digest pins every file, loader and flash layout; filenames are
+// not evidence. (On an SMK, Skiff stages its own loader for it: M-VAVE's must not run from Skiff's staging.)
 export async function validateStockPackage(bytes) {
-  if (bytes.length !== STOCK_V15_SIZE || await sha256hex(bytes) !== STOCK_V15_SHA256)
-    throw new Error("Select the unmodified official FM-1 V15 file (FM-1.fwsc).");
+  const sha = await sha256hex(bytes);
+  if (bytes.length === STOCK_SMK016_SIZE && sha === STOCK_SMK016_SHA256) {
+    const image = logicalImage(bytes);
+    if (productOf(bytes) !== "SMK-37 Pro_016" || !filesOk(image))
+      throw new Error("The official firmware has an unsupported SMK-37 layout.");
+    return { product: "SMK-37 Pro_016", image, sha256: sha };
+  }
+  if (bytes.length !== STOCK_V15_SIZE || sha !== STOCK_V15_SHA256)
+    throw new Error("Select the unmodified official firmware: FM-1.fwsc (FM-1 V15) or SMK-37_Pro_016.fwsc (SMK-37 Pro V016).");
   const pkg = new Package(bytes);
   if (pkg.product !== "FM-1_015" || pkg.flashFileOff !== 1044 || pkg.flashSize !== 602112 ||
       pkg.appBase !== 16384 || pkg.appOff !== 16672 || pkg.app.size !== STOCK_APP_SIZE ||

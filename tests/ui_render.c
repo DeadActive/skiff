@@ -602,7 +602,7 @@ static void state(void)                          /* a playing song with steps on
     if (usr_nz[0]) {                              /* (slices_usr filled USR1: empty again) */
         memset(host_slots, 0, sizeof host_slots);
         smp_user_scan(0);
-        slc_man_save = 0;
+        slc_man_save = smx_save = 0;                 /* ((#21) samples too) */
     }
 #endif
     for (i = 0; i < SCOPE_N; i++)                 /* a stand-in signal for the scope */
@@ -703,7 +703,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_GLO_PEEK, S_GLO_ACTIVE, S_GLO_EXT, S_SCL_PEEK, S_SCL_ACTIVE, S_EDIT_PEEK, S_EDIT_ACTIVE, S_EDIT_USER, S_LAYER_HINT, S_LAYER_LOCK, S_LAYER_LOCK_FX,
        S_SEQ_TOOLS, S_SEQ_TOOLS_DRUM,
        S_NAME_USER, S_NAME_TYPING, S_NAME_123, S_NAME_EMPTY, S_NAME_FULL, S_NAME_PLAYING, S_PROJECT_NAMED,
-       S_USER_FOOT, S_SLICES_BREAK, S_SLICES_USR, S_SLICES_NOFILE,
+       S_USER_FOOT, S_SLICES_BREAK, S_SLICES_USR, S_SLICES_NOFILE, S_SAMPLES,
        S_ROLL_EMPTY, S_ROLL_ACID, S_ROLL_CHORDS, S_ROLL_TIES, S_ROLL_LEN32, S_ROLL_HIGH, S_ROLL_LOW, S_ROLL_WIDE, S_ROLL_PLAYING,
        S_ROLL_LOCKS, S_ROLL_LOCK_HELD, S_DRUM_LOCKS, S_DRUM_LOCK_HELD, S_MOTION_LOCKS, S_AUTO_LIST, S_AUTO_LIST_ADD, S_AUTO_LIST_DRUM, S_AUTO_LIST_DEL, S_REC_LAYER, S_REC_LAYER_SET,
        S_COUNTIN, S_COUNTIN2, S_MENU_AUDIO, S_HEAD_PLAY_REC, S_HEAD_REC_OTHER, S_HEAD_BPM_TURN, S_HEAD_BPM_LOCK,
@@ -721,6 +721,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_DRIVE_SOFT, S_DRIVE_HARD, S_DRIVE_FOLD, S_DRIVE_BITS, S_INS_FUZZ, S_INS_CRUSH, S_INS_FLANG,
        S_MENU_MIDI, S_MENU_MIDI_SCROLL, S_LEARN, S_LEARN_CC, S_LFO2, S_ENV2, S_LANES_TUNE, S_REVERB_HALL, S_CHORUS_FB,
        S_CHORUS_FLANGER, S_CHORUS_PHASER, S_PRESETS_BASS,                                     /* (Skiff phase 9) */
+       S_SONG_REST, S_SONG_REST_PICK,                                                         /* (#28) */
        S_MOCK_HOME, S_MOCK_PRESETS, S_MOCK_SEQ, S_MOCK_DRUM, S_MOCK_MIXER, S_MOCK_DIALOG, S_MOCK_MENU, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "project", "lanes", "step", "pattern", "chance", "motion", "drum",
@@ -734,7 +735,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "layer_edit_active", "layer_edit_user", "layer_hint", "layer_lock", "layer_lock_fx",
     "layer_seq_tools", "layer_seq_tools_drum",
     "name_user", "name_typing", "name_123", "name_empty", "name_full", "name_playing", "project_named",
-    "user_foot", "slices_break", "slices_usr", "slices_nofile",
+    "user_foot", "slices_break", "slices_usr", "slices_nofile", "samples",
     "roll_empty", "roll_acid", "roll_chords", "roll_ties", "roll_len32_p2", "roll_high", "roll_low", "roll_wide", "roll_playing",
     "roll_locks", "roll_lock_held", "drum_locks", "drum_lock_held", "motion_locks", "auto_list", "auto_list_add", "auto_list_drum", "auto_list_delete", "layer_rec", "layer_rec_set",
     "countin", "countin_2bars", "menu_audio", "head_play_rec", "head_rec_other", "head_bpm_turn", "head_bpm_lock",
@@ -750,7 +751,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "fm_op_tone", "fm_op_env", "fm_op_keys", "fm_all_algo", "fm_all_pitch", "fm_all_lfo", "fm_init",
     "drive_soft", "drive_hard", "drive_fold", "drive_bits", "insert_fuzz", "insert_crush", "insert_flanger",
     "menu_midi", "menu_midi_scroll", "learn", "learn_cc", "lfo_2", "env_2", "lanes_tune", "reverb_hall", "chorus_feedback",
-    "chorus_flanger", "chorus_phaser", "presets_bass",
+    "chorus_flanger", "chorus_phaser", "presets_bass", "song_rest", "song_rest_pick",
     "mock_home", "mock_presets", "mock_seq", "mock_drum", "mock_mixer", "mock_dialog", "mock_menu"};
 
 /* the scenes of the UI design screens: the state the UI-redesign
@@ -1191,6 +1192,21 @@ static void setup(int s)
     case S_SIX_HOME: song.octave = 2; song.rec = 1; usb.config = 1; song.sel = NTRK - 2u; break;
     case S_SIX_SONG:                                /* (SEQ > SONG playing, SONG ON: entry B picked) */
         song_lists(1); go_page(GR_SONG); song.sel = NTRK - 2u; sg.entry = 1; break;
+    case S_SONG_REST:                               /* (#28) RESTs: T3 starts two passes later (on its A, the REST, */
+    case S_SONG_REST_PICK:                          /* picked; B staged), T4 and T6 end sooner; stopped, T2's G: KNOB 2 */
+        song_lists(s == S_SONG_REST);               /* turned to REST, OCT+ SET REST */
+        memmove(lists.ent[2][1], lists.ent[2][0], 2u * 2u);
+        lists.ent[2][0][0] = PAT_REST; lists.ent[2][0][1] = 1;
+        lists.ent[3][6][0] = PAT_REST; lists.ent[3][6][1] = 1;
+        lists.ent[5][4][0] = PAT_REST; lists.ent[5][4][1] = 3;
+        lists.cur[2] = 0; trk_pid[2] = 0; launch_q[2].slot = 1;
+        go_page(GR_SONG);
+        if (s == S_SONG_REST) {
+            song.sel = 2; sg.entry = 0;
+        } else {
+            sg.entry = 6; sg.pick = PAT_REST; sg.pick_at = 1u + 1u * 16u + 6u; ui.hot_col = 1; ui.hot_t = 30;
+        }
+        break;
     case S_FM_TONE:                                 /* (FM6 LAB) EDIT > OPERATOR and ALL OPS as the mockup's */
     case S_FM_ENV:                                  /* (design/mock_fm6.py, D): TINE EP's OP4 (TONE, OUTPUT turned; */
     case S_FM_KEYS:                                 /* ENV 1, RATE 2 turned); OP2 softer up the keys (R DEPTH 40 */
@@ -1464,6 +1480,29 @@ static void setup(int s)
         break;
     case S_SLICES_NOFILE: eng(13u); TSEL->p[P_E0] = 2; go_page(GR_SLICES); ui.msg_t = 0; break;   /* USR2 empty: SAMPLE NOT FOUND */
 #endif
+    /* (#21) EDIT > SAMPLES: USR1 a kit of 8 sounds (one key each, C4 up), D#4 played (its sound, 4), its LEVEL 50 %, REVERB
+     * 35 % (KNOB 3 hot), DELAY 16 % */
+    case S_SAMPLES: {
+        smp_user_hdr_t *h = (smp_user_hdr_t *)host_slots;
+        uint32_t z;
+        eng(ENGI_SAMPLE); host_slot_make(0);
+        for (h->nz = 8, z = 0; z < 8u; z++) {
+            h->zone[z] = h->zone[0];
+            h->zone[z].off = z * (h->data_len / 8u);
+            h->zone[z].n = h->data_len / 4u;
+            h->zone[z].le = h->zone[z].n - 1u;
+            h->zone[z].root16 = (int16_t)((60 + z) * 16);
+            h->zone[z].lo = h->zone[z].hi = (uint8_t)(60u + z);
+        }
+        smp_user_scan(0);
+        TSEL->p[P_E0] = (int16_t)SMP_NSETS;
+        last_note = 63;
+        usr_mix[0][SMX_LVL][3] = 64; usr_mix[0][SMX_REV][3] = 45; usr_mix[0][SMX_DLY][3] = 20;
+        go_page(GR_SMIX); ui.msg_t = 0;
+        ui.hot_col = 2; ui.hot_t = 30;
+        for (z = 0; z < 4000u && !sample_wave.ready; z++) sample_wave_tick(TSEL);
+        break;
+    }
     default: break;
     }
 }
@@ -1983,6 +2022,56 @@ int main(int argc, char **argv)
             for (k = 0; k < sizeof SHOW / sizeof SHOW[0]; k++)
                 if (!strcmp(UI_PALETTES[p].name, SHOW[k])) write_ppm(out, SHOW[k], S_NAME[s]);
         }
+    {   /* (Skiff #27) THEME CUSTOM: every screen in a set of the user's (a dusk: slate, warm white, orange, mint; the six
+         * tracks' own), stored and in use as the editor's COLORS leaves it, in each look's faces and widgets, linted;
+         * OUTDIR/ppm/CUSTOM_<look>_<screen>.ppm. MENU > PLAYHEAD LINE: HOME without CRYPT's torch, NEON's car, QUARK's
+         * collision, PHLINE_<palette>_<screen>.ppm (design/mock_c27.py) */
+        static const uint16_t CC[11] = {RGB(16, 24, 32), RGB(28, 40, 54), RGB(242, 232, 216), RGB(255, 154, 60),
+                                        RGB(127, 224, 200), RGB(255, 107, 107), RGB(255, 209, 102), RGB(6, 214, 160),
+                                        RGB(76, 201, 240), RGB(199, 125, 255), RGB(244, 162, 97)};
+        static const uint8_t LOOKS[4] = {UI_SKIFF_INDEX, UI_CRYPT_INDEX, UI_NEON_INDEX, UI_QUARK_INDEX};
+        uint32_t n0 = nfind, k, l;
+        for (l = 0; l < 4u; l++)
+            for (s = 0; s < S_COUNT; s++) {
+                char name[64], tag[24];
+                if (!FELUCCA_FM4 && (s == S_OP_ENV || (s >= S_ALG1 && s <= S_OP_LEVEL)))
+                    continue;
+                snprintf(tag, sizeof tag, "CUSTOM_%s", UI_PALETTES[LOOKS[l]].name);
+                snprintf(name, sizeof name, "%s/%s", tag, S_NAME[s]);
+                cur_name = name;
+                setup((int)s);
+                favorites.factory[15][24] = 0xA5u;      /* (SCENE_FREED: every unit since phase 5) */
+                for (k = 0; k < 11u; k++) {
+                    CPAL_COLS[2u * k] = (uint8_t)CC[k];
+                    CPAL_COLS[2u * k + 1u] = (uint8_t)(CC[k] >> 8);
+                }
+                CPAL_BYTE = (uint8_t)(3u | LOOKS[l] << 2);
+                settings.palette = LOOKS[l];
+                theme_apply();
+                draw((int)s);
+                lint();
+                write_ppm(out, tag, S_NAME[s]);
+            }
+        CPAL_BYTE = 0;
+        ux_cpal = 0;
+        for (p = UI_CRYPT_INDEX; p <= UI_QUARK_INDEX; p++) {
+            static const int HOMES[2] = {S_HOME, S_SIX_HOME};
+            for (k = 0; k < 2u; k++) {
+                char name[64], tag[24];
+                snprintf(tag, sizeof tag, "PHLINE_%s", UI_PALETTES[p].name);
+                snprintf(name, sizeof name, "%s/%s", tag, S_NAME[HOMES[k]]);
+                cur_name = name;
+                setup(HOMES[k]);
+                ui_ph_line = 1;
+                pal(p);
+                draw(HOMES[k]);
+                lint();
+                write_ppm(out, tag, S_NAME[HOMES[k]]);
+            }
+        }
+        ui_ph_line = 0;
+        fprintf(rep, "(#27) THEME CUSTOM (every screen, four looks) and PLAYHEAD LINE (HOME): %u lint findings\n", nfind - n0);
+    }
     {   /* MENU > LARGE (ui.c large_kind): every screen in every palette, linted (GREY: gray, MONO: neutral); GREY MONO
          * SKIFF as OUTDIR/ppm/LARGE_<PALETTE>_<screen>.ppm (ui_render.py: sheet_LARGE_<PALETTE>.png); the tall cards'
          * value faces counted (lg_hook) */

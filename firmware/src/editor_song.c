@@ -4,11 +4,11 @@
  * device's own control does, through the same functions (bank.c), and says so on the device. Included by editor.c.
  *   POOL: [1, id: CLEAR] -> op, rc (0 cleared, 1 nothing to clear, 2 in use, 3 playing, 4 failed), then each pattern:
  *     its LEN (0 empty), what uses it (bank.c pool_refs, at most 127)
- *   LIST: [op, track, entry ..]: 1 SET (pattern 1..64: a kept one), 2 COPY, 3 PLAY (the track to it), 4 CLEAR (stopped;
- *     its pattern goes when nothing else names it), 5 REPS (1..16; an entry naming a pattern); [6, on]: SONG -> op, rc
- *     (0 done, 1 empty / nothing to copy, 2 done without its automation, 3 playing, 4 PATTERNS FULL, 5 failed), SONG,
- *     then each track: the entry it is on (127: on no entry's pattern), the one staged (127 none), its pattern (127
- *     none), its 16 entries (pattern 1..64, 0 empty; REPS - 1)
+ *   LIST: [op, track, entry ..]: 1 SET (pattern 1..64: a kept one; (#28) 65 a REST), 2 COPY, 3 PLAY (the track to it),
+ *     4 CLEAR (stopped; its pattern goes when nothing else names it), 5 REPS (1..16; an entry naming a pattern); [6,
+ *     on]: SONG -> op, rc (0 done, 1 empty / nothing to copy, 2 done without its automation, 3 playing, 4 PATTERNS
+ *     FULL, 5 failed), SONG, then each track: the entry it is on (127: on no entry's pattern), the one staged (127
+ *     none), its pattern (127 none), its 16 entries (pattern 1..64, 65 REST, 0 empty; REPS - 1)
  *   PERFORM: [op ..]: 1 STORE scene, 2 RECALL scene, 3 MUTE track (the other way; staged while playing, a staged one
  *     taken back), 4 CANCEL (all that is staged), 5 LAUNCH (0 LOOP, 1 BAR, 2 BEAT, 3 NOW) -> op, rc (RECALL: 0 done or
  *     staged, 1 empty, 2 without some automation, 4 PATTERNS FULL; LAUNCH: as UI_SET's), LAUNCH, the scene last
@@ -28,7 +28,7 @@ static int ed_song_args_ok(uint32_t cmd, const uint8_t *a, uint32_t n)
         if (n < 3u || a[1] >= NTRK || a[2] >= NENT)
             return 0;
         if (a[0] == 1u || a[0] == 5u)
-            return n == 4u && a[3] >= 1u && a[3] <= (a[0] == 1u ? NPAT : 16u);
+            return n == 4u && a[3] >= 1u && a[3] <= (a[0] == 1u ? PAT_REST : 16u);
         return n == 3u && a[0] >= 2u && a[0] <= 4u;
     }
     if (a[0] == 4u)
@@ -61,7 +61,7 @@ static int ed_song_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
             k = a[1];
             e = a[2];
             if (a[0] == 1u)
-                rc = pool_used(a[3] - 1u) ? (uint32_t)song_put(k, e, a[3]) : 1u;
+                rc = a[3] == PAT_REST || pool_used(a[3] - 1u) ? (uint32_t)song_put(k, e, a[3]) : 1u;
             else if (a[0] == 2u)
                 rc = (uint32_t)song_put(k, e, SPICK_COPY);
             else if (a[0] == 3u)
@@ -87,7 +87,7 @@ static int ed_song_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
             ed_b(r < NENT ? r : 127u);
             ed_b(trk_pid[k] && trk_pid[k] <= NPAT ? trk_pid[k] - 1u : 127u);
             for (e = 0; e < NENT; e++) {
-                ed_b(lists.ent[k][e][0] <= NPAT ? lists.ent[k][e][0] : 0u);
+                ed_b(lists.ent[k][e][0] <= PAT_REST ? lists.ent[k][e][0] : 0u);
                 ed_b(lists.ent[k][e][1] & 15u);
             }
         }

@@ -13,11 +13,13 @@
   panel.js, fonts/            the panel's drawing and the fonts the Learn page shares, at the paths it has in web/
   src/                        not touched
 
-  web/make_site.py build/skiff-X.Y.fwsc X.Y OUT_DIR
+  web/make_site.py build/skiff-X.Y.fwsc X.Y OUT_DIR [SMK_PACKAGE ...]
 
-The package must be one made by tools/fm1pkg_make.py (Felucca's own loader, no vendor files).
-Its identity (FM-1_7xx) is read from the package; the device must report it after
-the install.
+The packages must be ones made by tools/fm1pkg_make.py (Felucca's own loader, no vendor files).
+Their identities are read from them (FM-1_7xx, and for the SMK-37 builds SMK-37 Pro_7xx,
+SMK-37 Elite_7xx, MKE-P37_7xx, one per model); the installer picks the one for the connected
+model, and the device must report it after the install. Names: skiff-X.Y.fwsc (FM-1),
+skiff-X.Y-smk37.fwsc, skiff-X.Y-smk37-elite.fwsc, skiff-X.Y-smk37-mke.fwsc.
 """
 import json
 import re
@@ -39,21 +41,38 @@ def product_of(raw):
     return "".join(chr((m - i - 1) & 0xFF) for i in range(BLOCKS) if (m := raw[i * BLK + KEEP]) != 0x7D)
 
 
-def main(pkg, version, out):
-    pkg, out = Path(pkg), Path(out)
-    raw = pkg.read_bytes()
+MODELS = {"FM-1": "", "SMK-37 Pro": "-smk37", "SMK-37 Elite": "-smk37-elite", "MKE-P37": "-smk37-mke"}
+
+
+def package(path, version):
+    """one of our packages -> (product, raw, published name); the model sets the name"""
+    raw = Path(path).read_bytes()
     product = product_of(raw)
-    if not re.fullmatch(r"FM-1_7\d\d", product):
-        raise SystemExit(f"{pkg}: identity {product!r} is not one of our packages (FM-1_7xx)")
+    model, _, num = product.rpartition("_")
+    if model not in MODELS or not re.fullmatch(r"7\d\d", num):
+        raise SystemExit(f"{path}: identity {product!r} is not one of our packages "
+                         f"(FM-1_7xx, SMK-37 Pro_7xx, SMK-37 Elite_7xx, MKE-P37_7xx)")
     if b"FELUCCA-LOADER-1" not in raw:              # Felucca loader marker: never publish a package with vendor files
-        raise SystemExit(f"{pkg}: no Felucca loader in it; the site ships only fm1pkg_make.py packages "
+        raise SystemExit(f"{path}: no Felucca loader in it; the site ships only fm1pkg_make.py packages "
                          "(a package patched from an official one carries vendor files)")
+    return product, raw, f"skiff-{re.sub(r'[^A-Za-z0-9.-]', '-', version)}{MODELS[model]}.fwsc"
+
+
+def main(pkg, version, out, *more):
+    out = Path(out)
+    pkgs = [package(p, version) for p in (pkg, *more)]
+    product, raw, name = pkgs[0]
+    if not product.startswith("FM-1_"):
+        raise SystemExit(f"{pkg}: the first package is the FM-1's (FM-1_7xx), not {product!r}")
+    models = [p.rpartition("_")[0] for p, _, _ in pkgs]
+    if len(set(models)) != len(models):
+        raise SystemExit(f"one package per model: {models}")
     html = (HERE / "index_pkg.html").read_text(encoding="utf-8")
     lib = strip_module((HERE / "fm1pkg.js").read_text(encoding="utf-8")) + "\n" + \
         strip_module((HERE / "fm1ota.js").read_text(encoding="utf-8")) + "\n" + \
         strip_module((HERE / "fm1backup.js").read_text(encoding="utf-8"))
-    name = f"skiff-{re.sub(r'[^A-Za-z0-9.-]', '-', version)}.fwsc"
-    meta = json.dumps({"version": version, "product": product, "pkg": "../../firmware/" + name})
+    meta = json.dumps({"version": version, "product": product, "pkg": "../../firmware/" + name,
+                       "packages": [{"product": p, "pkg": "../../firmware/" + n} for p, _, n in pkgs]})
     for mark in ("/*LIB*/", "/*META*/"):
         if html.count(mark) != 1:
             raise SystemExit(f"index_pkg.html must contain {mark} once; update make_site.py")
@@ -61,10 +80,11 @@ def main(pkg, version, out):
     inst, ed, fw = out / "webapp" / "installer", out / "webapp" / "editor", out / "firmware"
     for d in (inst, ed, fw):
         d.mkdir(parents=True, exist_ok=True)
-    for old in fw.glob("skiff-*.fwsc"):          # one package: the current one
+    for old in fw.glob("skiff-*.fwsc"):          # the current packages only
         old.unlink()
     (inst / "index.html").write_text(html, encoding="utf-8")
-    shutil.copy(pkg, fw / name)
+    for _, data, n in pkgs:
+        (fw / n).write_bytes(data)
     lic = HERE.parent / "LICENSES"                  # the package holds JieLi SDK files (Apache-2.0): their
     (fw / "LICENSES").mkdir(exist_ok=True)          # licence travels next to it, with Felucca's own
     names = sorted(f.name for f in lic.glob("*.txt"))
@@ -99,10 +119,11 @@ def main(pkg, version, out):
         '<!doctype html><meta charset="utf-8"><title>Skiff</title>'
         '<meta http-equiv="refresh" content="0; url=webapp/installer/">'
         '<a href="webapp/installer/">Skiff installer</a>\n', encoding="utf-8")
-    print(f"site: {out}: webapp/installer ({len(html)} B), webapp/editor, learn, try, firmware/{name} ({len(raw)} B, {product})")
+    print(f"site: {out}: webapp/installer ({len(html)} B), webapp/editor, learn, try, "
+          + ", ".join(f"firmware/{n} ({len(d)} B, {p})" for p, d, n in pkgs))
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
+    if len(sys.argv) < 4:
         sys.exit(__doc__)
-    main(*sys.argv[1:4])
+    main(*sys.argv[1:])

@@ -39,7 +39,8 @@ FUNCS = ["analog_render", "digital_render", "digital_render_legacy", "digital_re
                                                   # phase 9) CHORUS MODE / FEEDBACK (fx.c)
          "mix_part", "mix_split",                 # (Skiff 1.3) a track's block (fx.c), on either core; the split
          "track_insert", "ins_drive", "ins_swept",   # (Skiff 1.3) FX > INSERT (fx.c), on a track that uses one
-         "mix_spread", "esync_coef", "mod_depth"]   # (Skiff 1.3) SPREAD (fx.c), ENV SYNC (voice.c), MOD DEPTH (mod.c)
+         "mix_spread", "esync_coef", "mod_depth",   # (Skiff 1.3) SPREAD (fx.c), ENV SYNC (voice.c), MOD DEPTH (mod.c)
+         "smx_render"]                          # (Skiff, #21) a user sample's sound with its own sends (fx.c)
 # built only with FELUCCA_FM4=1 (DIGITAL, src/eng_digital.c; not in the default build, so not in BUDGET): absent,
 # they are skipped; present, checked against these (their budget lines until the engine was retired in 1.0)
 OPTIONAL = {"digital_render": 12, "digital_render_legacy": 333, "digital_render_custom": 558,

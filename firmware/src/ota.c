@@ -24,11 +24,27 @@
  *   ota_show(step, code)       progress / result for the screen
  *   ota_commit(parm)           write RAM record + reset (never returns on hardware)
  */
+#if BOARD_SMK37
+/* SMK-37 Pro (after genkigenki's SMK-37 layer): the last 5 sectors of the stock VM (0xBB000..0xBFFFF, FL_OTA in
+ * fm1_flash_map.h), below BTIF / USRTRIM 0xC0000..0xC1FFF; the update loader drops records only below 0xC0000 */
+#define OTA_AREA 0x000BB000u                     /* staged loader, 5 x 4 KiB */
+#define OTA_AREA_LEN 0x5000u
+#define OTA_RES (OTA_AREA + OTA_AREA_LEN - 0x100u)  /* 0xBFF00 = 4K boundary - 256: SPL scan */
+#define OTA_FL_LEN 0x9D000u                      /* flash.bin = [0, the PRCT end): the head and the SMK's app area
+                                                  * (ldr_core.c LDR_APP_HI): an FM-1 package is refused, and back */
+#ifndef SMK_MODEL
+#define SMK_MODEL "SMK-37 Pro"                   /* (fm1_cc.h) */
+#endif
+#define OTA_PARM_ID "ota-" SMK_MODEL "_016"       /* the stock app's record identity (Pro 18 B, Elite 20 B) */
+_Static_assert(OTA_AREA + OTA_AREA_LEN <= 0xC0000u && OTA_AREA >= 0x9D000u, "SMK: OTA area outside the VM");
+#else
 #define OTA_AREA 0x000E0000u                     /* staged loader, 5 x 4 KiB */
 #define OTA_AREA_LEN 0x5000u
 #define OTA_RES (OTA_AREA + OTA_AREA_LEN - 0x100u)  /* 0xE4F00 = 4K boundary - 256: SPL scan */
 #define OTA_FL_LEN 0x93000u                      /* flash.bin = [0, the PRCT end): the head and this board's app area,
                                                   * the size the update loader writes (ldr_core.c LDR_APP_HI) */
+#define OTA_PARM_ID "ota-FM-1_015"
+#endif
 #define OTA_LDR_HCRC 0xEBAAu                     /* official update loader (usb_hid_ota.bin) */
 #define OTA_LDR_DCRC 0x5881u
 #define OTA_LDR_LEN 0x4DE1u
@@ -159,11 +175,21 @@ static uint32_t ota_take(void)
 }
 
 /* main loop, outside a session: answer handshakes */
+#if BOARD_SMK37 && defined(FELUCCA_LOADER)
+static void ota_reply_info(void);                /* (SMK loader, loader.c) 0x7B its start record, 0x7C the clocks */
+static void ota_reply_clocks(void);
+#endif
 static void ota_service(void)
 {
     uint32_t d = ota_take();
     if (d == 7u && ota_dec[2] == 0x11)
         ota_reply_identity();
+#if BOARD_SMK37 && defined(FELUCCA_LOADER)
+    else if (d == 7u && ota_dec[2] == 0x7Bu)
+        ota_reply_info();
+    else if (d == 7u && ota_dec[2] == 0x7Cu)
+        ota_reply_clocks();
+#endif
 }
 
 /* one read request (3 tries x 5 s); data -> dst */
@@ -259,6 +285,31 @@ static int ota_ufw(uint8_t *hdr, uint32_t *fl_off, uint32_t *fl_len, uint32_t *o
     return 0;
 }
 
+#if BOARD_SMK37 && !defined(FELUCCA_LOADER)
+/* (SMK-37 Pro) for M-VAVE's own package the app stages ITS OWN loader, not the package's: M-VAVE's loader, staged by
+ * Skiff, erased BTIF and USRTRIM (the key calibration) on the unit (SMK37.md). Ours writes the official flash.bin's app
+ * area as it writes Skiff's (0x4000..0x9CFFF, the head checked equal here first, header last, FL_GUARD) and ignores
+ * the package's other entries (its USR image for 0xF4000 is not written). The record keeps OTA_PARM_ID */
+#define OTA_OWN_LDR 1
+#ifndef OTA_LDR_HOST
+#include "smk_ldr.h"                             /* build/gen (build.py): SMK_LDR, this build's ota.bin */
+#endif
+static uint8_t ota_emb;                          /* 1: this session stages SMK_LDR */
+static int ota_ldr_read(uint32_t pkg_off, uint32_t off, uint8_t *dst, uint32_t n)   /* the loader being staged */
+{
+    uint32_t i;
+    if (!ota_emb)
+        return ota_read(pkg_off + off, dst, n);
+    if (off + n > SMK_LDR_LEN)
+        return -1;
+    for (i = 0; i < n; i++)
+        dst[i] = SMK_LDR[off + i];
+    return 0;
+}
+#else
+#define OTA_OWN_LDR 0
+#endif
+
 /* ota_stage's failures from step 4's first erase on (-8 .. -13; the steps before: -1 .. -7 and -15, nothing written) */
 #define OTA_STAGED_RC(rc) ((rc) <= -8 && (rc) >= -13)
 static int ota_stage(void)                       /* steps 1..6; 0 = host said success */
@@ -266,6 +317,9 @@ static int ota_stage(void)                       /* steps 1..6; 0 = host said su
     static uint8_t hdr[0x400], b[512], mine[512];
     uint32_t i, n, ota_off, ota_len, fl_off, fl_len, c, len, own, official;
     int rc;
+#if OTA_OWN_LDR
+    ota_emb = 0;
+#endif
     /* 1. UFW header + entry list */
     ota_show(1, 0);
     if ((rc = ota_ufw(hdr, &fl_off, &fl_len, &ota_off, &ota_len)) != 0)
@@ -296,10 +350,18 @@ static int ota_stage(void)                       /* steps 1..6; 0 = host said su
             if (!ota_memeq(b, mine, 512))
                 return -5;
         }
+#if OTA_OWN_LDR
+        ota_emb = 1;                                       /* (ours in its place: its own length) */
+        len = ota_rd32(SMK_LDR + 8);
+#endif
     }
     /* 4. stage the package's loader: erase, body, verify, head last */
     ota_show(3, 0);
+#if OTA_OWN_LDR
+    if (ota_ldr_read(ota_off, 0, b, 512))
+#else
     if (ota_read(ota_off, b, 512))
+#endif
         return -6;
     c = ota_rd16(b + 2);                                    /* outer dcrc of the body */
     for (i = 0; i < OTA_AREA_LEN; i += 0x1000u)
@@ -309,7 +371,11 @@ static int ota_stage(void)                       /* steps 1..6; 0 = host said su
         uint32_t crc = 0;
         for (i = 0; i < len; i += n) {
             n = len - i > 512u ? 512u : len - i;
+#if OTA_OWN_LDR
+            if (ota_ldr_read(ota_off, 0x20u + i, b, n))
+#else
             if (ota_read(ota_off + 0x20u + i, b, n))
+#endif
                 return -9;
             crc = ota_crc16(b, n, crc);
             if (ota_prog(OTA_AREA + 32u + i, b, n))
@@ -364,8 +430,8 @@ static int ota_session(void)
     ota_wr16(parm + 2, 0x5A0Du);
     ota_wr16(parm + 4, 0x5A01u);
     ota_wr16(parm + 6, 0x5441u);
-    for (i = 0; i < 12u; i++)
-        parm[8 + i] = (uint8_t)"ota-FM-1_015"[i];    /* the loader's own USB identity */
+    for (i = 0; i < sizeof OTA_PARM_ID - 1u; i++)    /* FM-1 12 B, SMK 18 / 20 B; zero up to +0x27 */
+        parm[8 + i] = (uint8_t)OTA_PARM_ID[i];    /* the loader's own USB identity */
     ota_wr32(parm + 72, OTA_AREA);
     ota_wr16(parm, ota_crc16(parm + 2, 78, 0));
 #if FELUCCA_OTA_DRYRUN

@@ -20,6 +20,7 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
 #include "../firmware/src/gfx.c"
 #include "../firmware/src/panel.c"
 static void settings_save(void) {}
+static void theme_apply(void) { palette_set(settings.palette); }   /* (ui.c's: THEME CUSTOM is editor_test's) */
 #if __has_include("../firmware/src/favorites.c")
 #include "../firmware/src/favorites.c"
 #endif

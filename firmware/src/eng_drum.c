@@ -264,17 +264,10 @@ static void drum_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     dv_param_t k;
     int32_t y[CTL], mb[CTL], acc = clamp(p[P_E5] * v->vel * 4, 0, 65536), drv = p[P_E7], g = 0, mk = 0;   /* acc Q16 */
     uint32_t ln = (uint32_t)v->s[0] & (DV_NLANE - 1u), i, r;
-    int32_t lv = clamp(p[P_LN0 + ln], 0, 127);
-    vmod_t ml;                                           /* (only its amplitude ramp is read: voice_amp) */
+    vmod_t ml;
     if (!L)
         return;
-    if (lv < 127) {                                      /* the lane's LEVEL (square law) on the block's amplitude
-                                                          * ramp, not per sample; 100 %: the ramp as it was */
-        int32_t gl = lv * lv * 2 + (lv * lv >> 6);       /* Q15, 127: 32508 (not used), 64: 8256 */
-        ml.amp0 = (m->amp0 >> 4) * gl >> 11;
-        ml.amp1 = (m->amp1 >> 4) * gl >> 11;
-        m = &ml;
-    }
+    m = vmod_level(m, &ml, clamp(p[P_LN0 + ln], 0, 127));   /* the lane's LEVEL (dsp.c); 100 %: the ramp as it was */
     if (n > CTL)
         n = CTL;
     r = L->role;

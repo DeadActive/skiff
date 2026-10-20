@@ -36,6 +36,7 @@ static uint8_t flash_ok = 1, host_busy, host_page, host_torn;
 static char host_msg[32];
 static int transport_busy(void) { return host_busy; }
 static int slice_page_on(void) { return host_page; }
+static int smx_page_on(void) { return 0; }               /* ((#21) the SAMPLES page: as SLICES', above) */
 static void ui_message(const char *s) { snprintf(host_msg, sizeof host_msg, "%s", s); }
 static uint32_t host_erases;
 static int st_read(uint32_t off, void *dst, uint32_t n) { (void)off; (void)dst; (void)n; return -1; }

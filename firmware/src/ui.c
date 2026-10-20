@@ -27,6 +27,7 @@ static void project_new(void);
 static int step_page(uint32_t g) { return g == GR_ROLL || g == GR_TILES; }   /* (Skiff) STEP's tiles, ROLL: one page's ways */
 #define BANK_SLOTS 16u                         /* Skiff: the pattern bank (bank.c): A..P a track */
 static int bank_used(uint32_t k, uint32_t s);
+static int ent_on(uint32_t k, uint32_t e);
 static int keep_all(void);                       /* (Skiff phase 5) bank.c: keeping the tracks' patterns */
 static int keep_poll(void);
 static uint32_t keep_waiting(void);
@@ -45,6 +46,7 @@ static void song_top(void);
 static void song_oct(void);                    /* .. SEQ > SONG's OCT+ OCT- and its dialog (bank.c) */
 static void song_back(void);
 static void song_clear(uint32_t e);
+static int song_clear_at(uint32_t k, uint32_t e);
 static uint32_t song_clear_text(uint32_t e, char l[3][32], int *gone);
 static uint32_t bank_next(uint32_t k);
 static int bank_cancel(uint32_t k);
@@ -91,6 +93,24 @@ static uint32_t up_gen;                      /* bumped on every user bank change
  * SHIFT, the step pages' PRESETS: STEP and KEYS: STEPS, a layer's first-tap HOLD [X]: SHORTCUTS, (U5) SHIFT's map)
  * goes; an action page's OCT+ / OCT- line stays (what they do now). A byte no engine uses, 0 = ON */
 #define ui_hints_off (favorites.factory[15][22])
+/* (Skiff #27, @tradiuz) MENU > DISPLAY > THEME CUSTOM: the user's colours from the web editor (editor_preferences.c
+ * COLORS, after Felucca 1.6's CUSTOM palette, Leo Kuroshita), eleven: BG SURF TEXT THEME ACCENT and the six tracks',
+ * RGB565 low byte first, in DRUM-X's favourites row past its presets ([14][8..29]); CPAL_BYTE bit 0 a set stored, bit 1
+ * in use, bits 2..4 its look (the THEME whose faces and widgets it wears). Bytes bank.c freed (0 on every unit since
+ * phase 5: none stored). In use, settings.palette is the look: firmware before shows that THEME and keeps the bytes */
+#define CPAL_BYTE (favorites.factory[15][14])
+#define CPAL_COLS (&favorites.factory[14][8])          /* (22 bytes: 5 + UI_NTRK colours) */
+static uint32_t cpal_bits(void) { return favorites.factory[15][24] == 0xA5u ? CPAL_BYTE : 0u; }
+#define cpal_stored() (cpal_bits() & 1u)
+#define cpal_on() ((cpal_bits() & 3u) == 3u)
+static void theme_apply(void)                  /* settings.palette, and over it the user's colours while in use */
+{
+    ux_cpal = cpal_on() ? CPAL_COLS : 0;
+    palette_set(settings.palette);
+}
+/* (Skiff #27) MENU > DISPLAY > PLAYHEAD LINE: HOME's selected lane without its THEME's figure at the playhead (NEON's
+ * car, QUARK's collision, CRYPT's torch), the line only. A byte bank.c freed ([15][15]), 0 = the figure */
+#define ui_ph_line (favorites.factory[15][15])
 /* (Skiff 1.3) MENU > SYSTEM > CPU 2 CORES (BETA): the second core from the next power-on (main.c, hal/fm1_cpu1.h), bit 0
  * of a settings byte bank.c freed ([15][5]: zero on every unit since phase 5, SCENE_FREED); clear: one core, as 1.2. It
  * clears itself when core 1 misreads or stops answering (main.c) */
@@ -119,6 +139,12 @@ static const char *const CLK_WHY[11] = {"", "ALREADY 320", "SYS MODE", "PLL2 NOT
 /* (Skiff 1.3) MENU > MIDI > T1..T6 CHANNEL: each track's MIDI channel as its distance up from the track's own
  * (seq.c trk_midi_ch), settings bytes bank.c freed ([15][6..11]: 0 on every unit since phase 5 = channels 1..6) */
 #define ui_mch(i) (favorites.factory[15][6 + (i)])
+#if BOARD_SMK37
+/* (SMK-37 Pro) settings bytes bank.c freed ([15][12..13]: 0 on every unit since phase 5): MENU > KEY VELOCITY (SMK_KV_*,
+ * 0 DYNAMIC) and MASTER's level / 4 + 1 (K1, smk_ui.c; 0: none kept, the power-on level) */
+#define SMK_KV_BYTE (favorites.factory[15][12])
+#define SMK_MASTER_BYTE (favorites.factory[15][13])
+#endif
 static const uint8_t *const mch_io = &ui_mch(0);
 static const uint8_t UNIT_G[3] = {G_CLOCK, G_ROUTE, G_TUNE};
 static uint8_t unit_g_adopt __attribute__((section(".pool")));   /* the first boot: a load takes them (main.c) */
@@ -279,10 +305,10 @@ static void confirm_open(uint32_t kind, uint32_t trk)
     ui.force = 1;
 }
 /* (Skiff phase 5) SEQ > SONG (ui_input.c song_*, ui_graph.c graph_song): the entry KNOB 1 picked (A..P), KNOB 2's pick
- * for it (a pattern id + 1, SPICK_COPY: a copy of the entry's; 0 none: OCT+ plays the entry) and where it was made (1 +
- * the track x 16 + the entry: another track or entry since, none) */
-#define SPICK_COPY (NPAT + 1u)
-#define SPICK_CLEAR (NPAT + 2u)                /* ((Skiff U2) the entry cleared: its dialog, was EDIT) */
+ * for it (a pattern id + 1, (#28) PAT_REST, SPICK_COPY: a copy of the entry's; 0 none: OCT+ plays the entry) and where
+ * it was made (1 + the track x 16 + the entry: another track or entry since, none) */
+#define SPICK_COPY (NPAT + 2u)
+#define SPICK_CLEAR (NPAT + 3u)                /* ((Skiff U2) the entry cleared: its dialog, was EDIT) */
 static struct { uint8_t entry, pick, pick_at; } sg __attribute__((section(".pool")));
 
 /* MENU > DISPLAY > SCREEN OFF (1.1.5): after a while with no input on the panel the screen and its backlight go off
@@ -506,6 +532,25 @@ static uint8_t fm_ui[3] __attribute__((section(".pool")));
  * engine is not there: on the hits (engine_t.oneshot, DRUM and DRUM-X) ENV, ENV DEST, VOICE, VOICE 2 and SCL (its scale
  * and chords); where the operators are the envelope (ownenv, FM6) ENV and ENV DEST. (N2) ROLL is a melodic track's: on
  * a drum track STEP is its grid */
+/* (#21) EDIT > SAMPLES: of the USR set the selected SAMPLE track plays (else 0xFF: a built-in set, an empty slot, another
+ * engine), the sample KNOB 1 picked (smx_sel, its number: kept within the slot's), or the one a key played plays since
+ * (the last zone holding it, as SET's waveform shows); its slot in *k */
+static uint8_t smx_seen __attribute__((section(".pool")));   /* (the key played last when it was looked at) */
+static uint32_t smx_zone(uint32_t *k)
+{
+    uint32_t s = (uint32_t)TSEL->p[P_E0] - SMP_NSETS, i;
+    if (TSEL->eng_req != ENGI_SAMPLE || s >= SMP_USER_SLOTS || !usr_nz[s])
+        return 0xFFu;
+    if (last_note != smx_seen)
+        for (smx_seen = last_note, i = 0; i < usr_nz[s]; i++)
+            if (last_note >= usr_zone[s][i].lo && last_note <= usr_zone[s][i].hi)
+                smx_sel = (int16_t)(i + 1u);
+    smx_sel = (int16_t)clamp(smx_sel, 1, usr_nz[s]);
+    *k = s;
+    return (uint32_t)smx_sel - 1u;
+}
+static int smx_page_on(void) { return !ui.home && cur_page()->graph == GR_SMIX; }   /* (slice_store.c: saved once left) */
+
 static int page_visible(uint32_t i)
 {
     const engine_t *e = ENGINES[TSEL->eng_req % NENGINES];
@@ -515,6 +560,8 @@ static int page_visible(uint32_t i)
         return TSEL->eng_req % NENGINES == sh->eng;
     if (PAGES[i].graph == GR_LANES)
         return TSEL->eng_req % NENGINES == ENGI_DRUM;
+    if (PAGES[i].graph == GR_SMIX)                      /* ((#21) a SAMPLE track's on a USR set with samples) */
+        return smx_zone(&id) != 0xFFu;
     if (PAGES[i].graph == GR_ROLL)
         return !drum_track(TSEL);
     if (e->oneshot && (PAGES[i].fam == FAM_SCL || id == P_ATK || id == P_ED_FLT || id == P_EG2_ATK || id == P_VOICE ||
@@ -1021,10 +1068,10 @@ static void undo_push(uint32_t what)                       /* a new copy: the ca
 }
 static uint8_t undo_depth;       /* loads nest (an engine jump loads its first preset): the outer one counts;
                                   * felucca_init / project_load raise it to take no copy at all */
-/* (Skiff phase 5) each track's list (bank.c, DESIGN.md): NENT entries, byte 0 its pattern id + 1 (0: empty), byte 1
- * its repeats - 1; the entry each track is on; SONG on; the scenes (bank.c scene_*). A project keeps the same bytes
- * (SKF2). trk_pid: the pattern id + 1 the track's steps came from, where they are kept (0: none yet, given an id when
- * first kept). All 0 (power-on, a reset): nothing */
+/* (Skiff phase 5) each track's list (bank.c, DESIGN.md): NENT entries, byte 0 its pattern id + 1 (0: empty; (#28)
+ * PAT_REST: a REST), byte 1 its repeats - 1; the entry each track is on; SONG on; the scenes (bank.c scene_*). A project
+ * keeps the same bytes (SKF2). trk_pid: the pattern id + 1 the track's steps came from, where they are kept (0: none
+ * yet, given an id when first kept). All 0 (power-on, a reset): nothing */
 static struct {
     uint8_t ent[NTRK][NENT][2];
     uint8_t cur[NTRK];
@@ -1032,11 +1079,12 @@ static struct {
     uint8_t scene[PROJ_SCENES];
 } lists __attribute__((section(".pool")));
 static uint8_t trk_pid[NTRK] __attribute__((section(".pool")));   /* (.pool: off the ISR's merged globals) */
-static uint32_t ent_pat(uint32_t k, uint32_t e)        /* entry e of track k: its pattern id, PAT_NONE: empty */
+static uint32_t ent_pat(uint32_t k, uint32_t e)        /* entry e of track k: its pattern id, PAT_NONE: empty (a REST) */
 {
     uint32_t v = lists.ent[k % NTRK][e % NENT][0];
-    return v ? v - 1u : PAT_NONE;
+    return v && v <= NPAT ? v - 1u : PAT_NONE;
 }
+static int ent_rest(uint32_t k, uint32_t e) { return lists.ent[k][e][0] == PAT_REST; }   /* ((#28) k, e in range) */
 static uint32_t trk_pat(uint32_t k) { return trk_pid[k % NTRK] ? trk_pid[k % NTRK] - 1u : PAT_NONE; }
 /* (Skiff phase 6) the first of the four tracks a screen shows (HOME, SONG, PERFORM, MIXER, the GLO cards): T1..T4, or
  * with T5 or T6 selected the four ending at it */
@@ -1808,8 +1856,8 @@ static uint32_t song_pick(void)
 {
     return sg.pick && sg.pick_at == 1u + (song.sel % NTRK) * 16u + sg.entry % NENT ? sg.pick : 0u;
 }
-/* .. what OCT+ does there: the entry played ("PLAY"), the pick put into it ("SET 07"), a copy of its pattern made for it
- * ("COPY 06 TO 17") */
+/* .. what OCT+ does there: the entry played ("PLAY"), the pick put into it ("SET 07", "SET REST"), a copy of its
+ * pattern made for it ("COPY 06 TO 17") */
 static const char *song_act_name(void)
 {
     static char b[16] __attribute__((section(".pool")));   /* (.pool: off the ISR's merged globals) */
@@ -1818,6 +1866,8 @@ static const char *song_act_name(void)
         return "PLAY";
     if (p == SPICK_CLEAR)
         return "CLEAR";
+    if (p == PAT_REST)
+        return "SET REST";
     if (p == SPICK_COPY) {
         str_cpy(b, "COPY ", sizeof b);
         pat_num(b + 5, id);
@@ -1890,9 +1940,9 @@ static int act_ready(void)
     if (!c--)
         return 0;
     if (cur_page()->graph == GR_EVENTS) return ui.ev_top ? motion_count(TSEL) != 0u : ev_act_ready();
-    if (cur_page()->graph == GR_SONG)                   /* (Skiff phase 5) a pick, else an entry to play */
-        return song_pick() == SPICK_COPY ? pool_alloc() < NPAT : song_pick() == SPICK_CLEAR ? bank_used(s, sg.entry) :
-               song_pick() || bank_used(s, sg.entry);
+    if (cur_page()->graph == GR_SONG)                   /* (Skiff phase 5) a pick, else an entry to play ((#28) a REST) */
+        return song_pick() == SPICK_COPY ? pool_alloc() < NPAT : song_pick() == SPICK_CLEAR ? ent_on(s, sg.entry) :
+               song_pick() || ent_on(s, sg.entry);
     if (cur_page()->graph == GR_USER)
         return c == 3u ? !song.playing : up_used(ui.uslot) && (c == 1u || !song.playing);
     if (cur_page()->graph == GR_SLOTS && c == 1u)       /* ((Skiff U2) NAME; (1.2.1) DELETE) */

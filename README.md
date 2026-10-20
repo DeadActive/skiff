@@ -5,22 +5,23 @@
   </picture>
 </p>
 
-<p align="center"><b>A six-track groovebox firmware for the M-VAVE FM-1</b><br>
+<p align="center"><b>A six-track groovebox firmware for the M-VAVE FM-1 and SMK-37 Pro</b><br>
 synths and drums, patterns and songs, live performance, and a screen that shows what every control does</p>
 
 <p align="center">
   <a href="https://github.com/illuminus5/skiff/releases/latest"><img src="https://img.shields.io/github/v/release/illuminus5/skiff?label=release" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--only-blue.svg" alt="License: GPL-3.0-only"></a>
-  <img src="https://img.shields.io/badge/hardware-M--VAVE%20FM--1-555" alt="Hardware: M-VAVE FM-1">
+  <img src="https://img.shields.io/badge/hardware-M--VAVE%20FM--1%20%7C%20SMK--37%20Pro-555" alt="Hardware: M-VAVE FM-1 | SMK-37 Pro">
 </p>
 
-<p align="center"><b>New in 1.3.3:</b> QUARK's scope as the tour video's event display, live from all six tracks, and
+<p align="center"><b>New in 1.4:</b> Skiff on M-VAVE's <a href="SMK37.md">SMK-37 Pro</a> keyboard, REST in SONG,
+your own theme colours, each user sample's own level and sends, and an installer that carries on after a cut-off
+install ·
+<a href="https://github.com/illuminus5/skiff/releases/tag/v1.4">the release notes</a><br>
+<b>New in 1.3.3:</b> QUARK's scope as the tour video's event display, live from all six tracks, and
 fixes from your comments: HOME names the sound in LARGE too, PLAY says when it waits for an external clock, the
 installer says what it found ·
 <a href="https://github.com/illuminus5/skiff/releases/tag/v1.3.3">the release notes</a><br>
-<b>New in 1.3.2:</b> a stereo HALL reverb, <a href="https://illuminus5.github.io/skiff/try/">Skiff in
-your browser</a>, update mode on the screen and a finer vibrato ·
-<a href="https://github.com/illuminus5/skiff/releases/tag/v1.3.2">the release notes</a><br>
 <b>New in 1.3:</b> the FM-1's second core (BETA: 12 voices), MIDI LEARN and a channel per track,
 an INSERT effect, LFO sync, SPREAD and more from Felucca 1.6.1 ·
 <a href="https://github.com/illuminus5/skiff/releases/tag/v1.3">the release notes</a></p>
@@ -41,7 +42,8 @@ locks, a shared pool of patterns played through per-track lists and scenes, and 
 all live. Every page draws what its knobs do, and holding HOME shows what
 every button, encoder and key does right there. FM6 sounds can be built from a bare sine on the unit itself, every
 operator's envelope drawn as it plays and coloured by how bright the FM makes it. A browser editor reaches all of it
-from a computer.
+from a computer. The same firmware runs on M-VAVE's SMK-37 Pro keyboard, its pads a step grid and its faders a
+mixer: [SMK37.md](SMK37.md).
 
 Skiff is free software, a fork of [Felucca](https://github.com/hugelton/Felucca) 1.1.5 by Hügelton Instruments: it
 keeps Felucca's engines, sound and file formats, so Felucca's sounds and projects load in Skiff. Skiff is not
@@ -55,18 +57,26 @@ Custom firmware, at your own risk; the way back to the official firmware is belo
 connect the FM-1 by USB and follow it. The same page takes the FM-1 back to the official V15 firmware, saving a
 complete backup of your music first.
 
-**With Python 3:** download `skiff-1.3.3.fwsc` from the [latest release](https://github.com/illuminus5/skiff/releases/latest)
+**With Python 3:** download `skiff-1.4.fwsc` from the [latest release](https://github.com/illuminus5/skiff/releases/latest)
 and, with this repository's `tools/` folder,
 
 ```
 pip install mido python-rtmidi
-python tools/fm1_install.py skiff-1.3.3.fwsc
+python tools/fm1_install.py skiff-1.4.fwsc
 ```
 
 It takes about two minutes and the FM-1 restarts on Skiff.
 
 **Back to the official firmware:** the installer page above, `python tools/fm1_install.py FM-1.fwsc` with M-VAVE's
-file, or M-VAVE's own updater. **Edit from a computer:** the [Skiff Editor](https://illuminus5.github.io/skiff/webapp/editor/) (Chrome or
+file, or M-VAVE's own updater. V15 writes its Bluetooth settings anew on its first start, so pair Bluetooth
+devices again if they don't connect.
+
+**On the SMK-37 Pro:** the same installer finds the keyboard and picks its build (`skiff-1.4-smk37.fwsc` for
+Python). Two steps come first: M-VAVE's firmware V016 on the keyboard, and a backup of its flash, which holds the
+keyboard's own key calibration. [SMK37.md](SMK37.md#install) has both, the way back and what to do if it does not
+start.
+
+**Edit from a computer:** the [Skiff Editor](https://illuminus5.github.io/skiff/webapp/editor/) (Chrome or
 Edge, over USB MIDI).
 
 ## At a glance
@@ -232,12 +242,16 @@ a car on HOME's highway) and **QUARK** (particle physics: beams and collisions, 
 
 ![HOME in the six themes: SKIFF, HI-CON, PAPER, CRYPT, NEON, QUARK](docs/img/themes.png)
 
+**CUSTOM** takes your own colours from the web editor (a theme's five and the six tracks'), in the look of any of
+them. MENU › DISPLAY › PLAYHEAD LINE leaves HOME's playhead a line, without the torch, the car or the collision.
+
 ### The web editor
 
 The [Skiff Editor](https://illuminus5.github.io/skiff/webapp/editor/) (`web/editor.html`, Chrome or Edge over USB MIDI)
 edits a connected FM-1 live: the sounds and their presets, the steps, the mixer, the Song tab (each track's list, the
 scenes, the pattern pool), the projects and their names, the DRUM-X kit and the MENU settings, with PLAY, STOP and REC
-at the top. It looks like the unit and follows its THEME. It also keeps a library of sounds on the computer, imports
+at the top. It looks like the unit and follows its THEME, and sets THEME › CUSTOM's colours (Settings › Device
+display). It also keeps a library of sounds on the computer, imports
 FM6 patches from `.syx` files and saves complete backups.
 
 <table>
@@ -342,7 +356,8 @@ The notes live in **patterns**, and a project says which ones each track plays:
   when stopped, and when playing at the **LAUNCH** point: the track's pass end (LOOP), the next BAR, BEAT, or NOW.
 - **SONG ON:** while playing, each track moves to its next entry once the current one's REPS are played, at its own
   pass end; an empty entry between two patterns is a **rest**, silent for its REPS passes of the track's length
-  (1.2.1); the empty ones after the last end the list, and after the last comes the first. Tracks of different
+  (1.2.1); the empty ones after the last end the list, and after the last comes the first. KNOB 2 also picks
+  **REST** for an entry anywhere in the list, so a track can start later or end sooner without an empty pattern. Tracks of different
   lengths move on at different times. **SONG OFF:** each track loops its entry. GLO + PLAY starts every track from
   its first entry.
 - **Scenes** (16, in the project) keep the entry each track is on and every mute; SAVE held + a key stores one, a key
@@ -406,7 +421,8 @@ In the order the device lists them:
   (F1–F8) or the track's own (OWN)
 - **PHASE**: phase distortion (ported from CrispyZebra); (1.3) FOLD, a wavefolder
 - **LOFI**: chiptune; pulse, triangle, saw, noise and a 4-bit wave RAM, stepped envelope, sweep, arpeggio
-- **SAMPLE**: multisampled instruments and 3 user sample slots
+- **SAMPLE**: multisampled instruments and 3 user sample slots, each sample with its own level, reverb and delay
+  (EDIT › SAMPLES)
 - **VOICE**: formant oscillator, sung vowels
 - **TRIO**: 3 oscillators with ring modulation and sync, multimode filter
 - **WHEEL**: tonewheel-style organ; drawbar registrations, percussion, key click, drive, rotary speaker
@@ -564,6 +580,9 @@ or sevenths, or a fixed shape) and VOIC the voicing.
 and control behaves, rule by rule: [DESIGN.md](DESIGN.md). The editor's protocol:
 [web/EDITOR_PROTOCOL.md](web/EDITOR_PROTOCOL.md). Contributions: [CONTRIBUTING.md](CONTRIBUTING.md).
 
+**M-VAVE SMK-37:** `BOARD=smk37 ./build.sh` (`MODEL=elite`, `MODEL=mke` for the other two names): see
+[SMK37.md](SMK37.md).
+
 | Path | What |
 | --- | --- |
 | `firmware/` | firmware sources: `src/` app, `hal/` hardware layer, `loader/` update loader |
@@ -577,25 +596,30 @@ and control behaves, rule by rule: [DESIGN.md](DESIGN.md). The editor's protocol
 
 ## If the FM-1 does not start
 
+On the SMK-37: [SMK37.md](SMK37.md#if-it-does-not-start).
+
 **The screen says UPDATE MODE, or stays black while a computer sees a USB MIDI device named "Felucca
 Update":** an install was cut off, and the FM-1 waits in Skiff's update loader at every power-on. Nothing is
 lost. Connect it by USB and run the [Skiff installer](https://illuminus5.github.io/skiff/webapp/installer/) again
-(or `python tools/fm1_install.py skiff-1.3.3.fwsc`): it finishes the install. If the installer can't find it, plug
+(or `python tools/fm1_install.py skiff-1.4.fwsc`): it finishes the install. If the installer can't find it, plug
 the FM-1 straight into the computer: a USB hub or USB-sharing software can lose it when it switches to update mode.
 M-VAVE's own updater does not see the FM-1 in this state. (Since 1.3.2 the loader says UPDATE MODE on the screen;
 one an older Skiff left there keeps it black.)
 
-**A computer sees a USB device named WL80UBOOT** (or a USB mass-storage device with ID 4C4A:8057): that is the
-chip's built-in boot mode, and the FM-1 can be brought back:
+**A computer sees a USB disk named WL82 UBOOT1.00** (or WL80UBOOT, a USB mass-storage device with ID 4C4A:8057):
+that is the chip's built-in boot mode, and the FM-1 can be brought back:
 
 - First try another USB data cable, and close every other app that uses MIDI, then run `tools/fm1_install.py`
   again: it finishes an interrupted update.
 - If it stays in boot mode, [FM-1 Transporter](https://github.com/kurogedelic/FM-1-transporter) reads and
   writes the FM-1's flash from a Mac through a Seeed XIAO RP2040 (three wires to the FM-1's USB lines). Back up
-  the flash first, then write the official firmware (M-VAVE's FM-1.fwsc).
+  the flash first, then write the official firmware (M-VAVE's FM-1.fwsc). On Windows and Linux,
+  [jl-uboot-tool](https://github.com/kagaimiq/jl-uboot-tool) reads and writes it over the same USB cable, as
+  [SMK37.md](SMK37.md#back-up-first) describes for the keyboard (the FM-1's flash is 1 MiB too).
 
 **A computer sees nothing at all:** try another USB cable (a charge-only cable has no data lines) and another
-port, with the FM-1 charged. FM-1 Transporter (above) reaches the chip's boot mode by itself.
+port, with the FM-1 charged, then restart the computer: Windows can leave a USB port dead after a device in boot
+mode goes away. FM-1 Transporter (above) reaches the chip's boot mode by itself.
 
 ## Support
 
@@ -627,6 +651,9 @@ Skiff stands on Felucca. If it is useful to you, support Felucca's author:
   its host tests by gospodindilly-ops
 - 320 MHz (MENU › SYSTEM › CPU CLOCK): the switch from [fm1-clk320-probe](https://github.com/curist/fm1-clk320-probe)
   by [curist](https://github.com/curist) ([MIT](LICENSES/MIT-fm1-clk320.txt)), after the JieLi AC79 SDK's clock code (Apache-2.0)
+- The SMK-37 build: the board layer of [genkigenki](https://github.com/genkigenki)'s SMK-37 port of
+  [Felucca](https://github.com/genkigenki/Felucca) (GPL-3.0-only: the input, screen, pad LED, flash map, update and
+  installer parts), and the SMK-37 hardware notes of their [fm1-to-smk37](https://github.com/genkigenki/fm1-to-smk37) kit
 - Package format and boot files: [JieLi AC79 SDK](https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK) ([Apache-2.0](LICENSES/Apache-2.0.txt); three of its files are in every package, none in this tree)
 - Contributions to Felucca: [keremimo](https://github.com/keremimo) (white-key scales, #2), [ChanceTheMaker](https://github.com/ChanceTheMaker)
   (TRS MIDI, bend, sustain and clock, palettes, favourites, editor display settings: #8, #10, #11, #12),
@@ -642,7 +669,7 @@ Free software: [GPL-3.0-only](LICENSE), the Hügelton Sample Pack included. Skif
 Felucca; its changes are marked (Skiff) in the sources. The bundled fonts and the ported DSP keep their own
 licences ([LICENSES/](LICENSES/)); details in [LICENSING.md](LICENSING.md).
 
-M-VAVE and FM-1 are trademarks of their respective owners. Skiff and Felucca are not affiliated with or endorsed
+M-VAVE, FM-1 and SMK-37 are trademarks of their respective owners. Skiff and Felucca are not affiliated with or endorsed
 by them, and Skiff is not made or endorsed by Hügelton Instruments.
 
 Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments (Felucca)<br>

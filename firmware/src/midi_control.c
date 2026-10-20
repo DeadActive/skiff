@@ -65,7 +65,7 @@ static int midi_note_held(const track_t *t, uint32_t note)
 static int midi_local_held(const track_t *t, uint32_t note)
 {
     uint32_t k, i;
-    for (k = 0; k < 27u; k++)
+    for (k = 0; k < KB_N; k++)
         if (kb_chn[k] && kb_trk[k] == trk_index(t))
             for (i = 0; i < kb_chn[k]; i++)
                 if (kb_chord[k][i] == note)

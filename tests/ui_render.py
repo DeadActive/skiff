@@ -17,7 +17,8 @@ out = Path(sys.argv[1] if len(sys.argv) > 1 else "build/ui_new")
 shots = {}
 for f in sorted((out / "ppm").glob("*.ppm")):
     pal, name = f.stem.split("_", 1)
-    styled = pal in ("LINE", "BLOCKS", "LARGE", "LARGE-LINE", "LARGE-BLOCKS")   # STYLE / MENU > LARGE renders:
+    styled = pal in ("LINE", "BLOCKS", "LARGE", "LARGE-LINE", "LARGE-BLOCKS",    # STYLE / MENU > LARGE renders,
+                     "CUSTOM", "PHLINE")                                         # (#27) THEME CUSTOM, PLAYHEAD LINE:
                                                                                  # <STYLE>_<PALETTE>_<screen>
     if styled:
         p2, name = name.split("_", 1)

@@ -28,6 +28,17 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
 #include "../firmware/src/menu_items.c"
 static void panel_setup(void) {}
 
+#if BOARD_SMK37                                 /* (-DBOARD_SMK37=1: the SMK-37 Pro's layout, storage.c, fm1_flash_map.h) */
+#define T_AS 0xA9000u                           /* the autosave's pair */
+#define T_FM6_A 0xAB000u                        /* the FM6 patches' pair (OBJ_FM6BANK / OBJ_UPFM6) */
+#define T_FM6_B 0xAC000u
+#define T_POOL(off) ((off) >= FL_BANK_LO && (off) < FL_BANK_HI)
+#else
+#define T_AS 0xE5000u
+#define T_FM6_A 0x9F000u
+#define T_FM6_B 0xFE000u
+#define T_POOL(off) (((off) >= 0xE7000u && (off) < 0xE9000u) || ((off) >= 0xEA000u && (off) < 0xFC000u))
+#endif
 static uint8_t nor[0x100000], flash_ok = 1;
 static int erase_error, fail_after = -1;
 static uint32_t erases, as_erases, pool_erases;  /* (as_erases: the autosave's two sectors, 0xE5000 / 0xE6000; pool_erases:
@@ -36,8 +47,8 @@ static int st_read(uint32_t off, void *dst, uint32_t n) { memcpy(dst, nor + off,
 static int st_erase(uint32_t off)
 {
     erases++;
-    as_erases += off >= 0xE5000u && off < 0xE7000u;
-    pool_erases += (off >= 0xE7000u && off < 0xE9000u) || (off >= 0xEA000u && off < 0xFC000u);
+    as_erases += off >= T_AS && off < T_AS + 0x2000u;
+    pool_erases += T_POOL(off);
     if (erase_error) return -8;
     memset(nor + off, 0xFF, 4096);
     return 0;
@@ -62,13 +73,37 @@ static void fl_plain_window_init(void) {}
 #include "../firmware/src/project.c"
 #include "../firmware/src/bank.c"                 /* (Skiff phase 5: the patterns a project names; kept before saves) */
 
-enum { ED_UI_STATE = 34, ED_UI_SET, ED_UI_PALETTES, ED_FAV_GET, ED_FAV_SET };
+enum { ED_UI_STATE = 34, ED_UI_SET, ED_UI_PALETTES, ED_FAV_GET, ED_FAV_SET, ED_COLORS };   /* ((Skiff #27) 39) */
 static uint8_t ed_rep[64];                        /* the reply's bytes (MENU_SET) */
 static uint32_t ed_repn;
 static void ed_b(uint32_t n) { if (ed_repn < sizeof ed_rep) ed_rep[ed_repn++] = (uint8_t)(n & 127u); }
 static void ed_v(int32_t n) { ed_b((uint32_t)(n + 8192)); ed_b((uint32_t)(n + 8192) >> 7); }
 static int32_t ed_rv(const uint8_t *a) { return (int32_t)(a[0] | (uint32_t)a[1] << 7) - 8192; }
 static void ed_str(const char *s, uint32_t n) { (void)s; (void)n; }
+static uint32_t ed_unpack7(const uint8_t *a, uint32_t na, uint8_t *out, uint32_t max)   /* (editor.c's, (Skiff #27) COLORS) */
+{
+    uint32_t n = 0;
+    while (na && n < max) {
+        uint32_t m = *a++, j, k;
+        na--;
+        k = na > 7u ? 7u : na;
+        if (!k || n + k > max || (m >> k))
+            return 0;
+        for (j = 0; j < k; j++, na--)
+            out[n++] = (uint8_t)(*a++ | ((m >> j) & 1u) << 7);
+    }
+    return na ? 0u : n;
+}
+static void ed_bk_pack(const uint8_t *p, uint32_t n)   /* (editor_backup.c's) */
+{
+    while (n) {
+        uint32_t k = n > 7u ? 7u : n, mask = 0, i;
+        for (i = 0; i < k; i++) mask |= (uint32_t)(p[i] >> 7) << i;
+        ed_b(mask);
+        for (i = 0; i < k; i++) ed_b(p[i]);
+        p += k; n -= k;
+    }
+}
 #include "../firmware/src/editor_preferences.c"
 #include "../firmware/src/editor_menu.c"
 
@@ -172,7 +207,7 @@ static int mig_test(void)
     bad += check("FM6 bank -> user presets: B slots get the bank's newest patches", mig_ok());
     bad += check("  .. written into A (the bank's older copy); the bank's newest copy (B) still whole",
                  st_load(OBJ_UPFM6, &got, sizeof got) == (int)sizeof got && !memcmp(&got, &upf, sizeof got) &&
-                     ((st_hdr_t *)(nor + 0x9F000))->type == OBJ_UPFM6 && st_load(OBJ_FM6BANK, &mig_bank, sizeof mig_bank) > 0 &&
+                     ((st_hdr_t *)(nor + T_FM6_A))->type == OBJ_UPFM6 && st_load(OBJ_FM6BANK, &mig_bank, sizeof mig_bank) > 0 &&
                      !memcmp(mig_bank.v[0] + 118, "NEW B1", 6));
     up_load(0);
     bad += check("  .. UP_LOAD 1 plays the bank's B3, SLOT OWN", !memcmp(fm6_patch[song.sel] + FP_NAME, "NEW B3    ", 10) &&
@@ -222,7 +257,7 @@ static int mig_test(void)
     mig_boot();
     bad += check("saved again: its patch, and the bank's sectors now both hold the patches object",
                  mig_ok() && !upf_get(20, pk) && !memcmp(pk + 118, FM6_FACTORY[3] + 118, 10) &&
-                     ((st_hdr_t *)(nor + 0x9F000))->type == OBJ_UPFM6 && ((st_hdr_t *)(nor + 0xFE000))->type == OBJ_UPFM6);
+                     ((st_hdr_t *)(nor + T_FM6_A))->type == OBJ_UPFM6 && ((st_hdr_t *)(nor + T_FM6_B))->type == OBJ_UPFM6);
     memset(nor, 0xFF, sizeof nor);                        /* a device that never had a bank: nothing written */
     before = erases;
     mig_boot();
@@ -387,7 +422,7 @@ static int autosave_test(void)
         as_power_on();
         ok = autosave_boot(1) == 0 && song.g[G_BPM] != 97 && song.g[G_BPM] != 111;
         bad += check("autosave: both copies damaged: ignored, power-on as new", ok);
-        memset(nor + 0xE5000u, 0xFF, 0x2000u);
+        memset(nor + T_AS, 0xFF, 0x2000u);
         st_save(OBJ_AUTOSAVE, "NOT A PROJECT", 13u);     /* a valid record that is no project */
         as_power_on();
         bad += check("autosave: a record that is no project: ignored", autosave_boot(1) == 0 && song.g[G_BPM] != 97);
@@ -397,7 +432,7 @@ static int autosave_test(void)
         static project_t pj;
         static project_store_t w;
         uint32_t k = NTRK - 1u;
-        memset(nor + 0xE5000u, 0xFF, 0x2000u);
+        memset(nor + T_AS, 0xFF, 0x2000u);
         as_power_on();
         song.g[G_BPM] = 123;
         project_capture(&pj);
@@ -412,7 +447,7 @@ static int autosave_test(void)
         bad += check("autosave: an SKF2 one restored (the last track as at power-on); written again as SKF2 / SKF3", ok);
     }
     /* a power cut in the middle of a write: the copy before stays in charge */
-    memset(nor + 0xE5000u, 0xFF, 0x2000u);
+    memset(nor + T_AS, 0xFF, 0x2000u);
     as_power_on();
     autosave_boot(1);
     as_edit(8);
@@ -508,6 +543,50 @@ int main(void)
         const uint8_t bold[] = {1, 1};
         bad += check("the retired font weight is refused without a write", ed_ui_set(bold, sizeof bold) == 2);
     }
+    {   /* (Skiff #27) THEME CUSTOM's set over COLORS: applied at once; while playing written at STOP, as UI_SET's; what a
+         * power cycle reads (the settings object in flash, as persist_boot) is the set in use, in its look (the THEME
+         * firmware before shows); REMOVE is written too */
+        uint8_t a[2 + 26] = {1, UI_QUARK_INDEX}, raw[22];
+        const uint8_t rm[1] = {2};
+        uint16_t bg;
+        uint32_t i, k;
+        int n;
+        for (i = 0; i < 22u; i++) raw[i] = (uint8_t)(37u * i + 11u);
+        for (i = 0; i < 22u; i += 7u) {                 /* (pack7: a group's top bits, then its bytes) */
+            uint8_t *g = a + 2u + i / 7u * 8u;
+            for (k = 0; k < 7u && i + k < 22u; k++) { g[0] |= (uint8_t)(raw[i + k] >> 7 << k); g[1 + k] = raw[i + k] & 127u; }
+        }
+        bg = (uint16_t)(raw[0] | raw[1] << 8);
+        favorites.factory[15][24] = 0xA5u;                 /* (SCENE_FREED: every unit since phase 5) */
+        song.playing = 1;
+        ok = ed_colors(a, sizeof a) == 4 && cpal_on() && T_BG == bg && ux.quark && persist_pending == 1;
+        song.playing = 0;
+        settings_poll();
+        ok &= !persist_pending && persist_saved.palette == palette_to_stored(UI_QUARK_INDEX) &&
+              persist_saved.favorites.factory[15][14] == (3u | UI_QUARK_INDEX << 2) &&
+              !memcmp(&persist_saved.favorites.factory[14][8], raw, sizeof raw) && !memcmp(CPAL_COLS, raw, sizeof raw);
+        memset(&favorites, 0, sizeof favorites); memset(&settings, 0, sizeof settings);   /* (a power cycle) */
+        memset(&persist_saved, 0, sizeof persist_saved);
+        ux_cpal = 0; palette_set(0);
+        n = st_load(OBJ_SETTINGS, &p, sizeof p);
+        ok &= settings_import(&p, n) == 1 && !settings_init() && cpal_on() && settings.palette == UI_QUARK_INDEX &&
+              T_BG == bg && ux.quark;
+        persist_saved = p;
+        before = erases;
+        ok &= ed_colors(rm, 1) == 0 && erases > before && !cpal_stored() && T_BG == UI_PALETTES[UI_QUARK_INDEX].bg &&
+              persist_saved.favorites.factory[15][14] == 0u && persist_saved.palette == palette_to_stored(UI_QUARK_INDEX);
+        bad += check("(#27) COLORS: stored while playing, written at STOP, in use after a power cycle; REMOVE written", ok);
+    }
+#if BOARD_SMK37
+    {   /* (SMK-37 Pro: no LEDS row, so the editor's id 4 is unknown there; the MENU_SET path below is the FM-1's) */
+        const uint8_t leds_off[] = {4, 0, 64};
+        reset();
+        settings_init();
+        ed_repn = 0; ed_menu_handle(ED_MENU_SET, leds_off, 3);
+        bad += check("SMK-37: MENU_SET of LEDS: rc 1 (no such row), nothing changed, no erase",
+                     ed_rep[0] == 1 && settings_leds != LEDS_OFF && !persist_pending && !erases);
+    }
+#else
     {   /* MENU_SET (editor_menu.c): the same settings record, the same deferral, retry and idempotence */
         const uint8_t leds_off[] = {4, 0, 64}, large_on[] = {2, 1, 64}, hold_06[] = {5, 3, 64}, eq_bass[] = {9, 2, 64};
         persist_t q;
@@ -548,6 +627,7 @@ int main(void)
         bad += check("... and retried by the settings path", !persist_pending && leds_from_stored(persist_saved.zoom) == LEDS_INV);
         settings_hold = HOLD_DEF; settings_leds = LEDS_DIM;
     }
+#endif
     reset();
     settings.palette = 3;
     settings.lowcut = 2;

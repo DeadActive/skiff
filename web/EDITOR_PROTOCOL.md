@@ -182,7 +182,7 @@ at 1..3 and hides 6 5 8: what it sets still plays the right kit, and the device 
 
 | cmd | Request args | Reply args |
 | --- | --- | --- |
-| 1 INFO | — | version string, NENGINES, P_COUNT, G_COUNT, NSTEP, P_E0, then NENGINES engine-name strings, then (v3) NTRK (4; Skiff phase 6: 6), then (v6) CHAIN_ROWS (16), then the tagged blocks `55 01 uiCaps`, `4D 01 64 01`, `42 01 3`, `46 01 nfactory nbank`, `53 01 3`, (1.0.3) `50 01 3` and (1.0.4) `4E 01 count` (MENU settings; 12, 1.1: 15, 1.2: 17, 1.1.5: 18, Skiff U2: 16) and (1.0.5) `52 01 4` (ratchet) and (1.1) `4C 01 1` (parameter locks) and (Skiff phase 6) `54 01 tracks e0 e1 e2` (light tracks) (below) and (Skiff W1) `43 01 count` (a step's FLAM, COND, NUDGE; count: the trig conditions) and (Skiff W3) `4B 01 8` (the DRUM-X kit, below) and (Skiff W3) `57 01 caps` (bit 0 TRANSPORT, bit 1 PROJ_NAME, bit 2 POOL, bit 3 LIST, bit 4 PERFORM, below) and (Skiff 1.3) `49 01 c0 c1 e0 e1` (wide ids: P_COUNT and P_E0, above) ; older firmware ends earlier |
+| 1 INFO | — | version string, NENGINES, P_COUNT, G_COUNT, NSTEP, P_E0, then NENGINES engine-name strings, then (v3) NTRK (4; Skiff phase 6: 6), then (v6) CHAIN_ROWS (16), then the tagged blocks `55 01 uiCaps`, `4D 01 64 01`, `42 01 3`, `46 01 nfactory nbank`, `53 01 3`, (1.0.3) `50 01 3` and (1.0.4) `4E 01 count` (MENU settings; 12, 1.1: 15, 1.2: 17, 1.1.5: 18, Skiff U2: 16) and (1.0.5) `52 01 4` (ratchet) and (1.1) `4C 01 1` (parameter locks) and (Skiff phase 6) `54 01 tracks e0 e1 e2` (light tracks) (below) and (Skiff W1) `43 01 count` (a step's FLAM, COND, NUDGE; count: the trig conditions) and (Skiff W3) `4B 01 8` (the DRUM-X kit, below) and (Skiff W3) `57 01 caps` (bit 0 TRANSPORT, bit 1 PROJ_NAME, bit 2 POOL, bit 3 LIST, bit 4 PERFORM, (#21) bit 5 SMP_MIX, below) and (Skiff 1.3) `49 01 c0 c1 e0 e1` (wide ids: P_COUNT and P_E0, above) ; older firmware ends earlier |
 | 2 GET | scope, id | scope, id, v14 |
 | 3 SET | scope, id, v14 | scope, id, v14 (the value after clamping). Setting global `G_ENGSEL` (id from DESC label "ENG") changes the engine: its defaults, then its first preset (as on the device) |
 | 4 DUMP | — | engine, preset, then P_COUNT × v14 (the selected track), then G_COUNT × v14 (globals) |
@@ -253,6 +253,11 @@ All little endian.
 The slot's last 4 KiB sector (offset 0x13000) holds SLICE's slices set by hand on the device (`src/slice_store.c`:
 magic `"SLM1"`, the sample's length and data CRC, the slice starts) when the data leaves it free (at most 77,312
 bytes). An upload writes over it like any other data; a record that is not the slot's sample's is ignored.
+(Skiff, #21) right after that record (152 bytes into the sector) the device keeps its sounds' LEVEL, REV and DLY (`SMP_MIX`, below): 3 x 16
+int16 values, then a u32 check: "SMX1" (0x31584D53) XOR the CRC-32 of the values XOR the CRC-32 of the slot's
+480-byte header. It is the slot's for that header only: an upload of another header (another sample, other keys, another
+name) finds every sound at LEVEL 127, REV 0, DLY 0, as a slot uploaded before the feature; the same upload again finds
+them back. The header format is unchanged (version 1): older firmware plays such a slot as before.
 
 `fmt` values (`firmware/src/core.h`):
 
@@ -805,13 +810,13 @@ with the record when the firmware has FM6 v2 bit 1, and keeps it in library file
 ## Tagged device preferences v1
 
 INFO appends `0x55, 1, uiCaps` after the existing `NTRK, CHAIN_ROWS` bytes.
-Only this complete tagged extension enables commands 34–38. An untagged byte
+Only this complete tagged extension enables commands 34–38 ((Skiff #27) and 39 with bit 4). An untagged byte
 from an experimental firmware is not a SONG or preference capability.
 Command 33 remains SONG. Older editors can ignore the additional INFO bytes.
 
 `uiCaps`: bit 0 palette, bit 1 font weight (retired: firmware since the 1.0 UI has one
-weight and no longer sets it), bit 2 reserved for a MIDI monitor, bit 3 favorites. This build
-advertises 9 (palette and favorites).
+weight and no longer sets it), bit 2 reserved for a MIDI monitor, bit 3 favorites, (Skiff #27) bit 4 COLORS
+(THEME CUSTOM, cmd 39, below). This build advertises 25 (palette, favorites, COLORS).
 
 | cmd | Request args | Reply args |
 | --- | --- | --- |
@@ -820,9 +825,11 @@ advertises 9 (palette and favorites).
 | 36 UI_PALETTES | none | count, count × name string |
 | 37 FAV_GET | engine, start v14, count 1..32 | rc; on success: engine, start v14, count, count × on/off |
 | 38 FAV_SET | engine, preset v14, on/off | rc; when applied: engine, preset v14, on/off |
+| 39 COLORS (Skiff #27) | none, or op [, look, pack7 colours] | rc, flags, look, pack7 colours (THEME CUSTOM, below) |
 
 UI_SET ids: 0 palette (0..count-1, the order of UI_PALETTES: GREY GREEN AMBER ICE VIOLET ROSE PAPER
-HI-CON NIGHT MONO; 1.0.2: GREY is the MONO of 1.0.1, MONO a new black and white palette), 1 font (retired: rc 2), 2 reserved, 3 preset filter (0 all, 1 favorites). Unsupported state
+HI-CON NIGHT MONO; 1.0.2: GREY is the MONO of 1.0.1, MONO a new black and white palette; Skiff: SKIFF HI-CON PAPER
+CRYPT NEON QUARK, and (#27) CUSTOM last while a set is stored), 1 font (retired: rc 2), 2 reserved, 3 preset filter (0 all, 1 favorites). Unsupported state
 fields are 127.
 Both u28 signatures are four least-significant-first 7-bit bytes; compare them
 to refresh changed favorites and user slots. Factory references use stable
@@ -851,6 +858,24 @@ A request of the wrong length or with a value out of range gets no reply and cha
 first engine parameter) moves each sound from A to B. The device pushes nothing when the kit changes on it: read
 again to see its edits.
 
+## User sample mix (81; Skiff, #21)
+
+Each sound (zone) of a user slot has its own LEVEL, REV and DLY, as the device's SAMPLE page sets them: LEVEL 0..127
+(the unit shows a share of 127 in %; square law, as DRUM's lane levels: 127 plays the sound as uploaded, 64 at a
+quarter), REV and DLY 0..127 sent to the REVERB and the DELAY on top of the track's own sends (127 at most in all),
+before the track's DRIVE and INSERT, after its LEVEL, SLICER, mute and DUCK. INFO's `57 01 caps` bit 5. Firmware without
+the bit answers nothing.
+
+| cmd | Request args | Reply args |
+| --- | --- | --- |
+| 81 SMP_MIX | slot 0..2 (get), or slot and 48 values: LEVEL x 16, REV x 16, DLY x 16, one per sound in the slot's order (lowest root first), 0..127 (set) | slot, rc (0, 1 refused: an empty slot, nothing set; 2 set, but the sample fills the slot's last sector: the values last until the power goes off), the slot's sound count nz, then nz x (lo, hi): each sound's keys, then the 48 values as they are now |
+
+A set applies at once (sounding notes too) and is kept with the slot once the device's transport stops (its SLICES and
+SAMPLES pages closed); the device says MIX SAVED. Another length or slot gets no reply. The sounds past nz are kept as
+sent and mean nothing. The editor sends a set after each upload (its files' values; 100 %, 0, 0 unless changed). On the
+device the same values are EDIT > SAMPLES (a SAMPLE track on that USR set): KNOB 1 the sound, KNOB 2..4 its LEVEL,
+REVERB, DELAY.
+
 ## Transport, project names (76, 77; Skiff W3)
 
 INFO advertises `57 01 caps` after the DRUM-X kit (`4B 01 8`): bit 0 TRANSPORT, bit 1 PROJ_NAME. Firmware without the
@@ -878,12 +903,48 @@ empty) and 0..63 elsewhere. Don't resend a change that timed out (a COPY sent tw
 | cmd | Request args | Reply args |
 | --- | --- | --- |
 | 78 POOL | none (the pool), or 1, pattern 0..63: CLEAR it (only one nothing uses, only stopped; it can't be undone) | op, rc (0 cleared, 1 nothing to clear, 2 in use, 3 playing, 4 failed), then for each of the 64 patterns: its LEN (0: empty), how many use it (the entries naming it in the lists and the saved projects, and a track on it that no entry names; at most 127) |
-| 79 LIST | none (the lists), or op, track, entry 0..15 [, value]: 1 SET (value: a kept pattern 1..64; the track on that entry: it comes in as a launch), 2 COPY (a new pattern, a copy of the entry's; a track on it goes on with the copy), 3 PLAY (the track to the entry: at once stopped, at the LAUNCH point playing), 4 CLEAR (only stopped; its pattern is erased when nothing else names it; a track on it goes empty), 5 REPS (value 1..16; an empty entry's too, a rest's length in the song since Skiff 1.2.1); or 6, on: SONG | op, rc (0 done, 1 empty: an empty entry, nothing to copy, a pattern not kept; 2 done without its automation; 3 playing; 4 PATTERNS FULL; 5 failed), SONG 0/1, then for each track: the entry it is on (127: on no entry's pattern), the entry staged (127: none), the pattern it is on (0..63, 127 none), then its 16 entries: pattern (1..64, 0 empty), REPS − 1 |
+| 79 LIST | none (the lists), or op, track, entry 0..15 [, value]: 1 SET (value: a kept pattern 1..64, or (#28) 65 a REST; the track on that entry: it comes in as a launch), 2 COPY (a new pattern, a copy of the entry's; a track on it goes on with the copy), 3 PLAY (the track to the entry: at once stopped, at the LAUNCH point playing), 4 CLEAR (only stopped; its pattern is erased when nothing else names it; a track on it goes empty; a REST at once, playing too), 5 REPS (value 1..16; an empty entry's too, a rest's length in the song since Skiff 1.2.1); or 6, on: SONG | op, rc (0 done, 1 empty: an empty entry, nothing to copy, a pattern not kept; 2 done without its automation; 3 playing; 4 PATTERNS FULL; 5 failed), SONG 0/1, then for each track: the entry it is on (127: on no entry's pattern), the entry staged (127: none), the pattern it is on (0..63, 127 none), then its 16 entries: pattern (1..64, 65 a REST, 0 empty), REPS − 1 |
 | 80 PERFORM | none (the state), or op [, value]: 1 STORE (scene 0..15: the entry each track is on, its mute), 2 RECALL (scene), 3 MUTE (track: the other way, staged while playing; a staged one taken back), 4 CANCEL (all that is staged: entries, mutes; the song's next stays), 5 LAUNCH (0 LOOP, 1 BAR, 2 BEAT, 3 NOW; saved with the settings) | op, rc (RECALL: 0 done or staged, 1 empty, 2 a pattern without its automation, 4 PATTERNS FULL; LAUNCH: as UI_SET's), LAUNCH, the scene recalled or stored last (127 none), the scenes kept (16 bits, 7 a byte, low first), then for each track: muted 0/1, its mute staged (0 none, 1 to unmute, 2 to mute) |
 
 Nothing is pushed: the editor reads LIST and PERFORM again about once a second while it shows them (with TRANSPORT;
 POOL every fourth time) and after each change. A store over a kept scene and the CLEARs ask on the device's screen
 there; the editor asks before it sends them.
+
+## THEME CUSTOM (39; Skiff #27)
+
+MENU › DISPLAY › THEME has the user's colours as its last value, CUSTOM, once the editor has stored a set (after
+Felucca 1.6's CUSTOM palette and its PALETTE_GET / PALETTE_SET by Leo Kuroshita; Skiff's 80 is PERFORM, so here one
+command does both). A set is eleven colours: BG SURF TEXT THEME ACCENT, then the six tracks' (T1..T6), each RGB565,
+22 bytes low byte first as the device stores them and sent as pack7 (26 bytes; Felucca sends three 7-bit bytes a
+colour, which costs the FM-1 more code), and a look: the built-in THEME (0..5, the order of
+`UI_PALETTES`) whose faces and widgets it wears (CRYPT's pixel letters and skulls, NEON's chrome and sun, QUARK's
+brackets; SKIFF, HI-CON and PAPER: BLOCKS). The device derives the other tokens from the five as for its own palettes
+(`firmware/src/gfx.c` `palette_set`); a look's art keeps its own colours (CRYPT's flame, NEON's sun bands). `uiCaps`
+bit 4 says the device has it; firmware without it answers no COLORS.
+
+| cmd | Request args | Reply args |
+| --- | --- | --- |
+| 39 COLORS | none: the state; op 0 show: 0, look, pack7 colours; op 1 store: 1, look, pack7 colours; op 2 remove: 2; op 3 drop what is shown: 3 | rc, flags (bit 0 a set stored, bit 1 in use), look, then pack7 colours: the stored set (none stored: flags 0, look 0, the bytes as they are) |
+
+Op 0 shows the colours in that look at once and stores nothing (RAM only; the device's THEME, op 3 or a restart bring
+back the THEME in use). Op 1 stores them, makes CUSTOM the THEME in use and saves like `UI_SET` (rc 0 saved, 3 RAM
+only, 4 saved at STOP). Op 2 removes the set: the look's own colours are in use (THEME stays the look), saved the same
+way. rc 1: arguments (other than none, 1 or 28 bytes; an op past 3; a look past 5; pack7 that is not 22 bytes);
+nothing changes. **The device takes any colours**: the editor warns of those hard to read (`web/editor.html` `colorWarnings`:
+TEXT on BG and on SURF below 4.5:1, THEME and ACCENT on BG below 3:1, a track's colour on BG below 3:1; no
+THEME of the device's falls short). With colours nobody can read, the way back is op 2, or the device's MENU: hold HOME,
+THEME is the first row of the first tab (DISPLAY), a knob turn picks a built-in THEME.
+
+While a set is stored, CUSTOM is the last name of `UI_PALETTES` (cmd 36: count 7), `UI_SET` id 0 and `MENU_SET` id 0
+take 6, `UI_STATE`'s palette byte is 6 while it is in use, and MENU_DESC id 0 has seven values. With none stored: six,
+and `UI_SET` 0 with 6 answers rc 1.
+
+Stored with the settings (object 1: a full backup carries it), in favourites bytes no engine uses: the eleven colours
+low byte first at `factory[14][8..29]` (DRUM-X's row past its presets; `eng_drumx.c` keeps them at 64 at most),
+`factory[15][14]` bit 0 a set stored, bit 1 in use, bits 2..4 the look; read only once the old scenes are freed
+(`factory[15][24]` 0xA5, every unit since phase 5). In use, the settings' palette field is the look: firmware before
+shows that THEME and keeps the bytes, so a round trip through it loses nothing. Settings of before have the bytes 0:
+no set, nothing changes.
 
 ## MENU settings (72, 73; 1.0.4)
 
@@ -923,14 +984,15 @@ is told: no list of settings is fixed in the editor. INFO advertises `4E 01 coun
   A tab may hold items with no value that are not offered (this firmware: SYSTEM also holds CALIBRATION and ABOUT).
   For a kind it does not know, an editor cannot find the tab (it does not know that kind's bytes).
 
-This firmware (count 16; tabs 0 DISPLAY, 1 CONTROL, 2 AUDIO, 3 SYSTEM; 1.0.5 had the first 12, 1.1 the first 15, 1.2
-before SCALE LEDS the first 16, before SCREEN OFF the first 17). (Skiff U2) STYLE, id 1, and FX LATCH, id 7, are retired:
+This firmware (count 17; tabs 0 DISPLAY, 1 CONTROL, 2 AUDIO, 3 SYSTEM; 1.0.5 had the first 12, 1.1 the first 15, 1.2
+before SCALE LEDS the first 16, before SCREEN OFF the first 17; Skiff before #27 the first 16; the SMK-37 build has
+KEY VELOCITY, id 18, before PLAYHEAD and no LEDS). (Skiff U2) STYLE, id 1, and FX LATCH, id 7, are retired:
 BLOCKS is the only look, and a locked FX layer (SHIFT + FX) latches. Their ids stay unused (a MENU_SET to one answers
 rc 1), and the indexes after them are lower than before:
 
 | index | id | name | kind | values (min 0) | default | tab |
 | --- | --- | --- | --- | --- | --- | --- |
-| 0 | 0 | COLOR | 0 | 0..10: GREY GREEN AMBER ICE VIOLET ROSE PAPER HI-CON NIGHT MONO SKIFF (the order of `UI_PALETTES`) | SKIFF (a new unit) | 0 DISPLAY |
+| 0 | 0 | THEME (Felucca's COLOR) | 0 | 0..5: SKIFF HI-CON PAPER CRYPT NEON QUARK (the order of `UI_PALETTES`); (#27) 6 CUSTOM while a set is stored | SKIFF (a new unit) | 0 DISPLAY |
 | 1 | 2 | LARGE | 0 | 0 OFF, 1 ON | OFF | 0 DISPLAY |
 | 2 | 3 | ANIM | 0 | 0 ON, 1 OFF | ON | 0 DISPLAY |
 | 3 | 4 | LEDS | 0 | 0 OFF, 1 DIM LO, 2 DIM HI, 3 INV (darkest first, as the menu steps them) | DIM HI | 0 DISPLAY |
@@ -946,6 +1008,10 @@ rc 1), and the indexes after them are lower than before:
 | 13 | 15 | RESTORE LAST | 0 | 0 ON, 1 OFF (1.2) | ON | 3 SYSTEM |
 | 14 | 16 | SCALE LEDS | 0 | 0 OFF, 1 ON (1.2) | OFF | 1 CONTROL |
 | 15 | 17 | SCREEN OFF | 0 | 0 NEVER, 1 "5 MIN", 2 "15 MIN", 3 "30 MIN", 4 "60 MIN" (1.1.5) | 30 MIN | 0 DISPLAY |
+| 16 | 19 | PLAYHEAD | 0 | 0 THEME, 1 LINE (Skiff #27) | THEME | 0 DISPLAY |
+
+PLAYHEAD (id 19, Skiff #27): THEME draws the THEME's figure at the playhead on HOME's selected lane (CRYPT's torch,
+NEON's car, QUARK's collision), LINE the playhead's line only; SKIFF, HI-CON and PAPER draw no figure either way.
 
 The device's AUDIO tab shows SPEAKER EQ, USB LEVEL, CLICK, CLICK LEVEL, COUNT-IN (index 7, 8, 10, 11, 12).
 CLICK: the metronome while the transport runs: OFF, REC (while a track is armed), ON (always); CLICK LEVEL its

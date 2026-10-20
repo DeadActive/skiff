@@ -29,6 +29,7 @@
 #define FM1_PWR_CON (*(volatile uint32_t *)0x10000u)
 #define FM1_UPDATA_PARM ((volatile uint8_t *)0x01C7FD88u)
 #define FM1_UPDATA_PARM_LEN 112u
+#define FM1_LDR_CRUMB_ADDR 0x01C7FD20u    /* (SMK update loader) its start record, 48 B: app.ld keeps it out of NOINIT */
 
 static uint32_t fm1_p33_timeouts;
 
@@ -201,6 +202,10 @@ FM1_INLINE void fm1_enter_update(const uint8_t *parm)
         FM1_UPDATA_PARM[i] = parm[i];
     fm1_core_reset();
 }
+
+/* 1: the RAM record carries the update type (+6 0x5441, "AT"): an app wrote it before its reset (a power-on leaves
+ * none, and the loader zeroes it at its start) */
+FM1_INLINE int fm1_updata_parm_set(void) { return FM1_UPDATA_PARM[6] == 0x41u && FM1_UPDATA_PARM[7] == 0x54u; }
 
 FM1_INLINE void fm1_updata_parm_clear(void)
 {

@@ -862,10 +862,11 @@ int main(void)
 #define SKF2_BAD(off, v) (st2 = st, st2.raw[(off)] = (v), sum = proj_hash(st2.raw, PROJ_STORE2 - 4u), \
                           memcpy(st2.raw + PROJ_STORE2 - 4u, &sum, 4), !proj_import(&c, &st2, (int)PROJ_STORE2))
         e = 68u + PROJ_NT * (PROJ_NP + 2u);           /* the lists */
-        ok &= SKF2_BAD(e, NPAT + 1u) && SKF2_BAD(e + 1u, 16u) && SKF2_BAD(e + PROJ_NT * NENT * 2u, 16u) &&
-              SKF2_BAD(65u, 2u) && !SKF2_BAD(e, NPAT) && !SKF2_BAD(e + 1u, 15u);
+        ok &= SKF2_BAD(e, PAT_REST + 1u) && SKF2_BAD(e + 1u, 16u) && SKF2_BAD(e + PROJ_NT * NENT * 2u, 16u) &&
+              SKF2_BAD(65u, 2u) && !SKF2_BAD(e, NPAT) && !SKF2_BAD(e, PAT_REST) && !SKF2_BAD(e + 1u, 15u);
 #undef SKF2_BAD
-        bad += check("  refused: a damaged hash, an id past the pool, repeats past 16, an entry past 16, SONG 2", ok);
+        bad += check("  refused: a damaged hash, an id past the pool and REST, repeats past 16, an entry past 16, SONG 2; "
+                     "(#28) a REST read", ok);
         a.t[0].step[0].n = 1; a.t[0].step[0].note[0] = 60; a.t[0].step[0].time = ST_NOTE;
         ok = proj_pack(&st, &a) && proj_import(&c, &st, (int)sizeof st) && c.t[0].step[0].note[0] == 60u &&
              !c.ent[0][0][0] && !c.ent[0][0][1] && !c.cur[0] && !c.song && !c.scene[0];

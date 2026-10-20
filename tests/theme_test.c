@@ -107,6 +107,25 @@ int main(int argc, char **argv)
                 sheet[(p / 4 * 124 + y) * 960 + p % 4 * 240 + x] = v;
             }
     }
+    {   /* (Skiff #27) THEME CUSTOM: eleven colours (RGB565, low byte first) over any palette, which keeps its faces and
+         * widgets; the other tokens derived from them as from a palette's five; none: the palette's own again */
+        static const uint8_t cc[22] = {0xf8, 0xf7, 0xc0, 0xe6, 0x41, 0x08, 0x08, 0x51, 0x02, 0xa9,   /* PAPER-like: a light BG */
+                                       0x00, 0xf8, 0xe0, 0x07, 0x1f, 0x00, 0x1f, 0xf8, 0xe0, 0xff, 0x10, 0x84};
+        ux_cpal = cc;
+        for (unsigned p = 0; p < NPALETTES; p++) {
+            uint16_t *tok = &ux.bg;
+            palette_set(p);
+            for (unsigned k = 0; k < 5; k++) assert(tok[k] == (cc[2 * k] | cc[2 * k + 1] << 8));
+            for (unsigned k = 0; k < UI_NTRK; k++) assert(T_TRK(k) == (cc[10 + 2 * k] | cc[11 + 2 * k] << 8));
+            assert(T_MID == ux_mix(T_BG, T_TEXT, UI_MID_PCT) && T_DIM == ux_mix(T_BG, T_TEXT, UI_DIM_PCT) &&
+                   T_SEL == ux_mix(T_BG, T_THEME, UI_SEL_PCT) && T_RAISE == ux_mix(T_SURF, T_TEXT, UI_RAISE_PCT) &&
+                   T_LANE == ux_mix(T_SURF, T_THEME, 10) && T_INK == T_BG && ux.light && T_REC == UI_REC_LIGHT);
+            assert(ux.crypt == (p == UI_CRYPT_INDEX) && ux.neon == (p == UI_NEON_INDEX) && ux.quark == (p == UI_QUARK_INDEX));
+        }
+        ux_cpal = 0;
+        palette_set(UI_NEON_INDEX);
+        assert(T_BG == UI_PALETTES[UI_NEON_INDEX].bg && T_TRK(5) == UI_TRACKS[UI_NEON_INDEX][5] && !ux.light && ux.neon);
+    }
     /* the ramp cache follows the palette (a stale ramp would blend toward the old background) */
     palette_set(1);
     cv_begin(3, 1, T_BG); cv_text(0, 0, &probe, "A", T_THEME);
@@ -137,6 +156,6 @@ int main(int argc, char **argv)
         }
         fclose(f);
     }
-    printf("Palettes: GREY gray, MONO black and white, contrast (worst margin x%.2f), blending, ramp cache, font metrics and ellipsis passed.\n", worst);
+    printf("Palettes: GREY gray, MONO black and white, contrast (worst margin x%.2f), (#27) THEME CUSTOM over each, blending, ramp cache, font metrics and ellipsis passed.\n", worst);
     return 0;
 }

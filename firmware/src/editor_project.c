@@ -8,7 +8,7 @@
  *     1 refused: playing, patterns full, an empty slot; 2 failed), the music's slot (127 none), changed since, its
  *     name, then each slot: used, its name. A save or a rename stops the transport first (ed_flash_stop) */
 enum { ED_TRANSPORT = 76, ED_PROJ_NAME };
-#define ED_SKIFF_CAPS 31u                       /* TRANSPORT, PROJ_NAME, POOL, LIST, PERFORM */
+#define ED_SKIFF_CAPS 63u                       /* TRANSPORT, PROJ_NAME, POOL, LIST, PERFORM, (#21) SMP_MIX (editor.c) */
 
 /* a name from the editor -> b (PROJ_NAME_LEN + 1), upper case; 0: refused (too long, a byte outside 32..126) */
 static int ed_proj_name_in(const uint8_t *a, uint32_t n, char *b)

@@ -12,6 +12,9 @@
  *   kept; cancelled, replaced, at once when stopped first, never over a project loaded; a switch only with room to
  *   keep what goes out. Scenes.
  * The SAVE > PATTERNS page: tests/ui_test.c test_bank. Built and run by tests/run_tests.sh. */
+#ifndef BOARD_SMK37
+#define BOARD_SMK37 0                                   /* -DBOARD_SMK37=1: the pool on the SMK-37 Pro layout */
+#endif
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
@@ -172,15 +175,21 @@ static int layout(void)
     uint32_t i, o, c;
     for (i = 0; i < BK_NSECT; i++) {
         uint32_t s = bk_sector(i);
+#if BOARD_SMK37                                  /* (-DBOARD_SMK37=1: the SMK-37 Pro's USRFLASH, fm1_flash_map.h) */
+        ok &= s >= FL_BANK_LO && s + 0x1000u <= FL_BANK_HI && FL_GUARD(s, 0x1000u) &&
+              (s >= SMP_USER_BASE + SMP_USER_FLASH_SLOTS * SMP_USER_SIZE || s + 0x1000u <= SMP_USER_BASE);
+#else
         ok &= (s >= 0xE7000u && s + 0x1000u <= 0xE9000u) || (s >= 0xEA000u && s + 0x1000u <= 0xFC000u);
+#endif
         for (o = 0; o < OBJ_COUNT; o++)           /* apart from every storage.c object's sectors */
             for (c = 0; c < 2u; c++)
                 ok &= st_sector(o, c) != s;
-        ok &= s != 0xE9000u;
+        ok &= s != 0xE9000u || BOARD_SMK37;
         for (o = 0; o < i; o++)
             ok &= bk_sector(o) != s;
     }
-    bad += check("20 sectors: the VM area's last two, the package's USR region; not BTIF, nor any other object's", ok);
+    bad += check(BOARD_SMK37 ? "20 sectors (SMK-37 Pro): USRFLASH after the user slot, nor any other object's" :
+                 "20 sectors: the VM area's last two, the package's USR region; not BTIF, nor any other object's", ok);
     bad += check("a pattern 888 bytes (steps, NUDGE, timing, 64 motion records), 4 a sector, 16 chunks + 4 spare",
                  BK_REC == 888u && BK_LEN <= 3840u && BK_CHUNKS == 16u && BK_NSECT == 20u);
     return bad;
@@ -369,17 +378,18 @@ static int entries(void)
     lists.ent[0][0][0] = (uint8_t)(b + 1u);       /* T1's A and T2's A: b */
     lists.ent[1][0][0] = (uint8_t)(b + 1u);
     song.playing = 1;
-    ok &= pend_free() == 1u && bank_switch(0, 0) == 0 && bank_switch(1, 0) == 4 && bank_cancel(0) &&
-          bank_switch(1, 0) == 0 && bank_next(1) == 0u;
+    ok &= pend_free() == 1u && bank_switch(0, 0) == 0 && bank_switch(1, 0) == 0 && bank_next(0) == 0u &&
+          bank_next(1) == 0u;
+    bank_cancel(0);
     bank_cancel(1);
     song.playing = 0;
-    bad += check("  playing: a switch staged only with a waiting slot for each track staged (what goes out waits there)",
+    bad += check("  playing: switches staged with fewer waiting slots free than tracks staged (#29: none held for them)",
                  ok && keep_all() == 0 && pend_free() == PEND_N);
     return bad;
 }
 
-/* (phase 6) every track staged at once: a waiting slot a track (PEND_N = NTRK); a scene that cannot stage a track (no
- * room to keep what it has) says PATTERNS FULL, its other tracks staged all the same */
+/* (phase 6) every track staged at once; a scene that cannot stage a track (what went out at its last swap still waiting
+ * to be kept: bank_poll_trk) says PATTERNS FULL, its other tracks staged all the same, whatever waiting slots are free */
 static int staged_all(void)
 {
     int bad = 0, ok;
@@ -394,21 +404,27 @@ static int staged_all(void)
     song.playing = 1;
     for (k = 0; k < NTRK; k++)
         ok &= bank_switch(k, 1) == 0 && bank_next(k) == 1u;
-    bad += check("every track staged at once: a waiting slot a track (PEND_N = NTRK)", ok && PEND_N == NTRK &&
-                 pend_free() == PEND_N);
+    bad += check("every track staged at once", ok && pend_free() == PEND_N);
     for (k = 0; k < NTRK; k++)
         bank_cancel(k);
     lists.scene[0] = 2u;                          /* scene 1: T1 to its B, T2 to its B, the rest left alone */
     lists.scene[0] |= 2u << 5;
     lists.scene[48] = 1u;
     ok = bk_pack(r, &trk[3]);
-    for (k = 0; k < PEND_N - 1u; k++)             /* one slot free: T1 stages, T2 has none */
+    for (k = 0; k < PEND_N - 1u; k++)             /* one slot free */
         ok &= pat_keep_rec(20u + k, r) == 0;
+    launch_q[1].done = 2;                         /* T2: what went out still waiting to be kept */
     scene_key(0, 0);
     ok &= bank_next(0) == 1u && bank_next(1) == BK_NONE && str_eq(ui.msg2, "PATTERNS FULL");
     bank_cancel(0);
+    launch_q[1].done = 0;
+    scene_key(0, 0);
+    ok &= bank_next(0) == 1u && bank_next(1) == 1u;
+    bank_cancel(0);
+    bank_cancel(1);
     song.playing = 0;
-    bad += check("  a scene with no room for a track: PATTERNS FULL, the tracks with room staged", ok && keep_all() == 0);
+    bad += check("  a scene: a track still keeping what went out PATTERNS FULL, the others staged; one slot free, both",
+                 ok && keep_all() == 0);
     return bad;
 }
 
@@ -980,7 +996,7 @@ static int song_test(void)
     ok = song.playing && heard(0, 30) && heard(1, 90) && heard(2, 60) && bank_cur(0) == 0u && bank_cur(1) == 0u;
     bad += check("  GLO + PLAY: from the top, every track on its first entry", ok);
 
-    sg_stop();                                    /* no room to keep what would go out: the song waits */
+    sg_stop();                                    /* (#29) no waiting slot free: the song goes on all the same */
     simple(0, 30, 4, DIR_FWD);
     bank_put(0, 0, 0);
     lists.ent[0][0][1] = 0;
@@ -988,14 +1004,17 @@ static int song_test(void)
     for (i = 0; i < PEND_N; i++)
         ok &= pat_keep_rec(40u + i, r) == 0;
     sg_play();
-    sg_steps(8);
-    ok &= heard(0, 30) && !launch_q[0].armed;    /* (A again: B not staged) */
-    sg_stop();
-    ok &= keep_all() == 0;                        /* (the autosave's round: written) */
-    sg_play();
     sg_steps(4);
-    ok &= heard(0, 50);
-    bad += check("  no waiting slot to keep what goes out: the entry plays on; written (stopped), on again", ok);
+    ok &= heard(0, 50) && pend_free() == 0u;     /* (A unchanged: nothing of it to keep) */
+    t->step[0].note[0] = 57;                      /* B edited as it plays: nowhere for it to wait */
+    sg_steps(2);
+    sg_frame();                                   /* (C's rest came in; B held, in launch_q) */
+    ok &= !trk[0].seq_n && launch_q[0].done == 2u && str_eq(ui.msg2, "STOP TO SAVE") && lists.cur[0] == 1u;
+    sg_steps(4);
+    ok &= !trk[0].seq_n && !launch_q[0].armed;   /* (the track waits on the rest: D not staged) */
+    sg_stop();                                    /* stopped: a chunk written to make room, B kept */
+    ok &= !launch_q[0].done && lists.cur[0] == 2u && keep_all() == 0 && ent_go(0, 1) == 0 && t->step[0].note[0] == 57;
+    bad += check("  (#29) no waiting slot free: the song goes on; an edit with nowhere to wait held, kept at STOP", ok);
 
     sg_stop();                                    /* a LEN 1 pattern at 1/32, x3: exactly three steps */
     simple(0, 40, 1, DIR_FWD);
@@ -1033,6 +1052,113 @@ static int song_test(void)
     ok &= heard(0, 50);
     bad += check("  NUDGE: a step early in the one before, not where the next pattern comes in", ok);
     sg_stop();
+    lists.song = 0;
+    return bad;
+}
+
+/* (#29) a song where every track has a list (T6 DRUM, its lane hits), all of one length, so all move on together, and
+ * a pattern waiting to be written (an edit kept, stopped, that the autosave's quiet stop has not written yet): every
+ * track on to its next entry at its pass end, the last one too, round and round */
+static int song_six(void)
+{
+    int bad = 0, ok = 1;
+    uint32_t k, e, i;
+    fresh();
+    ui_launch = LAUNCH_LOOP;
+    for (k = 0; k < NTRK; k++) {                  /* each track: A (20 + 3k ..), B (40 + 3k ..), 4 steps */
+        for (e = 0; e < 2u; e++) {
+            simple(k, 20u + 20u * e + 3u * k, 4, DIR_FWD);
+            trk[k].step[0].hit = (uint8_t)(k == NTRK - 1u ? 1u << e : 0u);   /* (T6: KICK on A, SNARE on B) */
+            ok &= bank_put(k, e, 0) == 0;
+        }
+        ok &= ent_go(k, 0) == 0;
+    }
+    trk[NTRK - 1u].step[2].hit = 4u;              /* T6's A edited, then B and back: A waits to be written */
+    ok &= ent_go(NTRK - 1u, 1) == 0 && ent_go(NTRK - 1u, 0) == 0 && pend_free() == PEND_N - 1u;
+    lists.song = 1;
+    sg_play();
+    for (i = 1; i <= 4u; i++) {
+        sg_steps(4);                              /* (a pass: every track's next came in at its end) */
+        sg_frame();
+        for (k = 0; k < NTRK; k++)
+            ok &= lists.cur[k] == i % 2u && trk[k].step[0].note[0] == 20u + 20u * (i % 2u) + 3u * k &&
+                  trk[k].step[0].hit == (k == NTRK - 1u ? 1u << i % 2u : 0u);
+    }
+    ok &= trk[NTRK - 1u].step[2].hit == 4u;       /* (A again: its edit) */
+    sg_stop();
+    lists.song = 0;
+    bad += check("(#29) a song, a pattern waiting to be written: every track on at its pass end, T6 (DRUM) too", ok);
+    return bad;
+}
+
+/* (#28) RESTs (SONG's PATTERN knob): one before a track's first pattern (it starts later), one after its last (it ends
+ * sooner), each its REPS passes of the track's length; GLO + PLAY from the REST; the empty entries at either end of a
+ * list of before still passed over; a REST launched; stopped on one, recorded into; an SKF3 keeps them */
+static int song_rest(void)
+{
+    int bad = 0, ok;
+    track_t *t = &trk[0];
+    static project_t pj, got;
+    static project_store_t w;
+    fresh();
+    ui_launch = LAUNCH_LOOP;
+    simple(0, 30, 4, DIR_FWD);                    /* T1: B 4 steps (30..), C 2 (50..), A a REST x2, D a REST x1 */
+    bank_put(0, 1, 0);
+    simple(0, 50, 2, DIR_FWD);
+    bank_put(0, 2, 0);
+    lists.ent[0][0][0] = PAT_REST;
+    lists.ent[0][0][1] = 1;
+    lists.ent[0][3][0] = PAT_REST;
+    lists.song = 1;
+    song_top();                                   /* GLO + PLAY: on A, silent, the track's LEN (C's, 2) */
+    events_block(1);
+    ok = song.playing && lists.cur[0] == 0u && !trk_pid[0] && !t->seq_n && t->p[P_SLEN] == 2 && !bank_used(0, 0) &&
+         ent_pat(0, 0) == PAT_NONE;
+    sg_steps(3);
+    ok &= !t->seq_n;                              /* (A x2: four silent steps) */
+    sg_steps(1);
+    ok &= heard(0, 30);
+    sg_steps(4);
+    ok &= heard(0, 50);
+    sg_steps(2);
+    sg_frame();
+    ok &= !t->seq_n && lists.cur[0] == 3u;        /* D: C's length, once */
+    sg_steps(2);
+    ok &= !t->seq_n;                              /* A again (the list loops), x2 */
+    sg_steps(4);
+    ok &= heard(0, 30);
+    bad += check("(#28) a REST before the first pattern (starts later), one after the last (ends sooner), its REPS "
+                 "passes of the track's length; GLO + PLAY from it", ok);
+    sg_stop();
+    lists.ent[0][0][0] = lists.ent[0][3][0] = 0;  /* (a list of before: A and D empty) */
+    song_top();
+    events_block(1);
+    ok = heard(0, 30) && lists.cur[0] == 1u;
+    sg_steps(4);
+    ok &= heard(0, 50);
+    sg_steps(2);
+    ok &= heard(0, 30);
+    bad += check("  a list of before: the empty entries before its first pattern and after its last passed over", ok);
+    lists.ent[0][3][0] = PAT_REST;
+    ok = bank_switch(0, 3) == 0 && bank_next(0) == 3u && !launch_q[0].adv;   /* (a launch, LOOP: at B's pass end) */
+    sg_steps(4);
+    ok &= !t->seq_n;                              /* (D, B's length) */
+    sg_steps(4);
+    ok &= heard(0, 30);
+    bad += check("  a REST launched (PERFORM, SONG's OCT+): the track drops out at its launch point, on from it", ok);
+    sg_stop();
+    ok = ent_go(0, 3) == 0 && lists.cur[0] == 3u && !trk_pid[0] && seq_is_empty(t) && t->p[P_SLEN] == 4;
+    t->step[0] = (step_t){{77}, 1, ST_NOTE, 0, 100};   /* recorded into */
+    ok &= keep_all() == 0 && !ent_rest(0, 3) && trk_pid[0] && lists.ent[0][3][0] == trk_pid[0];
+    bad += check("  stopped on a REST: silent, the track's LEN as it was; recorded into: a pattern in that entry", ok);
+    project_capture(&pj);
+    pj.ent[0][0][0] = PAT_REST;
+    pj.ent[0][0][1] = 3;
+    ok = proj_pack2(&w, &pj, &PROJ_SKF3) && w.raw[68u + NTRK * (PROJ_NP + 2u)] == PAT_REST &&
+         proj_unpack2(&got, w.raw, &PROJ_SKF3) && got.ent[0][0][0] == PAT_REST && got.ent[0][0][1] == 3u;
+    pj.ent[0][0][0] = PAT_REST + 1u;
+    ok &= !proj_pack2(&w, &pj, &PROJ_SKF3);
+    bad += check("  an SKF3 keeps a REST (65, which firmware before refuses); past it refused", ok);
     lists.song = 0;
     return bad;
 }
@@ -1160,7 +1286,8 @@ static int dx_kit_project(void)
 int main(void)
 {
     int bad = layout() + fidelity() + keep() + entries() + staged_all() + last_track() + torn() + wear_and_wrap() +
-              playing() + live() + scenes() + scenes_six() + song_test() + migrate() + dx_kit_project();
+              playing() + live() + scenes() + scenes_six() + song_test() + song_six() + song_rest() + migrate() +
+              dx_kit_project();
     printf("%s\n", bad ? "BANK TEST FAILED" : "pattern bank tests passed");
     return bad != 0;
 }

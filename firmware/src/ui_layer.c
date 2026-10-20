@@ -772,7 +772,7 @@ static uint32_t layer_leds(uint32_t *br)
             can = scene_used(p);
         } else if (l == LAYER_PERF && !b && p < BANK_SLOTS) {   /* (Skiff) the slot playing and the one staged lit, */
             on = p == bank_cur(song.sel) || p == bank_next(song.sel);   /* the other kept ones breathe */
-            can = bank_used(song.sel, p);
+            can = ent_on(song.sel, p);                   /* ((#28) a REST too: the track drops out) */
         } else if (l == LAYER_REC && !b && p < 4u) {    /* a setting on (LEVEL: the click on) lit, the rest breathe; */
             on = p == 1u ? rp_get(RP_CLICK) != 0u : p == 2u ? rp_get(RP_COUNTIN) != 0u :   /* CLEAR: something to */
                  p == 3u && rp_get(RP_CLICK) != 0u;    /* clear */
@@ -1045,7 +1045,7 @@ static void layer_perf(void)
         cv_text_on(6, y + CAP_IN(M, PR_H), &AF_M, d, cb ? T_INK : col, g);
         for (p = 0; p < BANK_SLOTS; p++) {
             char s[2] = {(char)('A' + p), 0};
-            uint32_t st = p == nx ? PC_NEXT : p == cur ? PC_ON : bank_used(k, p) ? PC_KEPT : PC_EMPTY;
+            uint32_t st = p == nx ? PC_NEXT : p == cur ? PC_ON : ent_on(k, p) ? PC_KEPT : PC_EMPTY;
             perf_cell(PR_X(p), y, s, st, st == PC_ON ? tile : cb ? T_INK : col, cb ? col : muted ? T_TEXT : T_INK,
                       cb ? T_INK : T_MID, cb ? ux_mix(col, T_INK, 55) : T_DIM, g, 0);   /* (on DIM: TEXT, the far end
                                                      * from it in every palette) */
@@ -1075,7 +1075,7 @@ static uint32_t perf_sig(void)
     uint32_t k, p, h = 2166136261u, m;
     for (k = 0; k < NTRK; k++) {
         for (m = 0, p = 0; p < BANK_SLOTS; p++)
-            m |= (uint32_t)bank_used(k, p) << p;
+            m |= (uint32_t)ent_on(k, p) << p;
         h = (h ^ (bank_cur(k) | bank_next(k) << 8 | (uint32_t)(trk[k].p[P_MUTE] != 0) << 16 | (uint32_t)mute_arm[k] << 17))
             * 16777619u;
         h = (h ^ m) * 16777619u;
@@ -1372,6 +1372,21 @@ static void shift_map(smap_t *m)
     m[5] = (smap_t){"PLAY", song.playing ? "STOP" : "START", 0};   /* (what it would do now) */
     for (i = 0; i < 6u; i++)
         m[6 + i] = ALL[i];
+#if BOARD_SMK37
+    {   /* (SMK-37 Pro, SMK37_UX.md question 10) the controls by the SMK's printed names: K2 SELECT, K3 ALGORITHM, K4
+         * PRESETS, PARA EDIT, BT SAVE, SEQ REC REC, KNOB BANK SHIFT. PLAY stays PLAY: the SMK prints a play sign there,
+         * which the screen's fonts don't have */
+        static const char *const FM[] = {"PRESETS", "SELECT", "GLO + SELECT", "ALGO", "EDIT + REC", "HOLD SAVE",
+                                         "+ SAVE", "+ REC", "KEYS + REC"};
+        static const char *const SMK[] = {"K4", "K2", "GLOBE + K2", "K3", "PARA + SEQ REC", "HOLD BT",
+                                          "+ BT", "+ SEQ REC", "KEYS + SEQ REC"};
+        uint32_t j;
+        for (i = 0; i < 12u; i++)
+            for (j = 0; j < NELEM(FM); j++)
+                if (str_eq(m[i].key, FM[j]))
+                    m[i].key = SMK[j];
+    }
+#endif
 }
 static void draw_shift(void)
 {
@@ -1397,6 +1412,11 @@ static void draw_shift(void)
     }
     cv_blit(0, Y_GRAPH);
     cv_begin(240, foot_h(), T_BG);
+#if BOARD_SMK37
+    if (!((fm1_in.buttons >> panel.btn[B_HOME]) & 1u))   /* (KNOB BANK's SHIFT: let go, nothing) */
+        cv_free_hint(8, foot_line_y(), "SHIFT", T_MID, T_BG, 110);
+    else
+#endif
     cv_free_hint(8, foot_line_y(), "LET GO: MENU", T_MID, T_BG, 110);
     if (ui.home)
         str_cpy(ti, "HOME", sizeof ti);

@@ -52,6 +52,9 @@
 # SLICE (tests/slice_test.c): slice tables, AUTO onsets of a user-slot loop, reverse, keys, modes, the MAN slices
 #                   (SLICES page) and their store in the slot (src/slice_store.c); the presets and the loop;
 #                   demos in build/slice_demo/.
+# SMPMIX (tests/smpmix_test.c, Skiff #21): a user slot's sounds' LEVEL (square law), REV and DLY (their own sends, as
+#                   the track's would be, 127 at most in all, none while muted), kept with the slot (slice_store.c: for
+#                   its header only, with SLICE's record, torn or junk ignored), a slot of before as uploaded.
 # INPUT (tests/input_test.c): the key / button debounce of hal/fm1_input.h against the TIMER5 scan and bouncing
 #                   contacts: a press within 2 scans (<= 2.3 ms), one note per bouncy press, no early or hanging
 #                   release, stray samples ignored, fast repeats, the encoders' detents; the LED scan: lit LEDs every
@@ -170,8 +173,50 @@ head -c 200000 build/felucca.bin > "$OUT/old_app.bin"
 python3 tools/fm1pkg_make.py "$OUT/old_app.bin" build/loader/ota.bin "$OUT/old.fwsc" >/dev/null
 $CC -o "$OUT/ldr_test" tests/ldr_test.c
 run "update loader: other app -> this build" "$OUT/ldr_test" "$OUT/old.fwsc" build/felucca.fwsc
+# M-VAVE's own V15, from FM1_STOCK_DIR when set (never in the repo): Skiff's loader writes its flash.bin's app area only,
+# the header last
+v15="${FM1_STOCK_DIR:-/nonexistent}/FM-1.fwsc"
+if [ -f "$v15" ]; then
+    run "update loader: M-VAVE's V15 flash.bin, the app area only, the header last" "$OUT/ldr_test" "$OUT/old.fwsc" "$v15" stock
+else
+    echo "FM-1 V15: skipped (FM1_STOCK_DIR not set)"
+fi
 $CC -o "$OUT/ldr_screen_test" tests/ldr_screen_test.c
 run "update loader's screen (Skiff): UPDATE MODE, WRITING and its bar, UPDATE FAILED" "$OUT/ldr_screen_test"
+
+# the SMK-37 Pro build (BOARD_SMK37; after genkigenki's SMK-37 layer): the flash map and the store's owner tag, the
+# package layout, the OTA staging and the loader's windows on SMK-layout packages (made here from the FM-1 binaries:
+# only the layout and the protocol are under test); the pool and persistence on its layout below (build/gen)
+$CC -DBOARD_SMK37=1 -Ifirmware/hal -o "$OUT/smk_flash_test" tests/smk_flash_test.c
+run "SMK-37 Pro flash map: every object, the pool and the sample slot inside the windows, protected ranges never"     "$OUT/smk_flash_test"
+$CC -DBOARD_SMK37=1 -Ifirmware/hal -o "$OUT/smk_owner_test" tests/smk_owner_test.c
+run "SMK-37 Pro store owner tag (family SKIFF): another firmware's store cleared, ours kept, the stock mapping"     "$OUT/smk_owner_test"
+python3 tools/fm1pkg_make.py --board smk37 build/felucca.bin build/loader/ota.bin "$OUT/smk_new.fwsc" >/dev/null
+python3 tools/fm1pkg_make.py --board smk37 "$OUT/old_app.bin" build/loader/ota.bin "$OUT/smk_old.fwsc" >/dev/null
+run "SMK-37 Pro package layout (fm1pkg_make --board smk37): PRCT 0x9D000, the stock region table"     python3 tests/smk_pkg_test.py "$OUT/smk_new.fwsc"
+$CC -DBOARD_SMK37=1 -DOWN_PKG=1 -o "$OUT/ota_test_smk" tests/ota_test.c
+run "M-UPGRADE entry, SMK-37 Pro build (staging 0xBB000, record ota-SMK-37 Pro_016)" "$OUT/ota_test_smk" "$OUT/smk_new.fwsc"
+for m in 1 2; do                         # the MODEL=elite / mke builds of ota.c
+    $CC -DBOARD_SMK37=1 -DT_MODEL=$m -o "$OUT/ota_test_smk_m$m" tests/ota_test.c
+    run "M-UPGRADE entry, SMK model $m build (MODEL=elite / mke: its own record identity)" "$OUT/ota_test_smk_m$m"         "$OUT/smk_new.fwsc"
+done
+for m in pro elite mke; do               # the packages BOARD=smk37 MODEL=... sh build.sh made, when present
+    f=build/skiff-smk37.fwsc; id="SMK-37 Pro_700"
+    [ $m = elite ] && f=build/skiff-smk37-elite.fwsc && id="SMK-37 Elite_700"
+    [ $m = mke ] && f=build/skiff-smk37-mke.fwsc && id="MKE-P37_700"
+    [ -f $f ] && run "SMK package $f: identity $id, the stock region table" python3 tests/smk_pkg_test.py $f "$id"
+done
+$CC -DBOARD_SMK37=1 -o "$OUT/ldr_test_smk" tests/ldr_test.c
+run "update loader, SMK-37 Pro: app area 0x4000-0x9CFFF, protected ranges untouched" "$OUT/ldr_test_smk"     "$OUT/smk_old.fwsc" "$OUT/smk_new.fwsc"
+# M-VAVE's own V016 package, from SMK_STOCK_DIR when set (never in the repo): the SMK app stages its own loader for it
+# (SMK37.md), and that loader writes the official flash.bin's app area only, the header last
+v016="${SMK_STOCK_DIR:-/nonexistent}/SMK-37_Pro_016.fwsc"
+if [ -f "$v016" ]; then
+    run "M-UPGRADE entry, SMK-37 Pro, M-VAVE's V016: the app stages its own loader, record ota-SMK-37 Pro_016"     "$OUT/ota_test_smk" "$v016" official
+    run "update loader, SMK-37 Pro: M-VAVE's V016 flash.bin, the app area only, the header last"     "$OUT/ldr_test_smk" "$OUT/smk_old.fwsc" "$v016" stock
+else
+    echo "SMK-37 Pro V016: skipped (SMK_STOCK_DIR not set)"
+fi
 
 if [ -f build/gen/felucca_tables.h ]; then
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/hostsim" tests/hostsim.c -lm
@@ -240,6 +285,12 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "persistence: deferred settings, retry and failed-save rollback" "$OUT/persistence_test"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/bank_test" tests/bank_test.c -lm
     run "pattern bank (Skiff): patterns kept exactly, torn saves, fallback, wear, the sequence wrap" "$OUT/bank_test"
+    $CC -w -DBOARD_SMK37=1 -Ifirmware/hal -Ibuild/gen -Ifirmware/src -o "$OUT/bank_test_smk" tests/bank_test.c -lm
+    run "pattern bank on the SMK-37 Pro layout (USRFLASH 0xD6000..)" "$OUT/bank_test_smk"
+    $CC -w -DBOARD_SMK37=1 -Ifirmware/hal -Ibuild/gen -Ifirmware/src -o "$OUT/persistence_test_smk"         tests/persistence_test.c -lm
+    run "persistence on the SMK-37 Pro layout (the store from 0x9D000, its owner tag at boot)" "$OUT/persistence_test_smk"
+    $CC -O1 -w -DBOARD_SMK37=1 -Ifirmware/hal -Ibuild/gen -Ifirmware/src -o "$OUT/smk_ui_test" tests/smk_ui_test.c -lm
+    run "SMK-37 Pro controls (SMK37_UX.md): pads, colours, faders, entries, outer keys, KEY VELOCITY, wheels, SHIFT, MASTER, TRS clock" "$OUT/smk_ui_test"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/backup_test" tests/backup_test.c -lm
     run "full backup: CRC before writes, stale runtime, USB reset / timeout, malformed objects, older projects" "$OUT/backup_test"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/editor_test" tests/editor_test.c -lm
@@ -328,6 +379,8 @@ EOF
         $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/slice_test" tests/slice_test.c -lm
         run "SLICE: tables, onsets, reverse, keys, modes, MAN slices and their store, demos" "$OUT/slice_test" \
             build/slice_demo/loop build/slice_demo
+        $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/smpmix_test" tests/smpmix_test.c -lm
+        run "(#21) a user slot's sounds: LEVEL, REV, DLY, their store with the slot, old slots as uploaded" "$OUT/smpmix_test"
     else
         echo "== SLICE: build/ was made with FELUCCA_SLICE=0 (no BREAK); run ./build.sh without it first"
         fail=1
@@ -374,6 +427,7 @@ run "regression: target cost of the render loops (pi32v2 disassembly)" python3 t
     build/felucca.dis tests/target_budget.txt
 
 run "installer CLI (fm1_install.py) against a simulated FM-1" python3 tests/install_test.py
+run "(#21) sample upload CLI: mix (a sound's LEVEL REV DLY) against a fake device" python3 tests/sample_upload_test.py
 
 if command -v node >/dev/null 2>&1; then
     run "web pages: editor protocol + samples, package builder, update protocol" node web/test_web.mjs

@@ -55,7 +55,11 @@ static const char *const N_IBITS[] = {"1", "2", "3", "4", "5", "6", "7", "8", "9
                                       "16", 0};
 static const char *const N_IRATE[] = {"689", "919", "1.1k", "1.4k", "1.8k", "2.2k", "2.8k", "3.7k", "4.4k", "5.5k",
                                       "7.4k", "8.8k", "11k", "15k", "22k", "44k", 0};
+#if BOARD_SMK37
+static const char *const N_CLOCK[] = {"INT", "USB"};   /* (SMK-37: no TRS MIDI IN; a saved TRS loads clamped, as USB) */
+#else
 static const char *const N_CLOCK[] = {"INT", "USB", "TRS"};
+#endif
 static const char *const N_MIDI_INPUT[] = {"USB", "TRS"};
 static const char *const N_ROUTE[] = {"CH1-" TRK_STR(NTRK), "SEL"};   /* MIDI IN (seq.c): 1..NTRK -> parts, the rest
                                                                          * ignored / all -> selected */
@@ -259,6 +263,10 @@ static const param_desc_t *param_desc_of(uint32_t e, uint32_t id)
  * stands for */
 static int32_t enum_orig(const param_desc_t *d, int32_t v)
 {
+#if BOARD_SMK37 && FELUCCA_SLICE
+    if (d->names == N_SLC_SRC && (v == 2 || v == 3))  /* (SMK-37: USR2, USR3 have no flash; the knob steps over them) */
+        return 1;
+#endif
     if (d->names == N_DRUM_KIT)
         return v >= 0 && v < DK_COUNT ? (int32_t)DK_PLAYS[v] : v;
     return d->names == SMP_ALL_NAMES && v >= 0 && v < SMP_NSETS ? SMP_SET_ORIG[v] : v;
@@ -461,7 +469,8 @@ enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_
        GR_ARP2,                    /* (Skiff U5, V1) the pages' own graphs, the scope's before (ui_pgraph.c); ARP 2: ARP's */
        GR_FMOP, GR_FMALL,          /* (FM6 LAB) EDIT > OPERATOR and ALL OPS: FM6's patch, two sheets (ui_fm6.c) */
        GR_DRIVE,                   /* (Skiff phase 9) FX > DRIVE: the TYPE's transfer at the drive (ui_pgraph.c) */
-       GR_INS };                   /* (Skiff 1.3) FX > INSERT: its TYPE's transfer or sweep (ui_pgraph.c graph_insert) */
+       GR_INS,                     /* (Skiff 1.3) FX > INSERT: its TYPE's transfer or sweep (ui_pgraph.c graph_insert) */
+       GR_SMIX };                  /* (Skiff, #21) EDIT > SAMPLES: a user sample's LEVEL, REVERB, DELAY (ui.c smx_zone) */
 
 typedef struct {
     const char *title;
@@ -499,6 +508,9 @@ static const page_t PAGES[] = {
     {"SOUND", FAM_EDIT, SC_TRACK, GR_DXSND, {0xFF, 0xFF, 0xFF, 0xFF}},     /* (Skiff phase 7, 8) DRUM-X only: a sound of the
                                                                          * project's kit on one sheet (ui_dx.c) */
     {"SLICES", FAM_EDIT, SC_TRACK, GR_SLICES, {0xFF, 0xFF, 0xFF, 0xFF}},   /* SLICE only: the slices by hand (ui_slice.c) */
+    {"SAMPLES", FAM_EDIT, SC_GLOBAL, GR_SMIX, {0xFF, 0xFF, 0xFF, 0xFF}},   /* (#21) SAMPLE on a USR set only: KNOB 1 the
+                                                                         * sample, 2..4 its LEVEL REVERB DELAY (page_desc;
+                                                                         * SC_GLOBAL: no lock, no automation) */
     {"OP1 ENV", FAM_EDIT, SC_TRACK, GR_ADSR, {P_FM1_ATK, P_FM1_DEC, P_FM1_SUS, P_FM1_REL}},
     {"OP2 ENV", FAM_EDIT, SC_TRACK, GR_ADSR, {P_FM2_ATK, P_FM2_DEC, P_FM2_SUS, P_FM2_REL}},
     {"OP3 ENV", FAM_EDIT, SC_TRACK, GR_ADSR, {P_FM3_ATK, P_FM3_DEC, P_FM3_SUS, P_FM3_REL}},
@@ -530,12 +542,23 @@ static const page_t PAGES[] = {
 #define NPAGES (sizeof(PAGES) / sizeof(PAGES[0]))
 static uint8_t mod_ui_slot;      /* the MOD page: the matrix slot (0..3) KNOB 2..4 edit */
 static uint32_t page_lane(void);   /* (Skiff U3, R6) EDIT > LANES: the lane KNOB 1 picked (ui.c: ui.lane) */
+static uint32_t smx_zone(uint32_t *k);   /* (#21) EDIT > SAMPLES: the sample (ui.c) */
+static int16_t smx_sel __attribute__((section(".pool")));   /* (#21) .. KNOB 1's: its number, 1..16 */
 
 static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **valp)
 {
     uint32_t id = pg->graph != GR_LANES ? pg->id[slot] : slot == 1u ? P_LN0 + page_lane() :   /* (LANES: its LEVEL, */
                   slot == 2u ? P_LTUNE0 + page_lane() : slot == 3u ? P_LDECAY0 + page_lane() : 0xFFu;   /* (phase 9)
                                                        * TUNE, DECAY) */
+    if (pg->graph == GR_SMIX) {                       /* (#21) SAMPLES: KNOB 1 the sample, 2..4 its LEVEL, REVERB, DELAY */
+        static const param_desc_t SMX_D[4] = {PD("SAMPLE", F_INT, 1, 16, 1), PD("LEVEL", F_PCT, 0, 127, 127),
+                                              PD("REVERB", F_PCT, 0, 127, 0), PD("DELAY", F_PCT, 0, 127, 0)};
+        uint32_t k, z = smx_zone(&k);
+        *valp = z == 0xFFu ? 0 : slot ? &usr_mix[k][slot - 1u][z] : &smx_sel;
+        smx_save = 7u;                                /* (kept once the page is left: slice_store.c, a slot only when it
+                                                       * changed) */
+        return *valp ? &SMX_D[slot] : 0;
+    }
     if (id == 0xFFu) {
         *valp = 0;
         return 0;

@@ -362,6 +362,7 @@ typedef struct { uint8_t slot, repeat; } chain_row_t;
 #define NPAT 64u
 #define NENT 16u
 #define PAT_NONE 0xFFu                 /* no pattern (an entry stores id + 1, 0 = empty: ui.c lists) */
+#define PAT_REST (NPAT + 1u)           /* (#28) what an entry stores for a REST (no pattern: ent_pat says PAT_NONE) */
 #define PROJ_SCENES 82u                /* the 16 scenes as bank.c keeps them: 3 bytes each, then a used mask, then
                                         * (Skiff phase 6) 2 bytes each for T5 and T6 */
 typedef struct {

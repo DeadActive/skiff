@@ -36,7 +36,22 @@ static const uint16_t SCALE_MASK[] = {
 static uint32_t kb_prev;
 static volatile uint8_t kb_boot_hold;    /* #137: set from power-on to the end of the splash (main.c): the keys sound nothing,
                                           * and one held across its end stays silent until it is let go and pressed again */
-static uint8_t kb_note[27], kb_trk[27];  /* per key: the note it started and on which track */
+#if BOARD_SMK37
+/* (SMK-37 Pro, SMK37_UX.md outer keys A) 37 keys: the FM-1's 27 (F3..G5) as keys 0..26, the outer ten after them, C3..E3
+ * as 27..31 and G#5..C6 as 32..36 (kb_outer): kb_bed, the keybed's key; kb_semi, its offset from F3 (the low five below
+ * it: a negative one). Each key plays with its velocity through MENU > KEY VELOCITY (smk_input.h smk_vel); the FM-1's
+ * all at 100. KB_IN: the key the arp keeps (in_key); the outer ones none, they play as MIDI IN does */
+#define KB_N 37u
+static uint32_t kb_bed(uint32_t k) { return k < 27u ? k + SMK_KEY_F3 : k < 32u ? k - 27u : k; }
+static uint32_t kb_semi(uint32_t k) { return k < 27u ? k : k < 32u ? k - 32u : k - 5u; }
+#define KB_VEL(k) smk_vel(fm1_in.key_vel[kb_bed(k)])
+#define KB_IN(k) ((k) < 27u ? (k) + 1u : 0u)
+#else
+#define KB_N 27u
+#define KB_VEL(k) 100u
+#define KB_IN(k) ((k) + 1u)
+#endif
+static uint8_t kb_note[KB_N], kb_trk[KB_N];   /* per key: the note it started and on which track */
 static uint8_t in_key;                   /* the key (+ 1) whose notes go into input_on now (key_on), 0: none (MIDI IN) */
 /* (Skiff 1.3, from Felucca 1.5 #191) where each track's held[i] came from, so the arp maps it again as it plays
  * (arp_list: TRN, ROOT, SCALE, QNT as they are now). held_key: the key + 1 (bits 0..4) and the octave buttons then + 3
@@ -727,13 +742,13 @@ static void key_on(uint32_t k, track_t *t)
 {
     uint32_t n = chord_build(t, kb_note[k], kb_chord[k]), i, mc = trk_midi_ch(trk_index(t));
     kb_chn[k] = 0;
-    in_key = (uint8_t)(k + 1u);                     /* (the arp keeps the key: arp_add) */
+    in_key = (uint8_t)KB_IN(k);                     /* (the arp keeps the key: arp_add) */
     for (i = 0; i < n; i++) {
         uint32_t x = kb_chord[k][i];
         if (midi_local_held(t, x))
             continue;
-        input_on(t, x, 100);
-        midi_out_event(0x09u | (0x90u | mc) << 8 | x << 16 | 100u << 24);
+        input_on(t, x, KB_VEL(k));
+        midi_out_event(0x09u | (0x90u | mc) << 8 | x << 16 | KB_VEL(k) << 24);
     }
     in_key = 0;
     kb_chn[k] = (uint8_t)n;
@@ -772,10 +787,39 @@ static __attribute__((noinline)) void kb_lat(uint32_t k)
 }
 #endif
 
+#if BOARD_SMK37
+/* the ten outer keys (smk_input.h's queue, from the scan): notes on the selected track as the others play them; in a
+ * layer (its tiles are F3..G5's), NAME, the DRUM grid and under the splash nothing; SCREEN OFF's wake press silent */
+static void kb_outer(void)
+{
+    int32_t e;
+    while ((e = smk_extkey_take()) >= 0) {
+        uint32_t bed = (uint32_t)e >> 8, k = bed < 5u ? bed + 27u : bed;
+        if (k < 27u || k >= KB_N)
+            continue;
+        if (e & 0xFF) {
+            kb_trk[k] = song.sel;
+            kb_note[k] = KB_SILENT;
+            if (kb_boot_hold || kb_asleep || (fm1_in.buttons & kb_mask) || kb_lock || song.grid)
+                continue;
+            kb_note[k] = (uint8_t)kb_map(&trk[kb_trk[k]], kb_semi(k));
+            if (kb_note[k] != KB_SILENT)
+                key_on(k, &trk[kb_trk[k]]);
+        } else if (kb_note[k] != KB_SILENT) {
+            key_off(k, &trk[kb_trk[k] % NTRK]);
+            kb_note[k] = KB_SILENT;
+        }
+    }
+}
+#endif
+
 static void keyboard_block(void)
 {
     uint32_t cur = fm1_in.notes, ch, k;
     uint32_t lay, fx;
+#if BOARD_SMK37
+    kb_outer();
+#endif
     ch = cur ^ kb_prev;                           /* keys also sound while entering steps */
     if (!ch)
         return;
@@ -831,9 +875,34 @@ static void keyboard_block(void)
 }
 
 /* -------------------------------------------------------- sequencer --- */
+#if BOARD_SMK37
+/* (SMK-37 Pro, SMK37_UX.md question 12) MIDI clock out of the TRS jack, from the internal clock: Start at PLAY, then 24
+ * pulses a beat while playing (counted in samples, beat_samples: the song's tempo), Stop at STOP. With an external
+ * clock (MENU > CLOCK) none: the clock is someone else's */
+static uint32_t smk_clk_acc;
+static void smk_clk_block(uint32_t n)
+{
+    uint32_t b;
+    if (!song.playing || song.g[G_CLOCK])
+        return;
+    b = beat_samples();
+    smk_clk_acc += n * 24u;
+    while (b && smk_clk_acc >= b) {
+        smk_uart_tx_put(0xF8u);
+        smk_clk_acc -= b;
+    }
+}
+#endif
+
 static void seq_start(void)
 {
     uint32_t i;
+#if BOARD_SMK37
+    if (!song.g[G_CLOCK]) {                        /* (the TRS jack: Start, the first pulse with the first block) */
+        smk_uart_tx_put(0xFAu);
+        smk_clk_acc = beat_samples();
+    }
+#endif
     motion_begin();
     take_clear();                                  /* (Skiff) TAKES: a new log from PLAY */
     for (i = 0; i < NTRK; i++) {                   /* every track from its step 0, together */
@@ -870,6 +939,10 @@ static void seq_release(track_t *t)
 static void seq_stop(void)
 {
     uint32_t i;
+#if BOARD_SMK37
+    if (song.playing && !song.g[G_CLOCK])
+        smk_uart_tx_put(0xFCu);                    /* (the TRS jack: Stop) */
+#endif
     song.playing = 0;
     thr_out = 0;                                   /* (Skiff) the throws back at once (throw.c) */
     cin_left = 0;                                  /* (a count-in: cancelled, nothing recorded) */
@@ -1397,6 +1470,9 @@ static void events_block(uint32_t n)
         cin_record();
     if (song.playing)
         click_tick(seq_n);
+#if BOARD_SMK37
+    smk_clk_block(n);
+#endif
     for (i = 0; i < NPART; i++)
         arp_step(&trk[i], clock_mode ? seq_n : n, clock_mode && song.playing ? seq_n : n);
     beat_pos += clock_mode ? seq_n : n;               /* the beat the ARP LED flashes on (ui_leds) */

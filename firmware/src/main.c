@@ -22,6 +22,9 @@ void fm1_timer5_irq(void)
     fm1_timer5_ack();
     felucca_dbg.timer_irqs++;
     fm1_input_tick();
+#if BOARD_SMK37
+    smk_uart_tx_tick();                         /* (the TRS jack's MIDI OUT: a byte once the last has gone) */
+#endif
     {   /* milliseconds from the 24 MHz TIMER4 (robust to a late tick) */
         static uint32_t last, acc;
         acc += t0 - last;
@@ -190,8 +193,15 @@ static void fm1_main(void)
     }
     fm1_input_init();
     fm1_adc_init();
+#if BOARD_SMK37 && FELUCCA_FLASH
+    if (flash_ok)                                   /* the unit's key / pad velocity curves (USRTRIM, read only) */
+        smk_trim_load(fm1_xip_ptr(SMK_TRIM_FLASH));
+#endif
     panel_init();
     felucca_init();
+#if BOARD_SMK37
+    smk_ui_boot();                            /* (MASTER where it was left, KEY VELOCITY: smk_ui.c) */
+#endif
     master_boot();
     kb_boot_hold = 1;                         /* #137: no notes from the keys before the UI (seq.c keyboard_block) */
 #if FELUCCA_CPU2
@@ -210,12 +220,18 @@ static void fm1_main(void)
 #if FELUCCA_UART
     uart_midi_init();
 #endif
+#if BOARD_SMK37
+    smk_uart_tx_init();                       /* the TRS jack: MIDI OUT */
+#endif
     boot_leds();
     timer5_start();
     fm1_guard_lock_top();
     fm1_irq_enable_all();
     fm1_delay_ms(30);
-    if ((fm1_in.buttons & 3u) == 3u) {
+#ifndef FM1_OCT_BOTH
+#define FM1_OCT_BOTH 3u                       /* (host builds: the FM-1's OCT- and OCT+, ids 0 and 1) */
+#endif
+    if ((fm1_in.buttons & FM1_OCT_BOTH) == FM1_OCT_BOTH) {
         panel_setup();                        /* OCT- + OCT+ held at power-on */
         settings_save();
     }
@@ -328,10 +344,16 @@ static void fm1_main(void)
         felucca_dbg.home = ui.home;
         felucca_dbg.stage = 1;
         ui_input();
+#if BOARD_SMK37
+        smk_ui_frame();                               /* the SMK-37's own controls (smk_ui.c) */
+#endif
         settings_poll();                              /* queued settings save: only while stopped */
         autosave_poll();                              /* (1.2) the music, stopped and idle: project.c */
         felucca_dbg.stage = 2;
         ui_leds();
+#if BOARD_SMK37
+        padled_flush();                               /* the pads' colours, between LCD transfers (lcd.c) */
+#endif
         ui_draw();
         felucca_dbg.stage = 9;
         while (fm1_ms - m < 15u) {                               /* ~60 UI frames/s at most */

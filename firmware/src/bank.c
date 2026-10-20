@@ -69,7 +69,15 @@ _Static_assert(BK_POOL == NPAT, "the pool is the bank's records");
 static uint8_t bk_bufc;                            /* the chunk + 1 bk_buf holds whole (0: none, or changed; a backup's
                                                     * LIST reads a chunk in, its GETs read on: bank_chunk) */
 
+#if BOARD_SMK37
+/* (SMK-37 Pro) twenty sectors in a row in USRFLASH, after the user sample slot (fm1_flash_map.h FL_BANK); the first
+ * erase there releases the stock mapping's marker (storage.c st_stock_release) */
+_Static_assert(FL_BANK_HI - FL_BANK_LO == BK_NSECT * 0x1000u && FL_BANK_LO >= FL_SMP_LO && FL_BANK_HI <= FL_SMP_HI,
+               "SMK: the pattern pool's sectors");
+static uint32_t bk_sector(uint32_t i) { return FL_BANK_LO + i % BK_NSECT * 0x1000u; }
+#else
 static uint32_t bk_sector(uint32_t i) { return i < 2u ? 0xE7000u + i * 0x1000u : 0xEA000u + (i - 2u) * 0x1000u; }
+#endif
 static uint32_t bk_chunk(uint32_t id) { return id % BK_POOL / BK_PER; }
 
 #if FELUCCA_FLASH
@@ -82,7 +90,11 @@ static int bk_prog(uint32_t off, const void *s, uint32_t n) { return st_prog(off
 static uint8_t bk_ram[BK_NSECT][0x1000];
 static uint8_t *bk_at(uint32_t off)
 {
+#if BOARD_SMK37
+    uint32_t i = (off - FL_BANK_LO) >> 12;
+#else
     uint32_t i = off < 0xEA000u ? (off - 0xE7000u) >> 12 : ((off - 0xEA000u) >> 12) + 2u;
+#endif
     return &bk_ram[i % BK_NSECT][off & 0xFFFu];
 }
 static int bk_read(uint32_t off, void *d, uint32_t n) { memcpy(d, bk_at(off), n); return 0; }
@@ -437,6 +449,7 @@ static uint32_t pool_len(uint32_t id)               /* pattern id's LEN, 0 empty
     return (uint32_t)(len < 1 ? 1 : len > (int32_t)NSTEP ? (int32_t)NSTEP : len);
 }
 static int bank_used(uint32_t k, uint32_t e) { uint32_t id = ent_pat(k, e); return id != PAT_NONE && pool_used(id); }
+static int ent_on(uint32_t k, uint32_t e) { return bank_used(k, e) || ent_rest(k, e); }   /* (#28) a pattern or a REST */
 static void rec_motion_of(uint8_t *r, uint32_t id)  /* pattern id's stored automation into record r (motion_lost) */
 {
     if (!pat_read(id, bk_buf)) {
@@ -457,12 +470,12 @@ static int trk_rec(uint32_t k)
     return 1;
 }
 /* new pattern id (kept already) is track k's: named by the entry the track is on (that one naming another: the first
- * empty entry, the track on it; none: the pool keeps it, unnamed) */
+ * empty entry, the track on it; none: the pool keeps it, unnamed). (#28) A REST recorded into: as an empty entry */
 static void trk_name(uint32_t k, uint32_t id)
 {
     uint32_t e = lists.cur[k] % NENT;
     trk_pid[k] = (uint8_t)(id + 1u);
-    if (lists.ent[k][e][0])
+    if (lists.ent[k][e][0] && !ent_rest(k, e))
         for (e = 0; e < NENT && lists.ent[k][e][0]; e++)
             ;
     if (e < NENT) {
@@ -548,17 +561,24 @@ static int pat_load(track_t *t, uint32_t id)
     bk.gen++;
     return full ? 2 : 0;
 }
-/* track k on its entry e now (stopped): what the track had kept, then the entry's pattern. 0, 1 an empty entry, 2
- * without its automation, 4 PATTERNS FULL (nowhere to keep what the track had) */
+/* track k on its entry e now (stopped): what the track had kept, then the entry's pattern ((#28) a REST: no steps, no
+ * automation, on no pattern, its LEN DIV as they were: a song's rest, stage_entry). 0, 1 an empty entry, 2 without
+ * its automation, 4 PATTERNS FULL (nowhere to keep what the track had) */
 static int ent_go(uint32_t k, uint32_t e)
 {
     uint32_t id = ent_pat(k, e);
-    if (id == PAT_NONE || !pool_used(id))
+    k %= NTRK;
+    if (!ent_on(k, e))
         return 1;
     if (trk_keep(k))
         return 4;
-    lists.cur[k % NTRK] = (uint8_t)(e % NENT);
-    return pat_load(&trk[k % NTRK], id);
+    lists.cur[k] = (uint8_t)(e % NENT);
+    if (id != PAT_NONE)
+        return pat_load(&trk[k], id);
+    track_defaults_steps(&trk[k]);                 /* (its automation too, motion_lost with it: motion_clear) */
+    trk_pid[k] = 0;
+    bk.gen++;
+    return 0;
 }
 
 /* the page's mark: the entry track k is on, its pattern the track's (BK_NONE: none) */
@@ -637,13 +657,6 @@ static uint32_t launch_at(uint32_t m)
 {
     return m == LAUNCH_BAR ? (launch_steps / 16u + 1u) * 16u : (launch_steps / 4u + 1u) * 4u;
 }
-static uint32_t staged_n(void)                      /* the tracks with a pattern staged */
-{
-    uint32_t k, n = 0;
-    for (k = 0; k < NTRK; k++)
-        n += launch_q[k].armed != 0u;
-    return n;
-}
 static int q_empty(const launch_t *q)               /* the pattern in q: no step sounds, no automation */
 {
     uint32_t i;
@@ -655,12 +668,15 @@ static int q_empty(const launch_t *q)               /* the pattern in q: no step
 /* each frame (ui_input): a swap the ISR made (done): what played (now in launch_q) is kept as the pattern it was (a new
  * one: a new id, named by the entry it was on), and the track is on the entry that came in; a pattern or a mute still
  * staged when the transport stopped comes in now, as while stopped (a song's next not: PLAY stages it again; a
- * project load drops them: launch.c launch_drop) */
+ * project load drops them: launch.c launch_drop). (#29) What went out changed and no waiting slot free (playing: they
+ * are written stopped): it waits in q (done 2: nothing staged for the track meanwhile, stage_entry), the track counted
+ * on the entry it left, until stopped (a chunk written then to make room) */
 static void bank_poll_trk(uint32_t k)
 {
     launch_t *q = &launch_q[k];
     track_t *t = &trk[k];
     uint32_t id;
+    int rc = 0;
     if (mute_arm[k] && !song.playing) {
         t->p[P_MUTE] = (int16_t)(mute_arm[k] - 1u);
         mute_arm[k] = 0;
@@ -672,21 +688,27 @@ static void bank_poll_trk(uint32_t k)
         q->adv = 0;
         return;
     }
-    if (!q->done)
+    if (!q->done || (q->done == 2u && transport_busy()))
         return;
-    q->done = 0;
-    q->adv = 0;
     if ((trk_pid[k] || !q_empty(q)) && bk_pack_raw(bk_rec, k, q->step, q->time, &q->motion, (q->motion.on >> k) & 1u)) {
         id = trk_pid[k] ? trk_pid[k] - 1u : pool_alloc();   /* (a new pattern went out: the first free id) */
         if (trk_pid[k] && ((motion_lost >> k) & 1u))
             rec_motion_of(bk_rec, id);
         if (trk_pid[k] && proj_hash(bk_rec, BK_REC) == trk_sig[k])
             ;                                      /* (unchanged since it came in) */
-        else if (id == NPAT || pat_keep_rec(id, bk_rec))
-            ui_way("PATTERNS FULL", WAY_PATTERNS);           /* (bank_switch stages only with room: never) */
-        else if (!trk_pid[k])
+        else if (id == NPAT || (rc = pat_keep_now(id, bk_rec)) != 0) {
+            if (rc && transport_busy()) {
+                if (q->done == 1u)
+                    ui_way("PATTERNS FULL", "STOP TO SAVE");
+                q->done = 2;
+                return;
+            }
+            ui_way("PATTERNS FULL", WAY_PATTERNS);   /* (no id for it; stopped, a flash error) */
+        } else if (!trk_pid[k])
             trk_name(k, id);
     }
+    q->done = 0;
+    q->adv = 0;
     trk_pid[k] = (uint8_t)(q->id == PAT_NONE ? 0u : q->id + 1u);   /* ((1.2.1, #12) a rest: on no pattern) */
     trk_sig[k] = q_sig[k];
     lists.cur[k] = (uint8_t)(q->slot % NENT);
@@ -701,18 +723,21 @@ static void bank_poll(void)
         bank_poll_trk(k);
 }
 /* playing, nothing staged for track k (q not armed): entry e staged, launch mode m; a song's (adv) after reps passes of
- * the one playing. 0 staged, 1 an empty entry, 2 .. without its automation (AUTOMATION FULL), 4 PATTERNS FULL (nowhere
- * to keep what the track has: each swap may need a waiting slot, a new pattern an id). (1.2.1, #12) The song's on an
- * empty entry (song_poll: a rest): silence, no automation, the track's own LEN DIV SWING GATE DIR, so the rest's REPS
- * count passes of the length the track has; on no pattern (trk_pid 0), so nothing is kept unless it was recorded into */
+ * the one playing. 0 staged, 1 an empty entry, 2 .. without its automation (AUTOMATION FULL), 4 PATTERNS FULL (new
+ * steps there and no id for them; what went out at its last swap still waiting in q, bank_poll_trk). (#29) No waiting
+ * slot is held for the swap: one a track was, and the song stages its tracks T1 first, so a pattern waiting to be
+ * written kept the last track on its entry for good. (1.2.1, #12) The song's on an
+ * empty entry (song_poll: a rest), (#28) any on a REST: silence, no automation, the track's own LEN DIV SWING GATE DIR,
+ * so the rest's REPS count passes of the length the track has; on no pattern (trk_pid 0), so nothing is kept unless it
+ * was recorded into */
 static int stage_entry(uint32_t k, uint32_t e, uint32_t m, uint32_t adv, uint32_t reps)
 {
     track_t *t = &trk[k];
     launch_t *q = &launch_q[k];
     uint32_t id = ent_pat(k, e), full = 0, i;
-    if (pend_free() <= staged_n() || (!trk_pid[k] && !seq_is_empty(t) && pool_alloc() == NPAT))
+    if (q->done || (!trk_pid[k] && !seq_is_empty(t) && pool_alloc() == NPAT))
         return 4;
-    if (adv && !bank_used(k, e)) {
+    if (!bank_used(k, e) && (adv || ent_rest(k, e))) {
         for (i = 0; i < NSTEP; i++)
             step_clear(&q->step[i]);
         for (i = 0; i < 5u; i++)
@@ -744,18 +769,16 @@ static int stage_entry(uint32_t k, uint32_t e, uint32_t m, uint32_t adv, uint32_
     bk.gen++;
     return full ? 2 : 0;
 }
-/* entry e of track k: stopped (a count-in too), at once (ent_go); playing, staged for its launch point (ui.c
- * launch_mode), one staged before replaced (an empty entry leaves it staged). 0 done or staged, 1 an empty entry,
- * 2 .. without its automation (AUTOMATION FULL), 4 PATTERNS FULL (stage_entry) */
+/* entry e of track k ((#28) a REST too): stopped (a count-in too), at once (ent_go); playing, staged for its launch
+ * point (ui.c launch_mode), one staged before replaced (an empty entry leaves it staged). 0 done or staged, 1 an empty
+ * entry, 2 .. without its automation (AUTOMATION FULL), 4 PATTERNS FULL (stage_entry) */
 static int bank_switch(uint32_t k, uint32_t e)
 {
     launch_t *q;
-    uint32_t id;
     k %= NTRK;
     e %= NENT;
     q = &launch_q[k];
-    id = ent_pat(k, e);
-    if (id == PAT_NONE || !pool_used(id))
+    if (!ent_on(k, e))
         return 1;
     q->armed = 0;                                  /* (from here the ISR leaves it alone) */
     RING_PUBLISH();
@@ -767,7 +790,8 @@ static int bank_switch(uint32_t k, uint32_t e)
 /* ---- (phase 5) the song (SONG on: lists.song): each track plays its list in turn, after the last the first; an entry's
  * repeats its passes (launch.c launch_due). (1.2.1, #12) An empty entry between a track's first and last pattern is a
  * rest (silence for its REPS passes of the track's LEN); the empty ones after its last end the list (were: every empty
- * entry passed over). Each track on its own: its next comes in at
+ * entry passed over). (#28) A REST (SONG's PATTERN knob) is such a rest wherever it is: the list runs from its first
+ * pattern or REST to its last, so a track can start later or end sooner. Each track on its own: its next comes in at
  * its own pass end. PLAY goes on from the entry each track is on; GLO + PLAY from the first ones (song_top); a launch
  * (PERFORM, a scene) moves a track's place in it ---- */
 /* each frame (ui_input, after bank_poll): SONG on and playing, each track's next entry staged for its pass end (one
@@ -788,11 +812,11 @@ static void song_poll(void)
         if (!song.playing || q->armed || q->done)
             continue;
         cur = lists.cur[k] % NENT;
-        for (first = 0; first < NENT && !bank_used(k, first); first++)
+        for (first = 0; first < NENT && !ent_on(k, first); first++)
             ;
         if (first == NENT)
             continue;
-        for (last = NENT - 1u; !bank_used(k, last); last--)
+        for (last = NENT - 1u; !ent_on(k, last); last--)
             ;
         e = cur >= first && cur < last ? cur + 1u : first;   /* (the entries between: a pattern or a rest) */
         if (e != cur)
@@ -809,7 +833,7 @@ static void song_top(void)
         launch_q[k].armed = 0;
     bank_poll();                                   /* (a swap made: kept first; a mute staged: now) */
     for (k = 0; k < NTRK; k++) {
-        for (e = 0; e < NENT && (ent_pat(k, e) == PAT_NONE || !pool_used(ent_pat(k, e))); e++)
+        for (e = 0; e < NENT && !ent_on(k, e); e++)
             ;
         if (e < NENT)
             (void)ent_go(k, e);
@@ -1105,14 +1129,14 @@ static int song_put(uint32_t k, uint32_t e, uint32_t p)
     uint32_t id = ent_pat(k, e), n;
     char b[24], c[4];
     if (p != SPICK_COPY) {
-        lists.ent[k][e][0] = (uint8_t)p;           /* (p: the id + 1, as the entry keeps it) */
+        lists.ent[k][e][0] = (uint8_t)p;           /* (p: the id + 1, as the entry keeps it; (#28) PAT_REST) */
         bk.gen++;
         if (lists.cur[k] == e)
             return entry_go(k, e);
         song_tag(b, k, e);
         pat_num(c, p - 1u);
         str_cpy(b + 4, " SET ", sizeof b - 4u);
-        str_cpy(b + 9, c, sizeof b - 9u);
+        str_cpy(b + 9, p == PAT_REST ? "REST" : c, sizeof b - 9u);
         ui_message(b);
         return 0;
     }
@@ -1204,11 +1228,16 @@ static uint32_t song_clear_text(uint32_t e, char l[3][32], int *gone)
     }
     return n;
 }
-/* the dialog's OCT+: the entry cleared (bank_put); said. (Skiff W3) track k's (the editor's LIST CLEAR): bank_put's rc */
+/* the dialog's OCT+: the entry cleared (bank_put); said. (Skiff W3) track k's (the editor's LIST CLEAR): bank_put's rc.
+ * (#28) A REST (no dialog: nothing goes with it): at once, playing too */
 static int song_clear_at(uint32_t k, uint32_t e)
 {
     char b[8];
-    int rc = bank_put(k, e, 1);
+    int rc = 0;
+    if (ent_rest(k, e))
+        lists.ent[k][e][0] = 0;
+    else
+        rc = bank_put(k, e, 1);
     song_tag(b, k, e);
     if (rc == 0)
         ui_say(b, " CLEARED");

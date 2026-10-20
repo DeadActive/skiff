@@ -22,8 +22,11 @@
  *      and flash: 4K boundary - 256 between 0x93000 and 0xFC000, outside
  *      Felucca's store, where only user data lives) so the SPL boots the new
  *      app, and resets.
- * Power loss during 3: the record is still there, the SPL runs the loader
- * again on the next power-on and the host can resume.
+ * Power loss during 3: the record is still there, and a cut leaves no app to
+ * start: 3 erases the app's first sector before any other write and writes it
+ * last (the SMK-37 Pro's boot stage was seen to start a valid app over a
+ * pending record). The SPL then runs the loader again on the next power-on and
+ * the host can resume.
  *
  * Hooks from the platform (loader.c, ldr_test.c):
  *   ldr_fread(off, p, n)  ldr_erase(off)  ldr_prog(off, p, n)   flash, 0 = ok
@@ -31,12 +34,30 @@
  *   ldr_progress(done, total)
  * plus the ota.c hooks (frames, time, idle). */
 #define LDR_APP_LO 0x4000u
+#if BOARD_SMK37
+/* SMK-37 Pro: app area up to the stock PRCT end; records only in the VM, so ldr_records_drop can never
+ * erase BTIF / USRTRIM (0xC0000..0xC1FFF, the key calibration) or anything above */
+#define LDR_APP_HI 0x9D000u
+#define LDR_REC_LO 0x9D000u
+#define LDR_REC_HI 0xC0000u
+/* records are dropped in the whole VM, where the stock app may have staged its own (its staging address is only
+ * known at run time): the store there holds only Skiff's objects (commit records at +0; the samples and the pattern pool are in
+ * USRFLASH 0xC2000.., outside this window), so no skipped range */
+#define LDR_DATA_LO 0u
+#define LDR_DATA_HI 0u
+_Static_assert(LDR_APP_HI <= LDR_REC_LO && LDR_REC_HI <= 0xC0000u && LDR_APP_LO >= 0x4000u,
+               "SMK loader windows must stay below BTIF / USRTRIM and above the head");
+#else
 #define LDR_APP_HI 0x93000u
 #define LDR_REC_LO 0x93000u                     /* update records live above the app ... */
 #define LDR_REC_HI 0xFC000u                     /* ... and below Felucca's globals (Felucca's records: 0xE4F00, */
 #define LDR_DATA_LO 0x97000u                    /* the stock firmware's: 0xE8F00), never in Felucca's store, whose */
 #define LDR_DATA_HI 0xE0000u                    /* bytes (user samples) the host writes */
+#endif
 #define LDR_NSEC ((LDR_APP_HI - LDR_APP_LO) >> 12)
+#ifndef LDR_STAGE
+#define LDR_STAGE(stage, sector) ((void)0)       /* (the SMK loader: its start record, loader.c ldr_crumb.h) */
+#endif
 
 static int ldr_fread(uint32_t off, void *p, uint32_t n);
 static int ldr_erase(uint32_t off);
@@ -112,6 +133,7 @@ static int ldr_session(void)
     static uint16_t sc[LDR_NSEC];
     uint32_t i, k, fl_off, fl_size, ota_off, ota_len, key, s, want = ~0u, done = 0;   /* (no CRC16: no flash.bin entry) */
     int rc;
+    uint32_t n, head_gone = 0;                           /* (step 3: the app's header erased) */
     /* 1. UFW header + entry list (ota.c; it leaves the entries decoded in hdr) */
     if ((rc = ota_ufw(hdr, &fl_off, &fl_size, &ota_off, &ota_len)) != 0)
         return rc;
@@ -131,11 +153,17 @@ static int ldr_session(void)
     if (ota_crc16(sec + 2, 30, 0) != ota_rd16(sec))
         return -6;                                       /* package for another chip key */
     /* 2b. the whole package first: nothing is erased for a damaged one */
+    LDR_STAGE(2, 0);
     if ((rc = ldr_check(fl_off, fl_size, want, sc, sec)) != 0)
         return rc;
-    /* 3. app area, sector by sector */
-    for (s = LDR_APP_LO; s < LDR_APP_HI; s += 0x1000u) {
+    /* 3. app area, sector by sector. The SMK-37 Pro's boot stage starts a valid app over a pending update record (seen
+     * on the unit, stock V016 and Skiff alike), so a write cut short must leave no valid app: the app's first sector
+     * (its header, the one the chip-key check decrypts) is erased before any other sector is written, and written
+     * last; the FM-1 the same. 0x5000 up, then 0x4000 */
+    for (n = 1; n <= LDR_NSEC; n++) {
         uint32_t again;
+        s = LDR_APP_LO + (n % LDR_NSEC) * 0x1000u;
+        LDR_STAGE(3, s);
         for (again = 0;; again++) {                      /* as checked in 2b, else read it again */
             for (k = 0; k < 0x1000u; k += 512u)
                 if (ota_read(fl_off + s + k, sec + k, 512))
@@ -149,6 +177,11 @@ static int ldr_session(void)
             return -8;
         if (!ota_memeq(sec, cur, 0x1000u)) {
             uint32_t tries;
+            if (!head_gone && s != LDR_APP_LO) {         /* (the first sector that changes: the header goes first) */
+                if (ldr_erase(LDR_APP_LO))
+                    return -9;
+                head_gone = 1;
+            }
             for (tries = 0; tries < 2u; tries++) {
                 if (ldr_erase(s))
                     return -9;
@@ -167,6 +200,7 @@ static int ldr_session(void)
         ldr_progress(done, LDR_APP_HI - LDR_APP_LO);
     }
     /* 4. finish: the host confirms, the record goes, the SPL boots the app */
+    LDR_STAGE(4, 0);
     for (i = 0; i < 4u; i++)
         if (!ota_read(0xF0000000u, sec, 8))
             break;
@@ -180,5 +214,6 @@ static int ldr_session(void)
         if (ota_rd16(r + 6) == 0x5441u && ota_rd16(r) && ota_rd16(r) == ota_crc16(r + 2, 78, 0))
             ldr_erase(s - 0x1000u);
     }
+    LDR_STAGE(5, 0);
     return 0;
 }

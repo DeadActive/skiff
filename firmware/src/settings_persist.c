@@ -48,6 +48,10 @@ static int settings_import(persist_t *p, int n)
         p->favorites.factory[15][27] = 0;
     if (p->favorites.factory[15][21] >= 8u)        /* (Skiff phase 9) PRESETS' LIST type (ui.c ui_ptag, below PT_N) */
         p->favorites.factory[15][21] = 0;
+#if BOARD_SMK37
+    if (p->favorites.factory[15][12] >= SMK_KV_N)  /* (SMK-37) KEY VELOCITY (ui.c SMK_KV_BYTE): unknown = DYNAMIC */
+        p->favorites.factory[15][12] = 0;
+#endif
     p->magic = PERSIST_MAGIC;
     p->palette = palette_to_stored(palette_from_stored(p->palette));
     settings.magic = SETTINGS_MAGIC;
