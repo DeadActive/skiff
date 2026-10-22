@@ -23,7 +23,23 @@ typedef struct {
 typedef struct { const char *name; uint16_t bg, surf, text, theme, accent; } ui_pal_t;
 typedef struct { uint16_t off; uint8_t w; const char *label; } kc_t;
 #include "ui_fonts.h"                   /* AF_S 12 px / 400, AF_M 15 px / 500, AF_L 28 px / 600 */
+#if FELUCCA_BLE                         /* the Bluetooth build (BLE MIDI: 2026 DEADACTIVE): no pixel faces (its flash
+                                         * room): CRYPT and NEON draw with the regular ones */
+#define AF_S_PX AF_S
+#define AF_M_PX AF_M
+#define AF_L_PX AF_L
+#define AF_V_PX AF_V
+#define AF_S_PX_CAP_Y AF_S_CAP_Y
+#define AF_S_PX_CAP_H AF_S_CAP_H
+#define AF_M_PX_CAP_Y AF_M_CAP_Y
+#define AF_M_PX_CAP_H AF_M_CAP_H
+#define AF_L_PX_CAP_Y AF_L_CAP_Y
+#define AF_L_PX_CAP_H AF_L_CAP_H
+#define AF_V_PX_CAP_Y AF_V_CAP_Y
+#define AF_V_PX_CAP_H AF_V_CAP_H
+#else
 #include "ui_pixfont.h"                 /* (Skiff) THEME CRYPT's pixel faces AF_S_PX .. (tools/gen_pixel_font.py) */
+#endif
 #include "ui_palettes.h"
 #include "ui_keycaps.h"                 /* KC_*: the keycaps / badges (tools/gen_aa_keycaps.py), KNOB_* arcs */
 #define ELLIPSIS '\x85'                 /* the ellipsis glyph of AF_S and AF_M */

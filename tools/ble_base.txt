@@ -1,0 +1,6 @@
+# The Bluetooth build's base (FELUCCA_BLE=1, tools/build.py; BLE MIDI: 2026 DEADACTIVE).
+# UPSTREAM: the Skiff release whose update path this tree carries unchanged (gate 2a, tools/check_update_path.py).
+# LOADER_SHA256: that release's update loader, build/loader/ota.bin of the FM-1 build (gate 1): a Bluetooth build
+# stops on any other. After merging a later Skiff release: name its tag and its loader's hash here.
+UPSTREAM v1.4
+LOADER_SHA256 85d5a75e6282fce9e936c2556574363e37151ec2abf21db12e81a4f470da1a48

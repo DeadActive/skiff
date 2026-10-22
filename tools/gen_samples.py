@@ -33,6 +33,12 @@ SLICE's SRC PIANO (added in 1.0.4 after BREAK and USR1-3) is the PIANO set's mid
 no data of its own, only its slice table (one AUTO slice, the note's attack): SLC_PIANO_INIT.
 Without the CC0 library (no PIANO set) it has no material (SLICE plays a sine there).
 
+FELUCCA_SMP_DROP=PIANO,FLUTE,SAX,BREAK (the Bluetooth build, tools/build.py: its flash room; BLE MIDI: 2026
+DEADACTIVE) leaves those sets' samples out: each keeps its index, name and presets and has one zone of length 0, as
+every set has without the CC0 library (eng_sample.c smp_set_missing: a sine, NO SAMPLE). BREAK leaves SLICE's BREAK
+out ({0}: no material, as without the SLICE engine: a sine, NO SAMPLE); FUNK and the user slots stay. PIANO left out
+takes SLICE's PIANO with it (no material). Unset: no change.
+
 The header is cached (build/gen_samples.cache) under a hash of every
 input file, this script, sampleio.py and the Python version, so unchanged
 inputs skip the slow pitch detection.
@@ -242,7 +248,7 @@ class Builder:
         """SLICE's PIANO: the PIANO set's SLC_PIANO_NOTE zone (its data, no copy); its slice table: decoder states
         at k * len / SLC_GRID, one AUTO slice at 0 (a single note has one attack)"""
         z = next((z for name, z0, nz in self.sets if name == "PIANO"
-                  for z in self.zones[z0:z0 + nz] if z["root16"] == SLC_PIANO_NOTE * 16), None)
+                  for z in self.zones[z0:z0 + nz] if z["root16"] == SLC_PIANO_NOTE * 16 and z["n"]), None)
         if not z:
             return
         off, n = z["off"], z["n"]
@@ -272,6 +278,14 @@ class Builder:
                 e["lo"], e["hi"] = lo, hi
         self.sets.append((name, len(self.zones), len(entries)))
         self.zones += entries
+        self.kinds[name] = kind
+
+    def empty_set(self, name, kind):
+        """a set left out of this build (FELUCCA_SMP_DROP): its index, name and presets stay; one zone of length 0
+        over every key, the header's placeholder zone (eng_sample.c smp_set_missing)"""
+        self.sets.append((name, len(self.zones), 1))
+        self.zones.append(dict(off=0, n=0, ls=0, le=0, looped=False, sr=44100, root16=960, pred=0, idx=0, lo=0,
+                               hi=127))
         self.kinds[name] = kind
 
     def alias_set(self, name):
@@ -388,7 +402,8 @@ class Builder:
                 f"#define SLC_PIANO_NOTE {SLC_PIANO_NOTE}"] + self.slc_init("SLC_PIANO_INIT", b)
 
     def summary(self):
-        brk = f", SLICE BREAK {self.brk['n']} + FUNK {self.fnk['n']} samples" if self.brk else ""
+        brk = f", SLICE BREAK {self.brk['n']} + FUNK {self.fnk['n']} samples" if self.brk else \
+            f", SLICE FUNK {self.fnk['n']} samples" if self.fnk else ""
         brk += f", SLICE PIANO (shared) {self.pno['n']} samples" if self.pno else ""
         return f"samples: {len(self.sets)} sets, {len(self.zones)} zones, {len(self.blob)} B ADPCM{brk}"
 
@@ -398,13 +413,24 @@ def slice_on():
     return os.environ.get("FELUCCA_SLICE", "1") != "0"
 
 
-def input_key(have_cc0):
+def drop_sets():
+    """FELUCCA_SMP_DROP: the built-in sets (and SLICE's BREAK) this build leaves out, in CC0_SETS' order then BREAK
+    (an unknown name stops)"""
+    names = [n.strip().upper() for n in os.environ.get("FELUCCA_SMP_DROP", "").split(",") if n.strip()]
+    known = [n for n, kind in CC0_SETS if kind != "alias"] + ["BREAK"]
+    bad = [n for n in names if n not in known]
+    if bad:
+        sys.exit(f"gen_samples: FELUCCA_SMP_DROP names no built-in set: {', '.join(bad)} (sets: {', '.join(known)})")
+    return [n for n in known if n in names]
+
+
+def input_key(have_cc0, drop=()):
     """hash of everything the header depends on"""
     h = hashlib.sha256()
     here = Path(__file__).resolve().parent
     for p in (here / "gen_samples.py", here / "sampleio.py"):
         h.update(p.read_bytes())
-    h.update(repr((sys.version_info[:2], have_cc0, slice_on())).encode())   # sum() differs across versions
+    h.update(repr((sys.version_info[:2], have_cc0, slice_on(), *drop)).encode())   # sum() differs across versions
     files = sorted(BREAKS.glob("*.wav"))
     if have_cc0:
         files += sorted(CC0.glob("*/*.wav"))
@@ -418,9 +444,11 @@ def main(out):
     have_cc0 = CC0.exists() and any(CC0.glob("*/*.wav"))
     if not have_cc0:
         print("samples: CC0 library not fetched (tools/fetch_cc0.py) - no SAMPLE sets")
-    key = input_key(have_cc0)
+    drop = drop_sets()
+    key = input_key(have_cc0, drop)
+    cache = CACHE.with_name(f"gen_samples-{'-'.join(drop)}.cache") if drop else CACHE   # (the plain build's stays)
     try:
-        ck, summary, text = CACHE.read_text().split("\n", 2)
+        ck, summary, text = cache.read_text().split("\n", 2)
         if ck == key:
             Path(out).write_text(text)
             print(summary + " (cached)")
@@ -432,17 +460,20 @@ def main(out):
         for name, kind in CC0_SETS:
             if kind == "alias":
                 b.alias_set(name)
+            elif name in drop:
+                b.empty_set(name, kind)
             else:
                 b.cc0_set(name, kind)
     if slice_on():                                  # SLICE's loops: only when that engine is built
-        b.brk = b.slice_loop("break")               # last: the sets' offsets stay as they were
+        b.brk = None if "BREAK" in drop else b.slice_loop("break")   # last: the sets' offsets stay as they were
         b.fnk = b.slice_loop("funk")
         b.slice_piano()                             # (no data of its own: the PIANO set's)
     text = b.header()
     Path(out).write_text(text)
-    CACHE.parent.mkdir(parents=True, exist_ok=True)
-    CACHE.write_text(f"{key}\n{b.summary()}\n{text}")
-    print(b.summary())
+    summary = b.summary() + (f", left out: {' '.join(drop)}" if drop else "")
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(f"{key}\n{summary}\n{text}")
+    print(summary)
 
 
 if __name__ == "__main__":
