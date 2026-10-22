@@ -64,6 +64,13 @@ static volatile uint8_t kb_asleep;       /* MENU > SCREEN OFF (ui.c): the screen
                                           * wakes it (silent, no layer, its release nothing) */
 static uint8_t last_note = 60;
 static volatile uint8_t transport_req;   /* 1 start, 2 stop, 3 restart (from the UI) */
+#if FELUCCA_BLE
+static void bt_midi_out_isr(uint32_t pkt); /* bt_midi.c: what goes to USB MIDI out, to the BLE device too */
+static void bt_clock_block(uint32_t n, int restart);   /* bt_midi.c: MIDI clock out, the FM-1 on CLOCK INT */
+#define CLK_BLE 3u                        /* G_CLOCK BLE: the Bluetooth MIDI device's clock (source 3, bt_midi.c) */
+#define CLK_LINK 4u                       /* G_CLOCK LINK: FM-Link's follower (bt_fml.c) */
+static void bt_fml_block(uint32_t n, uint32_t *seq_n);   /* bt_fml.c: FM-Link, CLOCK INT (leads) / LINK (follows) */
+#endif
 static volatile uint8_t panic_req;       /* bit per track: release every sounding note (preset / engine change) */
 static volatile uint8_t midi_hint;       /* MIDI IN played track n - 1, which is not the selected one (the UI says so) */
 
@@ -749,6 +756,9 @@ static void key_on(uint32_t k, track_t *t)
             continue;
         input_on(t, x, KB_VEL(k));
         midi_out_event(0x09u | (0x90u | mc) << 8 | x << 16 | KB_VEL(k) << 24);
+#if FELUCCA_BLE
+        bt_midi_out_isr(0x09u | (0x90u | mc) << 8 | x << 16 | KB_VEL(k) << 24);   /* (bt_midi.c: the BLE device, MIDI mode) */
+#endif
     }
     in_key = 0;
     kb_chn[k] = (uint8_t)n;
@@ -766,6 +776,9 @@ static void key_off(uint32_t k, track_t *t)
             continue;
         input_off(t, x);
         midi_out_event(0x08u | (0x80u | mc) << 8 | x << 16);
+#if FELUCCA_BLE
+        bt_midi_out_isr(0x08u | (0x80u | mc) << 8 | x << 16);
+#endif
     }
 }
 
@@ -1366,8 +1379,16 @@ static void events_block(uint32_t n)
         midi_clock.mode = (uint8_t)clock_mode;
         midi_beat_samples = 0;
     }
+#if FELUCCA_BLE
+    if (clock_mode == CLK_LINK)
+        clock_mode = 0;                               /* FM-Link's follower: its own clock, held on the leader's */
+    bt_fml_block(n, &seq_n);                          /* (bt_fml.c: PLAY / STOP as the link wants, the advance) */
+#endif
     if (cin_left && !clock_mode)
         cin_block(n);
+#if FELUCCA_BLE
+    const int bt_restart = transport_req == 3u && !clock_mode;   /* (GLO + PLAY: Start again for the BLE clock out) */
+#endif
     if (transport_req == 1u) {
         if (clock_mode)
             midi_clock_transport(0xFAu, fm1_ms);
@@ -1388,6 +1409,9 @@ static void events_block(uint32_t n)
         }
         transport_req = 0;
     }
+#if FELUCCA_BLE
+    bt_clock_block(n, bt_restart);                    /* (bt_midi.c: the BLE device follows the FM-1's tempo) */
+#endif
     if (midi_route != midi_route_key()) {              /* MIDI IN or a track's channel changed: CH1-6 lets go of the
                                                          * channels no track is set to */
         midi_route = midi_route_key();

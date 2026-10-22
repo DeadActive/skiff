@@ -44,6 +44,24 @@ static int head_mark(char *b)
     }
     return 1;
 }
+#if FELUCCA_BLE
+/* (the Bluetooth build; BLE MIDI: 2026 DEADACTIVE) the Bluetooth icon left of the battery, as the battery's colours:
+ * lit (THEME) with a link up, struck through (MID) on but nothing linked, none off (bt_page.c bt_head_icon) */
+static uint32_t bt_head_icon(void);                    /* bt_page.c: 0 none, 1 struck (on, nothing linked), 2 lit */
+#define HB_BT_X 199                                    /* its cell (11 px), 4 px before the battery's */
+static void draw_bt_icon(int32_t x, uint32_t k)        /* the rune in lines in the cell at x; struck: a diagonal */
+{
+    const int32_t cx = x + 5, t = 5, b = H_HEAD - 6;
+    uint16_t c = k > 1u ? T_THEME : T_MID;
+    cv_line(cx, t, cx, b, c);                          /* the spine, the two arrows on its right */
+    cv_line(cx, t, cx + 4, t + 4, c);
+    cv_line(cx + 4, t + 4, cx - 4, b - 4, c);
+    cv_line(cx, b, cx + 4, b - 4, c);
+    cv_line(cx + 4, b - 4, cx - 4, t + 4, c);
+    if (k == 1u)
+        cv_line(cx - 5, b + 1, cx + 5, t - 1, c);
+}
+#endif
 static void draw_head_blocks(void)
 {
     const track_t *t = TSEL;
@@ -72,6 +90,9 @@ static void draw_head_blocks(void)
           (uint32_t)batt_shown() * 7777u + 0xB10C5u +
           str_hash(9u + (uint32_t)ui.home, ui.shift ? "SHIFT" : ui.home ? pn : page_head()) +   /* (the title) */
           (mark ? str_hash(3u + song.sel, mk) : 0u) + project_mark() * 104729u;
+#if FELUCCA_BLE
+    sig += bt_head_icon() * 2654435761u;               /* (the Bluetooth icon: none, struck, lit) */
+#endif
     ui.roll_bpm = song.g[G_BPM];                      /* (no rolling digits: none left to finish in another style) */
     ui.roll[ROLL_BPM].from[0] = 0;
     if (!ui.force && sig == ui.head_sig)
@@ -129,6 +150,12 @@ static void draw_head_blocks(void)
         int32_t r = HEAD_BAT_X - 4;                     /* project's name); the battery after it, at every level (#5), */
         char h[16];                                     /* the octave or the song row before it while they matter */
         draw_battery(HEAD_BAT_X);
+#if FELUCCA_BLE
+        if (bt_head_icon()) {                          /* (not under a message or a layer's label) */
+            draw_bt_icon(HB_BT_X, bt_head_icon());
+            r = HB_BT_X - 4;
+        }
+#endif
         str_cpy(h, ui.shift ? "SHIFT" : ui.home ? pn : page_head(), sizeof h);   /* ((U5) SHIFT's map) */
         x = r;
         if (h[0]) {

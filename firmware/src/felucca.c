@@ -48,6 +48,13 @@
 #ifndef FELUCCA_VERSION
 #define FELUCCA_VERSION "v1.4"     /* Skiff's; shown in the menu, the console and the editor; build.py --release X.Y */
 #endif
+#ifndef FELUCCA_BLE
+#define FELUCCA_BLE 0            /* the Bluetooth build (tools/build.py FELUCCA_BLE=1; BLE MIDI: 2026 DEADACTIVE): BLE-MIDI
+                                  * host and device, FM-Link, firmware/src/ble/ (the FM-1 only) */
+#endif
+#if FELUCCA_BLE && BOARD_SMK37
+#error "FELUCCA_BLE is the FM-1's (the SMK-37's radio, flash and RAM are not its)"
+#endif
 #if FELUCCA_OTA && !FELUCCA_FLASH
 #error "FELUCCA_OTA needs FELUCCA_FLASH"
 #endif
@@ -132,6 +139,19 @@ static inline __attribute__((always_inline)) void *audio_far(void *p) { void *vo
 #include "ui_menu.c"
 #include "ui_input.c"
 #include "ui_layer.c"              /* the quick layers (FX GLO SCL EDIT REC held; SEQ TOOLS: ui_tools.c) */
+#if FELUCCA_BLE
+#if !FELUCCA_OTA
+#error "FELUCCA_BLE needs FELUCCA_OTA (ed_service, the main loop's hook)"
+#endif
+#include "ble/ble_core.h"        /* the BLE unit's entry points (ble/ble.c, its own object) */
+static void bt_service(void);    /* core_ble_api.c: the BT stack's slice and the core's Bluetooth work (ed_service) */
+#include "bt_set.c"              /* MODE, AUTOSTART, ROLE, RECONNECT, in the settings */
+#include "smc.c"                 /* the SMC-Mixer DAW layout: decode, actions, LEDs, fader pickup */
+#include "bt_midi.c"             /* MIDI mode: in (the input ring, source 3) and out; SMC DAW mode: to smc.c */
+#include "bt_fml.c"              /* FM-Link: two FM-1s in time (fmlink.c), CLK INT leads, CLK LINK follows */
+#include "bt_devs.c"             /* the saved devices, this FM-1's address, the radio calibration's copy */
+#include "bt_page.c"             /* the Bluetooth page (MENU > SYSTEM > BLUETOOTH, ui_menu.c BT_MENU) */
+#endif
 
 /* --------------------------------------------- storage, update, editor --- */
 #if FELUCCA_FLASH
@@ -149,6 +169,9 @@ static inline __attribute__((always_inline)) void *audio_far(void *p) { void *vo
 #endif
 #if FELUCCA_CDC
 #include "console.c"
+#endif
+#if FELUCCA_BLE
+#include "core_ble_api.c"        /* the core functions the BLE unit calls (ble/ble_core.h) */
 #endif
 #if BOARD_SMK37
 #include "smk_ui.c"              /* the SMK-37's own controls: pads, faders, wheels, pedal, < >, KEY VELOCITY */

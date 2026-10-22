@@ -130,7 +130,11 @@ static uint32_t oct_leds(void)
     if (layer_set_open())                               /* a SET layer: OCT- puts back (UNDO), OCT+ nothing */
         return 1u;
     if (ui.menu && !ui.confirm)
-        return ui.menu >= 2u ? 1u :                    /* (ABOUT: OCT- back, lit) */
+        return
+#if FELUCCA_BLE
+               ui.menu == BT_MENU ? 1u | OCT_BREATH :  /* (the Bluetooth page: OCT- back, OCT+ acts on the row) */
+#endif
+               ui.menu >= 2u ? 1u :                    /* (ABOUT: OCT- back, lit) */
                menu_act(ui.menu_sel) ? (ui.menu_sel != MI_LCLEAR || ml_count() ? OCT_BREATH : 0u) :   /* CALIBRATION /
                                                         * ABOUT: OCT+ opens ((1.3) LEARN CLEAR: while CCs are learned) */
                (menu_step(ui.menu_sel, -1) != menu_get(ui.menu_sel) ? OCT_BREATH_DN : 0u) |   /* a value: each */

@@ -603,10 +603,20 @@ static void ui_way(const char *s, const char *way);
 static void clock_wait_poll(void)
 {
     static uint8_t said;
-    if (!song.playing || !song.g[G_CLOCK] || midi_clock.have_pulse)
+    if (!song.playing || !song.g[G_CLOCK] || midi_clock.have_pulse
+#if FELUCCA_BLE
+        || song.g[G_CLOCK] == CLK_LINK                 /* (FM-Link's follower: its own clock, bt_fml.c) */
+#endif
+        )
         said = 0;
     else if (!said && fm1_ms - midi_clock.start_ms >= 1000u) {
         said = 1;
+#if FELUCCA_BLE
+        if (song.g[G_CLOCK] == CLK_BLE) {
+            ui_way("WAITING FOR BLE CLOCK", "MENU > MIDI > CLOCK");
+            return;
+        }
+#endif
         ui_way(song.g[G_CLOCK] == 1 ? "WAITING FOR USB CLOCK" : "WAITING FOR TRS CLOCK", "MENU > MIDI > CLOCK");
     }
 }

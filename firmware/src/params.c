@@ -57,6 +57,10 @@ static const char *const N_IRATE[] = {"689", "919", "1.1k", "1.4k", "1.8k", "2.2
                                       "7.4k", "8.8k", "11k", "15k", "22k", "44k", 0};
 #if BOARD_SMK37
 static const char *const N_CLOCK[] = {"INT", "USB"};   /* (SMK-37: no TRS MIDI IN; a saved TRS loads clamped, as USB) */
+#elif FELUCCA_BLE
+static const char *const N_CLOCK[] = {"INT", "USB", "TRS", "BLE", "LINK"};   /* (BLE MIDI: 2026 DEADACTIVE; 3: the
+                                                                              * Bluetooth MIDI device, bt_midi.c; 4:
+                                                                              * FM-Link's follower, bt_fml.c) */
 #else
 static const char *const N_CLOCK[] = {"INT", "USB", "TRS"};
 #endif

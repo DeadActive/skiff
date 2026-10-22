@@ -18,6 +18,9 @@ static const char *const KVEL_N[SMK_KV_N] = {"DYNAMIC", "SOFT", "HARD", "FIXED 6
 enum { MI_COLOR, MI_PHEAD, MI_LARGE, MI_ANIM, MI_LEDS, MI_SCROFF, MI_HINTS, MI_HOLD, MI_ACCEL, MI_BPMLOCK, MI_SCLLED,
        MI_PREVIEW, MI_LOWCUT, MI_USB, MI_CLICK, MI_CLKLVL, MI_COUNTIN, MI_TUNE, MI_CLOCK, MI_ROUTE,
        MI_LEARN, MI_LCLEAR, MI_TCH1, MI_TCH2, MI_TCH3, MI_TCH4, MI_TCH5, MI_TCH6, MI_SERIAL, MI_RESTORE, MI_CPU, MI_CLK, MI_PANEL,
+#if FELUCCA_BLE
+       MI_BT,                    /* BLUETOOTH (the Bluetooth build: bt_page.c; BLE MIDI: 2026 DEADACTIVE), an action row */
+#endif
        MI_RESET, MI_ABOUT, MI_COUNT };
 #endif   /* ((Skiff U4, A3) HINTS; RESET SETTINGS, a row with no value: its dialog) */   /* ((Skiff U3, R8, R2) CLOCK, MIDI IN, TUNE: the unit's, GLOBAL's and SYSTEM's before; CPU: read) */   /* (1.1: the metronome's rows in
                                                                                              * AUDIO; 1.2: RESTORE LAST in SYSTEM, SCALE LEDS
@@ -35,8 +38,11 @@ static const char *const MI_NAME[MI_COUNT] = {"THEME", "PLAYHEAD", "LARGE", "ANI
                                               "SPEAKER EQ", "USB LEVEL", "CLICK", "CLICK LEVEL", "COUNT-IN", "TUNE",
                                               "CLOCK", "MIDI IN", "MIDI LEARN", "LEARN CLEAR",
                                               "T1 CHANNEL", "T2 CHANNEL", "T3 CHANNEL", "T4 CHANNEL", "T5 CHANNEL", "T6 CHANNEL",
-                                              "USB SERIAL", "RESTORE LAST", "CPU", "CPU CLOCK", "CALIBRATION", "RESET SETTINGS",
-                                              "ABOUT"};
+                                              "USB SERIAL", "RESTORE LAST", "CPU", "CPU CLOCK", "CALIBRATION",
+#if FELUCCA_BLE
+                                              "BLUETOOTH",
+#endif
+                                              "RESET SETTINGS", "ABOUT"};
 /* 1.0.5: the MENU's tabs (ui_menu.c: ALGORITHM steps between them, PRESETS among one tab's rows; the editor gets a
  * row's tab after its MENU_DESC reply). A tab's rows follow each other in MI order (tests/ui_test.c checks it); the
  * page shows MTAB_ROWS of them (ui_menu.c fits them; (1.3) MIDI's ten scroll, the cursor's row the last shown). A new
@@ -69,7 +75,11 @@ static const uint8_t MI_TAB[MI_COUNT] = {
     MTAB_MIDI, MTAB_MIDI, MTAB_MIDI, MTAB_MIDI, MTAB_MIDI, MTAB_MIDI,       /* (1.3) T1..T6 CHANNEL */
     MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM,                     /* USB SERIAL, RESTORE LAST, (Skiff U3) CPU,
                                                                              * (Skiff) CPU CLOCK (SYSTEM's seven scroll) */
-    MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM,                                  /* CALIBRATION, (U4) RESET SETTINGS, ABOUT */
+    MTAB_SYSTEM,                                                            /* CALIBRATION */
+#if FELUCCA_BLE
+    MTAB_SYSTEM,                                                            /* BLUETOOTH (the Bluetooth build) */
+#endif
+    MTAB_SYSTEM, MTAB_SYSTEM,                                               /* (U4) RESET SETTINGS, ABOUT */
 };
 typedef char mtab_fits_ui[sizeof ui.menu_row >= MTAB_COUNT ? 1 : -1];   /* (ui.c: the row last picked per tab) */
 static uint32_t mtab_first(uint32_t t)                 /* a tab's first row */
