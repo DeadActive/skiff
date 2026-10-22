@@ -1955,6 +1955,7 @@ static void al_table(void)
             al_count, al_nst, al_fail, al_lost);
 }
 
+#ifndef UI_RENDER_NO_MAIN                        /* (tests/bt_page_render.c: its own screens through the same lint) */
 int main(int argc, char **argv)
 {
     const char *out = argc > 1 ? argv[1] : "build/ui_new";
@@ -2228,3 +2229,4 @@ int main(int argc, char **argv)
            al_fail ? " (see align.txt)" : "");
     return nfind || nink || al_fail ? 1 : 0;
 }
+#endif

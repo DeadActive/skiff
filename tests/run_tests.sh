@@ -124,6 +124,12 @@ CC="${CC:-cc} -O1 -Wall -Wno-unused-function"
 fail=0
 run() { echo "== $1"; shift; "$@" || fail=1; }
 
+if grep -q "^ble_service:" build/felucca.dis 2>/dev/null; then    # (BLE MIDI: 2026 DEADACTIVE)
+    echo "build/ holds a Bluetooth build (FELUCCA_BLE=1): the budgets and the package tests are for the plain build."
+    echo "Run ./build.sh first."
+    exit 1
+fi
+
 $CC -o "$OUT/storage_test" tests/storage_test.c
 run "flash storage (A/B, torn writes)" "$OUT/storage_test"
 
@@ -429,6 +435,41 @@ run "regression: target cost of the render loops (pi32v2 disassembly)" python3 t
 run "installer CLI (fm1_install.py) against a simulated FM-1" python3 tests/install_test.py
 run "(#21) sample upload CLI: mix (a sound's LEVEL REV DLY) against a fake device" python3 tests/sample_upload_test.py
 
+# the Bluetooth build (FELUCCA_BLE=1, BLE MIDI: 2026 DEADACTIVE)
+run "SAMPLE sets and SLICE's BREAK left out of a build (gen_samples.py FELUCCA_SMP_DROP)" python3 tests/smp_drop_test.py "$OUT/smp_drop"
+for t in ble_midi ble_scan ble_central ble_vm ble_gatt; do $CC -o "$OUT/${t}_test" "tests/ble/${t}_test.c"; done
+$CC -Wno-deprecated-declarations -Ifirmware/src/ble -o "$OUT/ble_os_test" tests/ble/ble_os_test.c
+run "BLE-MIDI parser and packer" "$OUT/ble_midi_test"
+run "BLE scan table" "$OUT/ble_scan_test"
+run "BLE central state machine, reconnecting, UUID match, monitor text" "$OUT/ble_central_test"
+run "BLE stored RF calibration (config store)" "$OUT/ble_vm_test"
+run "BLE device role: the GATT table (BLE-MIDI service, characteristic, CCCD), advertising data, scan response" "$OUT/ble_gatt_test"
+$CC -o "$OUT/fmlink_test" tests/fmlink_test.c
+run "FM-Link: two FM-1s over a simulated Bluetooth link (bursts, delays, loss, crystals apart): start, 3 min, BPM, join, STOP" "$OUT/fmlink_test"
+run "BLE OS layer (host back end)" "$OUT/ble_os_test"
+run "BLE fault path: records and reboots, never waits on interrupts" python3 tests/ble/check_ble_fatal.py
+run "gate 2 tool self-test (update path: machine code, sources)" python3 tools/check_update_path.py --selftest
+run "gate 2a: the update path's sources = the base release's (tools/ble_base.txt)" python3 tools/check_update_path.py --sources
+run "gate 3 tool self-test (BT start-up reachable at boot)" python3 tools/check_ble_boot.py --selftest
+# the core's side, built as the Bluetooth build is (FELUCCA_BLE=1) on the UI harness, the BLE unit's entry points stubs
+if [ -f build/gen/ui_fonts.h ]; then
+    $CC -w -DFELUCCA_BLE=1 -DBT_TEST_PAGE=1 -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/bt_midi_test" tests/bt_midi_test.c -lm
+    run "Bluetooth MIDI: the settings bytes, MIDI mode in (source 3) and out, CLOCK BLE, the release on a lost link" "$OUT/bt_midi_test"
+    $CC -w -DFELUCCA_BLE=1 -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/bt_page_test" tests/bt_page_test.c -lm
+    run "Bluetooth page: the row in MENU > SYSTEM, the cursor, ON / OFF, MODE, the saved devices, ADD, a pick, the state line" "$OUT/bt_page_test"
+    $CC -w -DFELUCCA_BLE=1 -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/smc_test" tests/smc_test.c -lm
+    run "SMC-Mixer DAW layout (six strips): faders with pickup, knobs, MUTE SOLO REC SELECT, the transport, the LEDs, the mixer gone" "$OUT/smc_test"
+    $CC -w -DFELUCCA_BLE=1 -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/bt_devs_test" tests/bt_devs_test.c -lm
+    run "saved Bluetooth devices: the favourites' spare bytes (every engine's presets, Skiff's own uses), pick order, the 30 s grace, the RF copy" "$OUT/bt_devs_test"
+    $CC -w -DFELUCCA_BLE=1 -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/bt_fml_test" tests/bt_fml_test.c -lm
+    run "FM-Link's glue through the sequencer: CLOCK INT leads, LINK follows; PLAY, STOP, BPM, its own PLAY held, no link" "$OUT/bt_fml_test"
+    $CC -w -DFELUCCA_BLE=1 -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/bt_page_render" tests/bt_page_render.c -lm
+    run "Bluetooth page: every state in every THEME through the layout lint; the top bar's icon" "$OUT/bt_page_render" build/ui_bt
+    if python3 -c "import PIL" 2>/dev/null; then python3 tests/ui_render.py build/ui_bt >/dev/null; fi
+    $CC -w -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/clk_ble_plain_test" tests/clk_ble_plain_test.c -lm
+    run "the plain build after CLOCK BLE or LINK (the unit's setting, a project): as TRS, the unit's kept" "$OUT/clk_ble_plain_test"
+fi
+
 if command -v node >/dev/null 2>&1; then
     run "web pages: editor protocol + samples, package builder, update protocol" node web/test_web.mjs
     run "web backup: capture, validation before writes, restore order" node web/test_backup.mjs
@@ -454,4 +495,8 @@ else
         node web/emu/emu_test.mjs build/emu/felucca.wasm "$OUT/emu_native.f32"
 fi
 
+# last: it rebuilds build/ twice (the plain build, the same bytes when it passes). GATE5=1 sh tests/run_tests.sh
+if [ "${GATE5:-0}" = 1 ]; then
+    run "gate 5: the plain build byte-identical without the Bluetooth files" sh tools/check_default_build.sh
+fi
 [ $fail -eq 0 ] && echo "ALL HOST TESTS PASSED" || { echo "HOST TESTS FAILED"; exit 1; }
