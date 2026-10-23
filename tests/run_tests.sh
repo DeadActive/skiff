@@ -436,7 +436,7 @@ run "installer CLI (fm1_install.py) against a simulated FM-1" python3 tests/inst
 run "(#21) sample upload CLI: mix (a sound's LEVEL REV DLY) against a fake device" python3 tests/sample_upload_test.py
 
 # the Bluetooth build (FELUCCA_BLE=1, BLE MIDI: 2026 DEADACTIVE)
-run "SAMPLE sets and SLICE's BREAK left out of a build (gen_samples.py FELUCCA_SMP_DROP)" python3 tests/smp_drop_test.py "$OUT/smp_drop"
+run "SAMPLE sets and SLICE's BREAK and FUNK left out of a build (gen_samples.py FELUCCA_SMP_DROP)" python3 tests/smp_drop_test.py "$OUT/smp_drop"
 for t in ble_midi ble_scan ble_central ble_vm ble_gatt; do $CC -o "$OUT/${t}_test" "tests/ble/${t}_test.c"; done
 $CC -Wno-deprecated-declarations -Ifirmware/src/ble -o "$OUT/ble_os_test" tests/ble/ble_os_test.c
 run "BLE-MIDI parser and packer" "$OUT/ble_midi_test"
@@ -466,6 +466,8 @@ if [ -f build/gen/ui_fonts.h ]; then
     $CC -w -DFELUCCA_BLE=1 -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/bt_page_render" tests/bt_page_render.c -lm
     run "Bluetooth page: every state in every THEME through the layout lint; the top bar's icon" "$OUT/bt_page_render" build/ui_bt
     if python3 -c "import PIL" 2>/dev/null; then python3 tests/ui_render.py build/ui_bt >/dev/null; fi
+    $CC -w -DFELUCCA_BLE=1 -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/ble_fit_test" tests/ble_fit_test.c -lm
+    run "the Bluetooth build's room: the 1.11 s delay line (every TIME and BPM inside it, the wrap), no default sound on FUNK or BREAK" "$OUT/ble_fit_test"
     $CC -w -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/clk_ble_plain_test" tests/clk_ble_plain_test.c -lm
     run "the plain build after CLOCK BLE or LINK (the unit's setting, a project): as TRS, the unit's kept" "$OUT/clk_ble_plain_test"
 fi

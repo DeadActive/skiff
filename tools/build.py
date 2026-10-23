@@ -23,8 +23,9 @@ macOS (or with JIELI_DOCKER=1) each tool runs in a linux/amd64 container.
 FELUCCA_BLE=1 (BLE MIDI: 2026 DEADACTIVE, from Felucca's Bluetooth build, DeadActive/Felucca ble-kit): the Bluetooth
 build, for the FM-1 only (BOARD=smk37 refuses it). firmware/src/ble/ (its own unit) and the JieLi BT libraries
 (tools/ble_libs.py, AC79_BT_SDK) are linked in through LTO with firmware/app_ble.ld; for the flash room it leaves out
-the built-in PIANO, FLUTE and SAX sets and SLICE's BREAK (BLE_SMP_DROP) and the pixel faces of CRYPT and NEON
-(gfx.c), and it is built with one core (FELUCCA_CPU2=0); the build stops on any of its gates (the loader pin, the
+the built-in PIANO, FLUTE and SAX sets and SLICE's BREAK and FUNK (BLE_SMP_DROP), the pixel faces of CRYPT and NEON
+(gfx.c) and USB audio's 48 kHz (FELUCCA_UAC_48K=0), its delay line is 1.11 s (fx.c), and it is built with one core
+(FELUCCA_CPU2=0); the build stops on any of its gates (the loader pin, the
 update path, no BT at boot, RAM code: docs/ble/). The package is felucca-ble.fwsc. BLE_MEASURE=1: the regions widened
 so an image that does not fit can be measured; never packaged. Unset: the build is as before.
 """
@@ -59,8 +60,11 @@ LOADER_NAME = b"usb_hid_ota.bin"    # the file name the SPL looks for
 LDR_MAX = 0xBEF00 - 0xBD000
 DOCKER_IMAGE = os.environ.get("JIELI_DOCKER_IMAGE", "debian:bookworm-slim")
 SDK_MOUNT = None                    # Bluetooth builds: the JieLi BT SDK (tools/ble_libs.py), mounted read-only at /sdk
-BLE_SMP_DROP = "PIANO,FLUTE,SAX,BREAK"   # Bluetooth builds: the built-in SAMPLE sets and SLICE's BREAK left out for
-                                    # the flash room (tools/gen_samples.py FELUCCA_SMP_DROP; docs/ble/FIT.md)
+BLE_SMP_DROP = "PIANO,FLUTE,SAX,BREAK,FUNK"   # Bluetooth builds: the built-in SAMPLE sets and SLICE's BREAK and FUNK
+                                    # left out for the flash room (tools/gen_samples.py FELUCCA_SMP_DROP; docs/ble/FIT.md)
+BLE_POOL_FLOOR = 8192               # Bluetooth builds: the pool spare kept. The user (2026-10-23) allowed less, as SLOOP's,
+                                    # down to what the build keeps; with the delay line at 1.11 s it keeps 11,424 B, so the
+                                    # plain build's 8 KiB holds (docs/ble/FIT.md); RAM keeps its 4 KiB
 CFLAGS = ["-Os", "-ffunction-sections", "-fno-builtin", "-Wall", "-Wno-unused-function"]
 LINE = re.compile(r"^\s*([0-9a-f]+):\s+((?:[0-9a-f]{2} )+)\s*\t(.*)$")
 
@@ -540,8 +544,8 @@ def check(img, syms, dis, rt, ble=False, measure=False, script=None):
                  f"{ram_len}; pool {pool} B of {pool_len}; RAM code + .ramx {rtx} B of {rt_len}")
     if ram_len - bss < 4096:                      # keep >= 4 KiB of .bss spare (state the audio side touches)
         soft.append(f"RAM headroom {ram_len - bss} B < 4096 B")
-    if pool_len - pool < 8192:                    # keep >= 8 KiB of the pool spare
-        soft.append(f"pool headroom {pool_len - pool} B < 8192 B")
+    if pool_len - pool < BLE_POOL_FLOOR:          # keep the Bluetooth build's pool floor spare
+        soft.append(f"pool headroom {pool_len - pool} B < {BLE_POOL_FLOOR} B (BLE_POOL_FLOOR)")
     if rtx > rt_len:
         soft.append(f"RAM code + .ramx {rtx} B over RAMTEXT's {rt_len} B")
     return errors, notes
@@ -639,6 +643,8 @@ def main():
         # an opt-in beta, 1 CORE by default; the plain build keeps it
         os.environ.setdefault("FELUCCA_CPU2", "0")
         CPU2 = os.environ["FELUCCA_CPU2"] != "0"
+        os.environ.setdefault("FELUCCA_UAC_48K", "0")   # USB audio at 44.1 kHz only: its 48 kHz resampler (8 KB) for the
+                                                        # flash room (the user, 2026-10-23; docs/ble/FIT.md)
     fm1pkg_make.SDK = a.sdk
     for rel, sha in SDK_SHA256.items():          # fail early without the SDK
         if hashlib.sha256(fm1pkg_make.sdk_file(rel)).hexdigest() != sha:

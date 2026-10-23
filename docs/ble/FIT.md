@@ -32,7 +32,30 @@ The RAM code: the radio calibration's 4 KB of RAM code do not fit beside Skiff's
 0x01C00000..0x01C06000, so `app_ble.ld` lets RAMTEXT run on to 0x01C07F00 (the rest of the RAM-run debug area;
 crt0.S's STATUS words at 0x01C07F20 stay out of it).
 
-## It does not fit: open
+## What it costs on Skiff
+
+About **148 KB of flash** (the stack, the core's side, the device role, the page), **14.2 KB of `.data + .bss`** and
+**31 KB of pool** (the BT heap 23,552 B and the four task slots 7,440 B). The estimates from Felucca (141 KB, 23.7 KB of
+pool) predate the larger heap and Skiff's page.
+
+## The build (the user's decisions, 2026-10-23)
+
+Besides the cuts above, the Bluetooth build leaves out SLICE's FUNK (as BREAK: no material, a sine and NO SAMPLE for a
+sound that picks it; no sound the FM-1 starts with uses it, tests/ble_fit_test.c) and USB audio's 48 kHz
+(`FELUCCA_UAC_48K=0`: 44.1 kHz only), and its delay line is 49,152 samples, 1.11 s (`fx.c` `DLY_LEN`, 1.49 s in the
+plain build; every TIME clamps inside it, tests/ble_fit_test.c). The pool floor is `BLE_POOL_FLOOR` in `build.py`:
+the user allowed a smaller one (as SLOOP's), but the build keeps more than the plain build's 8 KB, so it stays 8,192.
+The SMC-Mixer on six strips (1..6 the tracks, faders 7 and 8 nothing): approved.
+
+| | image B (slot free) | `.data + .bss` B (of 98,304) | pool B (of 356,352) | RAM code + `.ramx` B |
+| --- | ---: | ---: | ---: | ---: |
+| **the Bluetooth build** | **578,164 (3,400)** | **93,808 (4,496 spare)** | **344,928 (11,424 spare)** | 27,936 of 32,512 |
+
+Every gate passes (1, 2a-2c, 3, the RAM code's reach, the registers). Before these decisions it was 23,120 B over the
+slot and 29,536 B short of pool (below).
+
+## Before the decisions
+
 
 - **Flash: 23,120 B over the slot**, with no margin. What is left to take, each the user's call: SLICE's FUNK
   (~16.6 KB with its slice table), USB audio's 48 kHz (`FELUCCA_UAC_48K=0`, its resampler's table 7.7 KB plus code),

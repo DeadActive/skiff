@@ -35,8 +35,8 @@ Without the CC0 library (no PIANO set) it has no material (SLICE plays a sine th
 
 FELUCCA_SMP_DROP=PIANO,FLUTE,SAX,BREAK (the Bluetooth build, tools/build.py: its flash room; BLE MIDI: 2026
 DEADACTIVE) leaves those sets' samples out: each keeps its index, name and presets and has one zone of length 0, as
-every set has without the CC0 library (eng_sample.c smp_set_missing: a sine, NO SAMPLE). BREAK leaves SLICE's BREAK
-out ({0}: no material, as without the SLICE engine: a sine, NO SAMPLE); FUNK and the user slots stay. PIANO left out
+every set has without the CC0 library (eng_sample.c smp_set_missing: a sine, NO SAMPLE). BREAK and FUNK leave SLICE's
+built-in loops out ({0}: no material, as without the SLICE engine: a sine, NO SAMPLE); the user slots stay. PIANO left out
 takes SLICE's PIANO with it (no material). Unset: no change.
 
 The header is cached (build/gen_samples.cache) under a hash of every
@@ -402,7 +402,8 @@ class Builder:
                 f"#define SLC_PIANO_NOTE {SLC_PIANO_NOTE}"] + self.slc_init("SLC_PIANO_INIT", b)
 
     def summary(self):
-        brk = f", SLICE BREAK {self.brk['n']} + FUNK {self.fnk['n']} samples" if self.brk else \
+        brk = f", SLICE BREAK {self.brk['n']} + FUNK {self.fnk['n']} samples" if self.brk and self.fnk else \
+            f", SLICE BREAK {self.brk['n']} samples" if self.brk else \
             f", SLICE FUNK {self.fnk['n']} samples" if self.fnk else ""
         brk += f", SLICE PIANO (shared) {self.pno['n']} samples" if self.pno else ""
         return f"samples: {len(self.sets)} sets, {len(self.zones)} zones, {len(self.blob)} B ADPCM{brk}"
@@ -414,10 +415,10 @@ def slice_on():
 
 
 def drop_sets():
-    """FELUCCA_SMP_DROP: the built-in sets (and SLICE's BREAK) this build leaves out, in CC0_SETS' order then BREAK
+    """FELUCCA_SMP_DROP: the built-in sets (and SLICE's BREAK, FUNK) this build leaves out, in CC0_SETS' order, BREAK, FUNK
     (an unknown name stops)"""
     names = [n.strip().upper() for n in os.environ.get("FELUCCA_SMP_DROP", "").split(",") if n.strip()]
-    known = [n for n, kind in CC0_SETS if kind != "alias"] + ["BREAK"]
+    known = [n for n, kind in CC0_SETS if kind != "alias"] + ["BREAK", "FUNK"]
     bad = [n for n in names if n not in known]
     if bad:
         sys.exit(f"gen_samples: FELUCCA_SMP_DROP names no built-in set: {', '.join(bad)} (sets: {', '.join(known)})")
@@ -466,7 +467,7 @@ def main(out):
                 b.cc0_set(name, kind)
     if slice_on():                                  # SLICE's loops: only when that engine is built
         b.brk = None if "BREAK" in drop else b.slice_loop("break")   # last: the sets' offsets stay as they were
-        b.fnk = b.slice_loop("funk")
+        b.fnk = None if "FUNK" in drop else b.slice_loop("funk")
         b.slice_piano()                             # (no data of its own: the PIANO set's)
     text = b.header()
     Path(out).write_text(text)

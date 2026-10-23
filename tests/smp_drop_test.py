@@ -4,7 +4,7 @@
 """tools/gen_samples.py FELUCCA_SMP_DROP (the Bluetooth build's flash room): a dropped built-in SAMPLE set keeps its
 index, name and preset and has no data (one zone of length 0: eng_sample.c smp_set_missing), every other set keeps
 its samples, and nothing changes while the variable is unset. (Skiff) BREAK leaves SLICE's BREAK out ({0}), FUNK and the
-sets stay; the Bluetooth build's whole list (PIANO, FLUTE, SAX, BREAK) too.
+sets stay; FUNK likewise; the Bluetooth build's whole list (PIANO, FLUTE, SAX, BREAK, FUNK) too.
   smp_drop_test.py OUTDIR"""
 import os
 import re
@@ -57,7 +57,8 @@ def main(out):
     d0, z0, s0, rest0, p0 = parse(full)
     names = [n for n, _, _ in s0]
     funk0 = re.search(r"define SLC_FUNK_INIT.*?(?=\n#define |\Z)", full, re.S).group(0)
-    for drop in (["FLUTE"], ["FLUTE", "SAX"], ["PIANO", "FLUTE", "SAX"], ["BREAK"], ["PIANO", "FLUTE", "SAX", "BREAK"]):
+    for drop in (["FLUTE"], ["FLUTE", "SAX"], ["PIANO", "FLUTE", "SAX"], ["BREAK"], ["FUNK"],
+                 ["PIANO", "FLUTE", "SAX", "BREAK", "FUNK"]):
         r = gen(out / "drop.h", ",".join(drop))
         assert r.returncode == 0, r.stdout + r.stderr
         text = (out / "drop.h").read_text()
@@ -77,7 +78,7 @@ def main(out):
         has_piano = "PIANO" not in drop
         assert ("define SLC_PIANO_INIT {0}" not in text) == has_piano, f"{drop}: SLICE's PIANO"
         assert ("define SLC_BREAK_INIT {0}" in text) == ("BREAK" in drop), f"{drop}: SLICE's BREAK"
-        assert "define SLC_FUNK_INIT {0}" not in text, f"{drop}: SLICE's FUNK lost"
+        assert ("define SLC_FUNK_INIT {0}" in text) == ("FUNK" in drop), f"{drop}: SLICE's FUNK"
         if drop == ["BREAK"]:       # the sets' bytes as they were; FUNK the same loop (its offset moved)
             assert d1[:len(d0) - len(d1)] == d0[:len(d0) - len(d1)] or not sets_off, f"{drop}: the sets changed"
             funk1 = re.search(r"define SLC_FUNK_INIT.*?(?=\n#define |\Z)", text, re.S).group(0)
