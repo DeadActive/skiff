@@ -34,6 +34,9 @@ static void smc_in(uint32_t pkt);                    /* smc.c */
 /* 1 = the SMC-Mixer DAW layout, 0 = MIDI: MODE, or AUTO by the connected device's name */
 static uint32_t bt_mode_now(void)
 {
+#if !FELUCCA_SMC
+    return 0;                                        /* (Skiff: no SMC-Mixer layout: the mixer is a MIDI controller) */
+#endif
     bt_set_t s;
     bt_set_get(&s);
     if (s.mode != BT_MODE_AUTO)

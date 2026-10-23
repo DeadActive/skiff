@@ -52,6 +52,10 @@
 #define FELUCCA_BLE 0            /* the Bluetooth build (tools/build.py FELUCCA_BLE=1; BLE MIDI: 2026 DEADACTIVE): BLE-MIDI
                                   * host and device, FM-Link, firmware/src/ble/ (the FM-1 only) */
 #endif
+#ifndef FELUCCA_SMC
+#define FELUCCA_SMC 0            /* (the Bluetooth build) the SMC-Mixer DAW layout (smc.c): not in Skiff's, for the room of
+                                  * its sample pack (docs/ble/FIT.md); MODE then has AUTO, MIDI, FM-LINK */
+#endif
 #if FELUCCA_BLE && BOARD_SMK37
 #error "FELUCCA_BLE is the FM-1's (the SMK-37's radio, flash and RAM are not its)"
 #endif
@@ -146,7 +150,9 @@ static inline __attribute__((always_inline)) void *audio_far(void *p) { void *vo
 #include "ble/ble_core.h"        /* the BLE unit's entry points (ble/ble.c, its own object) */
 static void bt_service(void);    /* core_ble_api.c: the BT stack's slice and the core's Bluetooth work (ed_service) */
 #include "bt_set.c"              /* MODE, AUTOSTART, ROLE, RECONNECT, in the settings */
+#if FELUCCA_SMC
 #include "smc.c"                 /* the SMC-Mixer DAW layout: decode, actions, LEDs, fader pickup */
+#endif
 #include "bt_midi.c"             /* MIDI mode: in (the input ring, source 3) and out; SMC DAW mode: to smc.c */
 #include "bt_fml.c"              /* FM-Link: two FM-1s in time (fmlink.c), CLK INT leads, CLK LINK follows */
 #include "bt_devs.c"             /* the saved devices, this FM-1's address, the radio calibration's copy */

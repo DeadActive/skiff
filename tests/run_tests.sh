@@ -452,12 +452,14 @@ run "gate 2 tool self-test (update path: machine code, sources)" python3 tools/c
 run "gate 2a: the update path's sources = the base release's (tools/ble_base.txt)" python3 tools/check_update_path.py --sources
 run "gate 3 tool self-test (BT start-up reachable at boot)" python3 tools/check_ble_boot.py --selftest
 # the core's side, built as the Bluetooth build is (FELUCCA_BLE=1) on the UI harness, the BLE unit's entry points stubs
+# (Skiff's Bluetooth build has no SMC-Mixer layout, FELUCCA_SMC 0: bt_midi_test, bt_page_test and smc_test test Felucca's
+# layer as it is with it, FELUCCA_SMC=1; tests/ble_fit_test.c Skiff's MODE without it)
 if [ -f build/gen/ui_fonts.h ]; then
-    $CC -w -DFELUCCA_BLE=1 -DBT_TEST_PAGE=1 -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/bt_midi_test" tests/bt_midi_test.c -lm
+    $CC -w -DFELUCCA_BLE=1 -DFELUCCA_SMC=1 -DBT_TEST_PAGE=1 -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/bt_midi_test" tests/bt_midi_test.c -lm
     run "Bluetooth MIDI: the settings bytes, MIDI mode in (source 3) and out, CLOCK BLE, the release on a lost link" "$OUT/bt_midi_test"
-    $CC -w -DFELUCCA_BLE=1 -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/bt_page_test" tests/bt_page_test.c -lm
+    $CC -w -DFELUCCA_BLE=1 -DFELUCCA_SMC=1 -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/bt_page_test" tests/bt_page_test.c -lm
     run "Bluetooth page: the row in MENU > SYSTEM, the cursor, ON / OFF, MODE, the saved devices, ADD, a pick, the state line" "$OUT/bt_page_test"
-    $CC -w -DFELUCCA_BLE=1 -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/smc_test" tests/smc_test.c -lm
+    $CC -w -DFELUCCA_BLE=1 -DFELUCCA_SMC=1 -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/smc_test" tests/smc_test.c -lm
     run "SMC-Mixer DAW layout (six strips): faders with pickup, knobs, MUTE SOLO REC SELECT, the transport, the LEDs, the mixer gone" "$OUT/smc_test"
     $CC -w -DFELUCCA_BLE=1 -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/bt_devs_test" tests/bt_devs_test.c -lm
     run "saved Bluetooth devices: the favourites' spare bytes (every engine's presets, Skiff's own uses), pick order, the 30 s grace, the RF copy" "$OUT/bt_devs_test"

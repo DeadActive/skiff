@@ -22,12 +22,11 @@ macOS (or with JIELI_DOCKER=1) each tool runs in a linux/amd64 container.
 
 FELUCCA_BLE=1 (BLE MIDI: 2026 DEADACTIVE, from Felucca's Bluetooth build, DeadActive/Felucca ble-kit): the Bluetooth
 build, for the FM-1 only (BOARD=smk37 refuses it). firmware/src/ble/ (its own unit) and the JieLi BT libraries
-(tools/ble_libs.py, AC79_BT_SDK) are linked in through LTO with firmware/app_ble.ld; for the flash room it leaves out
-the built-in PIANO, FLUTE and SAX sets and SLICE's BREAK and FUNK (BLE_SMP_DROP), the pixel faces of CRYPT and NEON
-(gfx.c) and USB audio's 48 kHz (FELUCCA_UAC_48K=0), its delay line is 1.11 s (fx.c), and it is built with one core
-(FELUCCA_CPU2=0). BLE_PACK=1: its built-in samples are a pack instead (tools/gen_samples.py FELUCCA_SMP_PACK:
-build/skiff-samples-VER.bin, the plain build's sample bytes, installed over USB into USR2 and USR3's flash: one user
-slot, USR1; docs/ble/FIT.md: 1,184 B over the slot as it is); the build stops on any of its gates (the loader pin, the
+(tools/ble_libs.py, AC79_BT_SDK) are linked in through LTO with firmware/app_ble.ld; for the flash room its built-in
+samples are a pack (tools/gen_samples.py FELUCCA_SMP_PACK: build/skiff-samples-VER.bin, the plain build's sample bytes,
+installed over USB into USR2 and USR3's flash: one user slot, USR1), it has no SMC-Mixer layout (felucca.c
+FELUCCA_SMC), it leaves out the pixel faces of CRYPT and NEON (gfx.c) and USB audio's 48 kHz (FELUCCA_UAC_48K=0), its
+delay line is 1.11 s (fx.c), and it is built with one core (FELUCCA_CPU2=0); the build stops on any of its gates (the loader pin, the
 update path, no BT at boot, RAM code: docs/ble/). The package is felucca-ble.fwsc. BLE_MEASURE=1: the regions widened
 so an image that does not fit can be measured; never packaged. Unset: the build is as before.
 """
@@ -62,10 +61,8 @@ LOADER_NAME = b"usb_hid_ota.bin"    # the file name the SPL looks for
 LDR_MAX = 0xBEF00 - 0xBD000
 DOCKER_IMAGE = os.environ.get("JIELI_DOCKER_IMAGE", "debian:bookworm-slim")
 SDK_MOUNT = None                    # Bluetooth builds: the JieLi BT SDK (tools/ble_libs.py), mounted read-only at /sdk
-BLE_SMP_DROP = "PIANO,FLUTE,SAX,BREAK,FUNK"   # Bluetooth builds: the built-in SAMPLE sets and SLICE's BREAK and FUNK
-                                    # left out for the flash room (tools/gen_samples.py FELUCCA_SMP_DROP; docs/ble/FIT.md)
-BLE_SMP_PACK = GEN / "skiff_samples.pack"   # Bluetooth builds with BLE_PACK=1: the built-in samples as a pack, not in
-                                    # the image (tools/gen_samples.py FELUCCA_SMP_PACK); build/skiff-samples-VER.bin
+BLE_SMP_PACK = GEN / "skiff_samples.pack"   # Bluetooth builds: the built-in samples as a pack, not in the image
+                                    # (tools/gen_samples.py FELUCCA_SMP_PACK; docs/ble/FIT.md); build/skiff-samples-VER.bin
 BLE_POOL_FLOOR = 8192               # Bluetooth builds: the pool spare kept. The user (2026-10-23) allowed less, as SLOOP's,
                                     # down to what the build keeps; with the delay line at 1.11 s it keeps 11,424 B, so the
                                     # plain build's 8 KiB holds (docs/ble/FIT.md); RAM keeps its 4 KiB
@@ -322,7 +319,7 @@ def build_app():
         flags.append("-DFELUCCA_BLE=1")
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_OTA_RAMONLY", "FELUCCA_CDC",
                  "FELUCCA_UART", "FELUCCA_UAC", "FELUCCA_UAC_TONE", "FELUCCA_UAC_48K", "FELUCCA_ICONS", "FELUCCA_SLICE", "FELUCCA_FM4",
-                 "FELUCCA_CDC_DEFAULT", "FELUCCA_CPU2"):
+                 "FELUCCA_CDC_DEFAULT", "FELUCCA_CPU2", "FELUCCA_SMC"):
         v = os.environ.get(flag)    # unset: the default in firmware/src/felucca.c
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")
@@ -641,10 +638,7 @@ def main():
     if ble:                         # a gated Bluetooth build is packaged under its own name
         global CPU2
         name = name.replace("felucca", "felucca-ble", 1).replace(stem, stem + "-ble", 1)
-        if os.environ.get("BLE_PACK") == "1":       # (tools/gen_samples.py: the flash room)
-            os.environ.setdefault("FELUCCA_SMP_PACK", str(BLE_SMP_PACK))
-        else:
-            os.environ.setdefault("FELUCCA_SMP_DROP", BLE_SMP_DROP)
+        os.environ.setdefault("FELUCCA_SMP_PACK", str(BLE_SMP_PACK))   # (tools/gen_samples.py: the flash room)
         # one core (FELUCCA_CPU2=0): the second core's stacks and mailbox (6 KB of .data + .bss) and the BT stack's do
         # not both fit the RAM with its 4 KB kept spare, and the two are untried together on the FM-1. CPU 2 CORES is
         # an opt-in beta, 1 CORE by default; the plain build keeps it

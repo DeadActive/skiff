@@ -58,7 +58,7 @@ static volatile uint32_t kb_mask;     /* main: the button bits whose hold makes 
 static volatile uint8_t kb_lock;      /* main: a layer locked open (#83, no button held): 1 keys are the layer's, 2 FX's */
 static volatile uint8_t perf_solo;    /* main: tracks soloed in the GLO layer (the others muted as by a black key) */
 static volatile uint8_t perf_kill;    /* main: every effect off (the menu, a dialog, UBOOT) */
-#if FELUCCA_BLE
+#if FELUCCA_BLE && FELUCCA_SMC
 static volatile uint8_t smc_solo;     /* main: tracks soloed from the SMC-Mixer (smc.c): latched, the menu open or not */
 #endif
 static volatile int8_t perf_k[4];     /* main: the knob macros, 0 = untouched: FILTER -100..100 (- LPF, + HPF),
@@ -255,7 +255,7 @@ static __attribute__((noinline)) AUDIO_RAM int perf_begin(uint32_t n)
                     (perf_solo ? (~(uint32_t)perf_solo & ((1u << NTRK) - 1u)) << PF_M1 : 0u)) & AUDIO_FAR(perf_avail)();
     uint32_t q, k, ph0, bnd;
     int32_t m;
-#if FELUCCA_BLE
+#if FELUCCA_BLE && FELUCCA_SMC
     if (smc_solo)                                  /* (the SMC-Mixer's SOLO: the others muted, perf_kill or not) */
         held |= (~(uint32_t)smc_solo & ((1u << NTRK) - 1u)) << PF_M1;
 #endif

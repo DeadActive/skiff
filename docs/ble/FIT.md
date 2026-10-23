@@ -74,13 +74,27 @@ Measured what-ifs (scratch builds, not in the tree):
 
 With all three every gate passes (gates 1, 2a-2c, 3, 4 in a BLE_MEASURE build).
 
-## The built-in samples as a pack (BLE_PACK=1, 2026-10-24): 1,184 B over the slot
+## The Bluetooth build (2026-10-24): the samples as a pack, no SMC-Mixer layout
+
+The user's decisions: the built-in samples (PIANO, FLUTE, SAX, SLICE's BREAK and FUNK) come back as a pack in USR2 and
+USR3's flash (one user slot, USR1), and the SMC-Mixer layout goes to make the room. `FELUCCA_BLE=1 ./build.sh` builds
+it: the package and build/skiff-samples-1.4.bin beside it.
+
+- The pack: tools/gen_samples.py `FELUCCA_SMP_PACK` (the plain build's sample bytes exactly, then the zone and SLICE
+  tables), installed over USB: editor protocol PACK (90, web/EDITOR_PROTOCOL.md), the Bluetooth site's INSTALL
+  BUILT-IN SAMPLES step (web/pack_step.js, web/make_site.py --pack), tools/fm1_sample_pack.py. Without it (or with
+  another firmware's) the built-in sounds play a sine, say NO SAMPLE, and once SAMPLES: INSTALL PACK.
+- **A deviation from Felucca's reference (docs/ble/PORTING.md, layer 3): the SMC-Mixer layout (smc.c) is optional in
+  Skiff (felucca.c `FELUCCA_SMC`, 0 in its Bluetooth build).** MODE has AUTO, MIDI and FM-LINK; a stored SMC DAW reads
+  as AUTO; AUTO with an SMC-Mixer is MIDI mode: its faders, knobs and buttons arrive as ordinary MIDI on the input ring
+  (MIDI LEARN maps them). smc.c and its test stay (`FELUCCA_SMC=1`, Felucca's layer as it is); the reference keeps it.
+
+## The pack with the SMC-Mixer layout (2026-10-24, before the decision): 1,184 B over the slot
 
 The user's design: one user slot (USR1), the built-in samples (PIANO, FLUTE, SAX, SLICE's BREAK and FUNK) as a pack in
 USR2 and USR3's flash, installed over USB (editor protocol PACK 90, web/EDITOR_PROTOCOL.md; the Bluetooth site's
-INSTALL BUILT-IN SAMPLES step, web/pack_step.js with web/make_site.py --pack; tools/fm1_sample_pack.py). Built with
-`BLE_PACK=1 FELUCCA_BLE=1 ./build.sh` (build/skiff-samples-1.4.bin beside the package). Implemented and tested on the
-host (tests/ble_pack_test.c, tests/site_pack_test.py); the default Bluetooth build stays the one above until it fits.
+INSTALL BUILT-IN SAMPLES step, web/pack_step.js with web/make_site.py --pack; tools/fm1_sample_pack.py). Measured with the
+SMC-Mixer layout still in (tests/ble_pack_test.c, tests/site_pack_test.py).
 
 | | image B (slot free) | `.data + .bss` B | pool B |
 | --- | ---: | ---: | ---: |
