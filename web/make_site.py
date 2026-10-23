@@ -14,6 +14,10 @@
   src/                        not touched
 
   web/make_site.py build/skiff-X.Y.fwsc X.Y OUT_DIR [SMK_PACKAGE ...]
+  web/make_site.py --pack build/skiff-samples-X.Y.bin [--no-try] build/felucca-ble.fwsc X.Y-ble OUT_DIR
+                              (BLE MIDI: 2026 DEADACTIVE) the Bluetooth build's site: the built-in sample pack in
+                              firmware/ and the installer's INSTALL BUILT-IN SAMPLES step (web/pack_step.js); --no-try
+                              leaves the browser emulator out (the plain build's). Without --pack: as before
 
 The packages must be ones made by tools/fm1pkg_make.py (Felucca's own loader, no vendor files).
 Their identities are read from them (FM-1_7xx, and for the SMK-37 builds SMK-37 Pro_7xx,
@@ -58,7 +62,16 @@ def package(path, version):
     return product, raw, f"skiff-{re.sub(r'[^A-Za-z0-9.-]', '-', version)}{MODELS[model]}.fwsc"
 
 
-def main(pkg, version, out, *more):
+PACK_HTML = (
+    '  <h2 style="margin-top:28px;font-size:18px">Built-in samples</h2>\n'
+    '  <p class="small">This Bluetooth build keeps its built-in samples (PIANO, FLUTE, SAX, SLICE\'s BREAK and FUNK) '
+    'outside the firmware. Install them once after the firmware (and again after a firmware update that asks for it). '
+    'They replace anything in user sample slots USR2 and USR3: this build has one user slot, USR1. Without them those '
+    'sounds play a sine and the FM-1 says NO SAMPLE.</p>\n'
+    '  <p><button id="pack-go" disabled>Install built-in samples</button></p>\n')
+
+
+def main(pkg, version, out, *more, pack=None, no_try=False):
     out = Path(out)
     pkgs = [package(p, version) for p in (pkg, *more)]
     product, raw, name = pkgs[0]
@@ -71,12 +84,21 @@ def main(pkg, version, out, *more):
     lib = strip_module((HERE / "fm1pkg.js").read_text(encoding="utf-8")) + "\n" + \
         strip_module((HERE / "fm1ota.js").read_text(encoding="utf-8")) + "\n" + \
         strip_module((HERE / "fm1backup.js").read_text(encoding="utf-8"))
-    meta = json.dumps({"version": version, "product": product, "pkg": "../../firmware/" + name,
-                       "packages": [{"product": p, "pkg": "../../firmware/" + n} for p, _, n in pkgs]})
+    meta = {"version": version, "product": product, "pkg": "../../firmware/" + name,
+            "packages": [{"product": p, "pkg": "../../firmware/" + n} for p, _, n in pkgs]}
+    if pack:                                        # (the Bluetooth build: its sample pack and the step that installs it)
+        meta["samples"] = "../../firmware/" + Path(pack).name
+    meta = json.dumps(meta)
     for mark in ("/*LIB*/", "/*META*/"):
         if html.count(mark) != 1:
             raise SystemExit(f"index_pkg.html must contain {mark} once; update make_site.py")
     html = html.replace("/*LIB*/", lib).replace("/*META*/", meta)
+    if pack:
+        for mark, add in (('  <details style="margin-top:24px">', PACK_HTML),
+                          ("</script>\n</body>", (HERE / "pack_step.js").read_text(encoding="utf-8"))):
+            if html.count(mark) != 1:
+                raise SystemExit(f"index_pkg.html must contain {mark!r} once; update make_site.py")
+            html = html.replace(mark, add + mark)
     inst, ed, fw = out / "webapp" / "installer", out / "webapp" / "editor", out / "firmware"
     for d in (inst, ed, fw):
         d.mkdir(parents=True, exist_ok=True)
@@ -85,6 +107,10 @@ def main(pkg, version, out, *more):
     (inst / "index.html").write_text(html, encoding="utf-8")
     for _, data, n in pkgs:
         (fw / n).write_bytes(data)
+    for old in fw.glob("skiff-samples-*.bin"):     # (the Bluetooth site's sample pack: the current one only)
+        old.unlink()
+    if pack:
+        shutil.copy(pack, fw / Path(pack).name)
     lic = HERE.parent / "LICENSES"                  # the package holds JieLi SDK files (Apache-2.0): their
     (fw / "LICENSES").mkdir(exist_ok=True)          # licence travels next to it, with Felucca's own
     names = sorted(f.name for f in lic.glob("*.txt"))
@@ -110,20 +136,30 @@ def main(pkg, version, out, *more):
     shutil.copytree(HERE / "fonts", out / "fonts", dirs_exist_ok=True)
     emu = HERE.parent / "build" / "emu"             # ((Skiff #18) the browser emulator: web/emu/build.sh's, ../panel.js)
     page = (emu / "index.html").read_text(encoding="utf-8") if (emu / "index.html").exists() else ""
-    if f">v{version}<" not in page:
+    if no_try:                                      # (the Bluetooth site: no emulator of its own)
+        pass
+    elif f">v{version}<" not in page:
         raise SystemExit(f"{emu}: no browser build of v{version} without the preview mark "
                          "(EMU_PREVIEW=0 sh web/emu/build.sh, after the release build)")
-    shutil.rmtree(out / "try", ignore_errors=True)
-    shutil.copytree(emu, out / "try")
+    else:
+        shutil.rmtree(out / "try", ignore_errors=True)
+        shutil.copytree(emu, out / "try")
     (out / "index.html").write_text(
         '<!doctype html><meta charset="utf-8"><title>Skiff</title>'
         '<meta http-equiv="refresh" content="0; url=webapp/installer/">'
         '<a href="webapp/installer/">Skiff installer</a>\n', encoding="utf-8")
-    print(f"site: {out}: webapp/installer ({len(html)} B), webapp/editor, learn, try, "
-          + ", ".join(f"firmware/{n} ({len(d)} B, {p})" for p, d, n in pkgs))
+    print(f"site: {out}: webapp/installer ({len(html)} B), webapp/editor, learn, " + ("" if no_try else "try, ") +
+          (f"firmware/{Path(pack).name}, " if pack else "") +
+          ", ".join(f"firmware/{n} ({len(d)} B, {p})" for p, d, n in pkgs))
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 4:
+    args, opts = sys.argv[1:], {}
+    while args[:1] in (["--pack"], ["--no-try"]):
+        if args[0] == "--pack":
+            opts["pack"], args = args[1], args[2:]
+        else:
+            opts["no_try"], args = True, args[1:]
+    if len(args) < 3:
         sys.exit(__doc__)
-    main(*sys.argv[1:])
+    main(*args, **opts)

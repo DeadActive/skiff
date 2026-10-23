@@ -876,6 +876,32 @@ sent and mean nothing. The editor sends a set after each upload (its files' valu
 device the same values are EDIT > SAMPLES (a SAMPLE track on that USR set): KNOB 1 the sound, KNOB 2..4 its LEVEL,
 REVERB, DELAY.
 
+## Built-in sample pack (90; the Bluetooth build only)
+
+BLE MIDI: 2026 DEADACTIVE. Skiff's Bluetooth build (`FELUCCA_BLE=1`) keeps its built-in samples (PIANO, FLUTE, SAX,
+SLICE's BREAK, FUNK and PIANO) in a pack outside the firmware: `build/skiff-samples-VER.bin` (tools/gen_samples.py
+`FELUCCA_SMP_PACK`), a 256-byte header (u32 magic `"SKPK"` 0x4B504B53, u32 version 1, u32 payload length, u32 CRC-32
+(zlib) of the payload, u32 id: the first four bytes of the payload's SHA-256, then zeros) and the payload: the plain
+build's sample bytes exactly, then (4-aligned) the zone table and SLICE's tables. It lives in the flash of USR2 and
+USR3 (0xB4000..0xDBFFF): that build has one user slot, USR1 (SMP_INFO lists one), and SMP_ERASE / BEGIN / WRITE / END
+on USR2 or USR3 do nothing and answer rc 0 (a backup's restore goes on; END says USR2 USR3 SKIPPED on the device).
+The device uses the pack while its header names this firmware's length, CRC and id and the data's CRC checks (at
+power-on and after END); else its built-in sounds play a sine and say NO SAMPLE (the first time: SAMPLES: INSTALL
+PACK). Firmware without the pack (every other build) answers nothing.
+
+| cmd | Request args | Reply args |
+| --- | --- | --- |
+| 90 PACK | 0 (INFO) | 0, state (0 none, 1 this firmware's, 2 another), the firmware's pack length (3 x 7 bit), its id (5 x 7 bit), rc 0 |
+| 90 PACK | 1 (BEGIN) | 1, rc: the pack is no longer used (its sounds stop), its header's sector is erased |
+| 90 PACK | 2 (WRITE), offset (3 x 7 bit, 256-aligned, from 256), pack7 data (up to 256 bytes, inside the payload) | 2, offset (3 x 7 bit), rc; the first write into a sector erases it |
+| 90 PACK | 3 (END), pack7 of the header's first 20 bytes | 3, rc: checked (this firmware's pack, the data's CRC), then written last and read back; the pack in use |
+
+rc: 0 done, 1 a bad request (outside the payload, unaligned, WRITE or END while the pack is in use), 2 not this
+firmware's pack, 3 the transport runs (stop it first: nothing is written), 4 a flash error, 5 the data's CRC or the
+header read back wrong (BEGIN again). A power cut before END leaves no header: the pack is not used until an install
+completes. The Bluetooth site's installer has the step (web/pack_step.js); `tools/fm1_sample_pack.py install` does the
+same from a computer.
+
 ## Transport, project names (76, 77; Skiff W3)
 
 INFO advertises `57 01 caps` after the DRUM-X kit (`4B 01 8`): bit 0 TRANSPORT, bit 1 PROJ_NAME. Firmware without the

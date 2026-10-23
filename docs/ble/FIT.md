@@ -73,3 +73,21 @@ Measured what-ifs (scratch builds, not in the tree):
 | + the delay line halved (`fx.c` `DLY_LEN` 32768, 0.74 s) | 578,180 (3,384) | 312,160 (44,192 spare) |
 
 With all three every gate passes (gates 1, 2a-2c, 3, 4 in a BLE_MEASURE build).
+
+## The built-in samples as a pack (BLE_PACK=1, 2026-10-24): 1,184 B over the slot
+
+The user's design: one user slot (USR1), the built-in samples (PIANO, FLUTE, SAX, SLICE's BREAK and FUNK) as a pack in
+USR2 and USR3's flash, installed over USB (editor protocol PACK 90, web/EDITOR_PROTOCOL.md; the Bluetooth site's
+INSTALL BUILT-IN SAMPLES step, web/pack_step.js with web/make_site.py --pack; tools/fm1_sample_pack.py). Built with
+`BLE_PACK=1 FELUCCA_BLE=1 ./build.sh` (build/skiff-samples-1.4.bin beside the package). Implemented and tested on the
+host (tests/ble_pack_test.c, tests/site_pack_test.py); the default Bluetooth build stays the one above until it fits.
+
+| | image B (slot free) | `.data + .bss` B | pool B |
+| --- | ---: | ---: | ---: |
+| the pack with the sample bytes only, the tables in the image | 585,980 (-4,416) | 93,824 | 345,232 |
+| **the pack with the zone and SLICE tables too (as built)** | **582,748 (-1,184)** | 93,824 | 345,232 |
+| .. and the BLE unit at -Oz (measured, not kept: untested code) | 582,196 (-632) | | |
+
+The samples leave the image, but the code that plays them comes back: the build without them had every built-in
+zone empty and a one-byte SMP_DATA, and the compiler dropped the sample, grain and slice readers' paths for them
+(about 4.5 KB); the pack's reading, checking and install code is about 1 KB.

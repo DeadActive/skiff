@@ -466,6 +466,16 @@ if [ -f build/gen/ui_fonts.h ]; then
     $CC -w -DFELUCCA_BLE=1 -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/bt_page_render" tests/bt_page_render.c -lm
     run "Bluetooth page: every state in every THEME through the layout lint; the top bar's icon" "$OUT/bt_page_render" build/ui_bt
     if python3 -c "import PIL" 2>/dev/null; then python3 tests/ui_render.py build/ui_bt >/dev/null; fi
+    mkdir -p "$OUT/pack"
+    if FELUCCA_SMP_PACK="$OUT/pack/pack.bin" python3 tools/gen_samples.py "$OUT/pack/felucca_samples.h" >/dev/null; then
+        $CC -w -I"$OUT/pack" -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/ble_pack_test" tests/ble_pack_test.c -lm
+        run "the Bluetooth build's built-in sample pack: validation, the install (PACK 90: header last, a power cut, refused while playing, its range), reads from it, one user slot, USR2 / USR3 skipped" \
+            "$OUT/ble_pack_test" "$OUT/pack/pack.bin"
+        [ -f build/felucca.fwsc ] && run "the Bluetooth site (make_site.py --pack): the sample pack and its install step; the plain site without" \
+            python3 tests/site_pack_test.py build/felucca.fwsc "$OUT/pack/pack.bin" "$OUT/site_pack"
+    else
+        echo "== the sample pack's header could not be made"; fail=1
+    fi
     $CC -w -DFELUCCA_BLE=1 -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/ble_fit_test" tests/ble_fit_test.c -lm
     run "the Bluetooth build's room: the 1.11 s delay line (every TIME and BPM inside it, the wrap), no default sound on FUNK or BREAK" "$OUT/ble_fit_test"
     $CC -w -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/clk_ble_plain_test" tests/clk_ble_plain_test.c -lm
