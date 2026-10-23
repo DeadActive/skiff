@@ -59,9 +59,29 @@ typedef struct {
     uint32_t apos[SLC_AUTO], ast[SLC_AUTO];   /* AUTO slice starts (apos[0] = 0) and their states */
 } slc_src_t;
 
+#ifdef SMP_PACK                     /* (the Bluetooth build: the pack's, eng_sample.c SMP_PACK; slc_get: while it is in) */
+_Static_assert(sizeof(slc_src_t) == 976u, "the pack's SLICE tables (tools/gen_samples.py slc_bytes)");
+static const slc_src_t SLC_NONE;
+#ifdef SMP_PACK_SLC_BREAK
+#define SLC_BREAK (*(const slc_src_t *)(const void *)(SMP_DATA + SMP_PACK_SLC_BREAK))
+#else
+#define SLC_BREAK SLC_NONE
+#endif
+#ifdef SMP_PACK_SLC_PIANO
+#define SLC_PIANO (*(const slc_src_t *)(const void *)(SMP_DATA + SMP_PACK_SLC_PIANO))
+#else
+#define SLC_PIANO SLC_NONE
+#endif
+#ifdef SMP_PACK_SLC_FUNK
+#define SLC_FUNK (*(const slc_src_t *)(const void *)(SMP_DATA + SMP_PACK_SLC_FUNK))
+#else
+#define SLC_FUNK SLC_NONE
+#endif
+#else
 static const slc_src_t SLC_BREAK = SLC_BREAK_INIT;
 static const slc_src_t SLC_PIANO = SLC_PIANO_INIT;
 static const slc_src_t SLC_FUNK = SLC_FUNK_INIT;     /* (Skiff phase 9) */
+#endif
 static slc_src_t slc_usr[SMP_USER_SLOTS];
 /* append-only: stored sounds keep their SRC numbers (1.0.4 added PIANO, Skiff phase 9 FUNK) */
 static const char *const N_SLC_SRC[] = {"BREAK", "USR1", "USR2", "USR3", "PIANO", "FUNK"};
@@ -97,6 +117,10 @@ static uint32_t slc_src_of(const int16_t *p) { return (uint32_t)clamp(p[P_E0], 0
  * the build) */
 static const slc_src_t *slc_get(uint32_t src)
 {
+#ifdef SMP_PACK
+    if (!SLC_SRC_USR(src) && !smp_pack_ok)
+        return 0;                                   /* (the Bluetooth build: BREAK, PIANO, FUNK are the pack's) */
+#endif
     if (!src)
         return SLC_BREAK.len ? &SLC_BREAK : 0;
     if (src == SLC_SRC_PIANO)

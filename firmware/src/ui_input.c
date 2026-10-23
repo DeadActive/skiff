@@ -1290,9 +1290,24 @@ static int page_tap(uint32_t b)
  * it plays a sine): the no-file icon and NO SAMPLE (ui.c MSG_NO_SAMPLE). Once per track and source: at power-on, a sound
  * or project load, SRC / SET turned, a slot erased; again after another source or a project load. One a frame; after
  * a message already showing (LOADED) as the second message. Not on notes: nothing in the audio path */
+#ifdef SMP_PACK
+/* (the Bluetooth build) the track's sound is a built-in one: SAMPLE's / GRAIN's sets, SLICE's BREAK, PIANO, FUNK */
+static int snd_builtin(const track_t *t)
+{
+    const engine_t *e = ENGINES[eng_idx(t->eng_req)];
+#if FELUCCA_SLICE
+    if (e == &ENG_SLICE)
+        return !SLC_SRC_USR(slc_src_of(t->p));
+#endif
+    return (e == &ENG_SAMPLE || e == &ENG_GRAIN) && (uint32_t)t->p[P_E0] % SMP_NALL < SMP_NSETS;
+}
+#endif
 static void sample_notice(void)
 {
     uint32_t k, code;
+#ifdef SMP_PACK
+    static uint8_t pack_said;                         /* (once a power-on: the way to the pack) */
+#endif
     for (k = 0; k < NTRK; k++) {
         code = 0;
         if (!snd_missing(&trk[k], &code)) {
@@ -1302,6 +1317,14 @@ static void sample_notice(void)
         if (snd_said[k] == code)
             continue;
         snd_said[k] = (uint8_t)code;
+#ifdef SMP_PACK
+        if (!smp_pack_ok && !pack_said && snd_builtin(&trk[k])) {   /* (the Bluetooth build: the built-in samples are
+                                                                     * a pack, installed from the Skiff site) */
+            pack_said = 1;
+            ui_way(MSG_NO_SAMPLE, "SAMPLES: INSTALL PACK");
+            return;
+        }
+#endif
         if (ui.msg_t)
             str_cpy(ui.msg2, MSG_NO_SAMPLE, sizeof ui.msg2);
         else

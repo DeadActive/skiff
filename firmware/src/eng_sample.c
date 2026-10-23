@@ -55,6 +55,15 @@ static uint32_t pow2_q16(int32_t d16)
 #define SMP_SHOWN SMP_USER_FLASH_SLOTS               /* (SMK37_UX.md question 11: USR2, USR3 not offered) */
 #define SMP_PICK_MAX (SMP_NSETS + SMP_USER_FLASH_SLOTS - 1)   /* SAMPLE's SET, GRAIN's SOURCE: up to USR1 */
 _Static_assert(SMP_USER_BASE + SMP_USER_FLASH_SLOTS * SMP_USER_SIZE <= FL_SLOT_HI, "SMK: the user slot past FL_SLOT");
+#elif defined(SMP_PACK)
+/* the Bluetooth build (BLE MIDI: 2026 DEADACTIVE; tools/gen_samples.py FELUCCA_SMP_PACK): USR1 only, as the SMK-37's;
+ * USR2 and USR3's flash (0xB4000..0xDBFFF) holds the built-in pack (SMP_PACK_BASE below): never scanned, never
+ * erased or written as a slot (editor.c skips them) */
+#define SMP_USER_FLASH_SLOTS 1u
+#define SMP_USER_BASE 0xA0000u
+#define SMP_USER_HAS(k) ((uint32_t)(k) < SMP_USER_FLASH_SLOTS)
+#define SMP_SHOWN SMP_USER_FLASH_SLOTS
+#define SMP_PICK_MAX (SMP_NSETS + SMP_USER_FLASH_SLOTS - 1)   /* SAMPLE's SET, GRAIN's SOURCE: up to USR1 */
 #else
 #define SMP_USER_BASE 0xA0000u
 #define SMP_USER_HAS(k) 1
@@ -90,6 +99,54 @@ static const char *const SMP_ALL_NAMES[SMP_NALL] = {SMP_SET_NAMES_INIT, "USR1", 
 #define SMP_USER_XIP(k) fm1_xip_ptr(SMP_USER_BASE + (k) * SMP_USER_SIZE)
 #endif
 static const uint8_t *smp_user_xip(uint32_t k) { return SMP_USER_XIP(k); }
+#ifdef SMP_PACK
+/* The built-in pack (the Bluetooth build): the plain build's SMP_DATA, exactly, installed over USB (editor.c ED_PACK)
+ * in USR2 and USR3's flash and read, as a user slot is, through the plain XIP window. A 256-byte header (magic "SKPK",
+ * version 1, the payload's length, its CRC-32, its id: tools/gen_samples.py pack_header), then the payload: the data,
+ * then the tables that serve only it (the zones at SMP_PACK_ZONES, SLICE's BREAK FUNK PIANO at SMP_PACK_SLC_*). While
+ * the pack in flash is this firmware's (its length, CRC and id as built), SMP_ZONES is the pack's zone table and SLICE
+ * has BREAK, FUNK and PIANO; else every built-in set has no data (a sine, NO SAMPLE, the hint to install the pack:
+ * ui_input.c sample_notice). The user slot's zones are rebased onto this
+ * SMP_DATA as onto the array (32-bit offsets, wrapping) */
+#define SMP_PACK_BASE (SMP_USER_BASE + SMP_USER_SIZE)          /* USR2's offset: 0xB4000 */
+#define SMP_PACK_SIZE (2u * SMP_USER_SIZE)                     /* to USR3's end: 0xDC000 */
+#define SMP_PACK_HDR 256u
+#define SMP_PACK_MAGIC 0x4B504B53u                             /* "SKPK" */
+_Static_assert(SMP_PACK_HDR + SMP_PACK_LEN <= SMP_PACK_SIZE, "the built-in pack fits USR2 and USR3's flash");
+_Static_assert(sizeof(smp_zone_t) == 28u && SMP_PACK_ZONES % 4u == 0u, "the pack's zone table (<5I2h4B)");
+typedef struct { uint32_t magic, version, len, crc, id; } smp_pack_hdr_t;
+#ifndef SMP_PACK_XIP                                /* host tests: a RAM image */
+#define SMP_PACK_XIP() ((const uint8_t *)FM1_XIP(SMP_PACK_BASE))   /* (a constant: as fm1_xip_ptr, no call) */
+#endif
+#define SMP_DATA (SMP_PACK_XIP() + SMP_PACK_HDR)
+static uint8_t smp_pack_ok;                         /* the pack in flash is this firmware's: SMP_ZONES filled */
+static uint32_t st_crc32(const void *p, uint32_t n);   /* storage.c */
+/* 0 none (no header), 1 this firmware's, 2 another (a header, another length, id or CRC) */
+static uint32_t smp_pack_state(void)
+{
+    const smp_pack_hdr_t *h = (const smp_pack_hdr_t *)SMP_PACK_XIP();
+    if (h->magic != SMP_PACK_MAGIC)
+        return 0;
+    return h->version == 1u && h->len == SMP_PACK_LEN && h->id == SMP_PACK_ID && h->crc == SMP_PACK_CRC &&
+           st_crc32(SMP_DATA, SMP_PACK_LEN) == SMP_PACK_CRC ? 1u : 2u;
+}
+static void smp_pack_drop(void)                     /* (before its flash changes) every built-in zone empty: a voice on
+                                                     * one ends, SLICE's built-in sources go (eng_slice.c slc_get) */
+{
+    uint32_t i;
+    smp_pack_ok = 0;
+    for (i = 0; i < sizeof SMP_ZONES / sizeof SMP_ZONES[0]; i++)
+        SMP_ZONES[i].n = 0;
+}
+static void smp_pack_scan(void)                     /* at boot (project.c) and after an install (editor.c) */
+{
+    smp_pack_drop();
+    if (smp_pack_state() != 1u)
+        return;
+    memcpy(SMP_ZONES, SMP_DATA + SMP_PACK_ZONES, sizeof SMP_ZONES);
+    smp_pack_ok = 1;
+}
+#endif
 #if FELUCCA_SLICE
 static void slc_user_scan(uint32_t k, int valid);   /* eng_slice.c: SLICE's slice table of the slot */
 #else

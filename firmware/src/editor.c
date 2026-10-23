@@ -23,6 +23,9 @@ enum { ED_INFO = 1, ED_GET, ED_SET, ED_DUMP, ED_DESC, ED_STEP_GET, ED_STEP_SET, 
 
 enum { ED_KIT_GET = 74, ED_KIT_PUT };                 /* (Skiff W3) the DRUM-X kit (INFO 4B 01 8) */
 enum { ED_SMP_MIX = 81 };                             /* (Skiff, #21) a user slot's sounds' LEVEL REV DLY (INFO 57 01 bit 5) */
+#ifdef SMP_PACK
+enum { ED_PACK = 90 };                                /* (the Bluetooth build) the built-in pack (eng_sample.c SMP_PACK) */
+#endif
 
 static uint8_t ed_out[600];
 static uint32_t ed_n;
@@ -96,6 +99,11 @@ static int ed_smp_erase(uint32_t k, uint32_t all)  /* header sector, or the whol
         return -8;                                 /* SMK: USR2 / USR3 have no flash */
     st_stock_release();                            /* before the first erase in USRFLASH: storage.c */
 #endif
+#ifdef SMP_PACK
+    if (!SMP_USER_HAS(k))
+        return 0;                                  /* (the Bluetooth build: USR2 / USR3 are the pack's flash; nothing
+                                                    * there to erase as a slot: a backup's empty slot restores as is) */
+#endif
     usr_nz[k] = 0;
     for (i = 0; i < 16u; i++)
         usr_zone[k][i].n = 0;                     /* a sounding voice ends instead of reading 0xFF */
@@ -115,6 +123,12 @@ static int ed_smp_end(uint32_t k, const uint8_t *a, uint32_t na)
     if (!SMP_USER_HAS(k))
         return 4;                                  /* SMK: USR2 / USR3 have no flash */
 #endif
+#ifdef SMP_PACK
+    if (!SMP_USER_HAS(k)) {                        /* (the Bluetooth build: a backup's USR2 / USR3 sample skipped, said) */
+        ui_message("USR2 USR3 SKIPPED");
+        return 0;
+    }
+#endif
     if (ed_unpack7(a, na, ed_smp_buf, sizeof(smp_user_hdr_t)) != sizeof(smp_user_hdr_t))
         return 1;
     if (h->magic != SMP_USER_MAGIC || h->version != 1 || !h->nz || h->nz > 16u ||
@@ -133,6 +147,90 @@ static int ed_smp_end(uint32_t k, const uint8_t *a, uint32_t na)
     smp_user_scan(k);
     return usr_nz[k] ? 0 : 5;
 }
+
+#ifdef SMP_PACK
+/* ---- the built-in pack (the Bluetooth build; BLE MIDI: 2026 DEADACTIVE): PACK (90), op [args]
+ *   0 INFO                          -> 0, state (0 none, 1 this firmware's, 2 another), its length (3 x 7 bit), id (5 x 7)
+ *   1 BEGIN                         -> 1, rc: the pack no longer in use (its zones gone), its header's sector erased
+ *   2 WRITE off (3 x 7 bit), pack7  -> 2, off (3 x 7), rc: up to 256 bytes at off (256-aligned, from 256, inside the
+ *                                      pack's length); a sector erased when the write reaches its start
+ *   3 END pack7 header (20 B)       -> 3, rc: the header checked against this firmware's pack and the data's CRC, then
+ *                                      written last and read back; the pack in use from then on
+ * rc: 0 done, 1 a bad request (or WRITE before BEGIN), 2 not this firmware's pack, 3 stop the music first, 4 a flash
+ * error, 5 the data's CRC, or the header read back, wrong. Only USR2 and USR3's flash (SMP_PACK_BASE..SMP_PACK_SIZE),
+ * never while the transport runs. A power cut before END leaves no header: the pack is not used, BEGIN starts again */
+static void ed_pack_inval(void)
+{
+    fm1_irq_off();
+    fl_inval(SMP_PACK_BASE, SMP_PACK_SIZE);
+    fm1_irq_on();
+}
+static uint32_t ed_pack(const uint8_t *a, uint32_t na)
+{
+    uint32_t op = a[0], off, len, took;
+    const smp_pack_hdr_t *h = (const smp_pack_hdr_t *)ed_smp_buf;
+    if (op == 0u)
+        return 0;
+    if (transport_busy())
+        return 3;
+    if (op == 1u) {                                /* BEGIN */
+        int rc;
+        smp_pack_drop();
+        audio_silence();
+        rc = fl_erase4k(SMP_PACK_BASE, &took);
+        ed_pack_inval();
+        return rc ? 4u : 0u;
+    }
+    if (op == 2u) {                                /* WRITE */
+        if (na < 5u || smp_pack_ok)
+            return 1;
+        off = (uint32_t)a[1] | (uint32_t)a[2] << 7 | (uint32_t)a[3] << 14;
+        len = ed_unpack7(a + 4, na - 4u, ed_smp_buf, 256u);
+        if (off < SMP_PACK_HDR || (off & 0xFFu) || !len || off + len > SMP_PACK_HDR + SMP_PACK_LEN)
+            return 1;
+        if (!(off & 0xFFFu)) {                     /* first write into a sector: erase it */
+            audio_silence();
+            if (fl_erase4k(SMP_PACK_BASE + off, &took))
+                return 4;
+        }
+        return fl_write(SMP_PACK_BASE + off, ed_smp_buf, len) ? 4u : 0u;
+    }
+    if (op != 3u || smp_pack_ok || ed_unpack7(a + 1, na - 1u, ed_smp_buf, sizeof *h) != sizeof *h)
+        return 1;                                  /* END */
+    if (h->magic != SMP_PACK_MAGIC || h->version != 1u || h->len != SMP_PACK_LEN || h->id != SMP_PACK_ID ||
+        h->crc != SMP_PACK_CRC)
+        return 2;
+    ed_pack_inval();
+    if (st_crc32(SMP_DATA, SMP_PACK_LEN) != SMP_PACK_CRC)
+        return 5;
+    if (fl_write(SMP_PACK_BASE, ed_smp_buf, sizeof *h))
+        return 4;
+    ed_pack_inval();
+    smp_pack_scan();
+    return smp_pack_ok ? 0u : 5u;
+}
+static void ed_pack_reply(const uint8_t *a, uint32_t na)
+{
+    uint32_t rc;
+    if (!na || a[0] > 3u || !flash_ok)
+        return;
+    rc = ed_pack(a, na);
+    ed_b(a[0]);
+    if (a[0] == 0u) {
+        uint32_t st = smp_pack_state(), i;
+        ed_b(st);
+        for (i = 0; i < 21u; i += 7u)
+            ed_b(SMP_PACK_LEN >> i);
+        for (i = 0; i < 35u; i += 7u)
+            ed_b(SMP_PACK_ID >> i);
+    } else if (a[0] == 2u) {
+        ed_b(a[1]);
+        ed_b(a[2]);
+        ed_b(a[3]);
+    }
+    ed_b(rc);
+}
+#endif
 
 /* the engine byte of DUMP / RELOAD / TRACK */
 static uint32_t ed_eng(const track_t *t) { return t->eng_req % NENGINES; }
@@ -512,6 +610,13 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
     if (ed_project_handle(cmd, a, na)) { ed_send(); return; }
     if (ed_song_handle(cmd, a, na)) { ed_send(); return; }
     switch (cmd) {
+#ifdef SMP_PACK
+    case ED_PACK:
+        if (!na || a[0] > 3u || !flash_ok)
+            return;
+        ed_pack_reply(a, na);
+        break;
+#endif
     case ED_MOTION: {
         track_t *t = &trk[a[0]]; uint32_t rc = 0;
         if (na > 1u && a[1] == 7u) {
@@ -688,6 +793,10 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         len = ed_unpack7(a + 4, na - 4u, ed_smp_buf, 256u);
         if (off < SMP_USER_DATA || (off & 0xFFu) || !len || off + len > SMP_USER_SIZE)
             rc = 1;
+#ifdef SMP_PACK
+        else if (!SMP_USER_HAS(a[0]))
+            rc = 0;                                        /* (the Bluetooth build: USR2 / USR3 skipped, ed_smp_end) */
+#endif
         else if (usr_nz[a[0]] || !SMP_USER_HAS(a[0]))
             rc = 4;                                        /* slot in use: SMP_BEGIN first (voices read it) */
         else if (ed_flash_stop())

@@ -39,6 +39,12 @@ every set has without the CC0 library (eng_sample.c smp_set_missing: a sine, NO 
 built-in loops out ({0}: no material, as without the SLICE engine: a sine, NO SAMPLE); the user slots stay. PIANO left out
 takes SLICE's PIANO with it (no material). Unset: no change.
 
+FELUCCA_SMP_PACK=FILE (the Bluetooth build, tools/build.py) writes the plain header's tables without SMP_DATA's bytes;
+those go to FILE, the built-in pack: a 256-byte header (magic "SKPK", version 1, the payload's length, its CRC-32,
+its id: the first four bytes of its SHA-256), then the payload: exactly the plain build's sample bytes, then the zone
+table and SLICE's BREAK, FUNK and PIANO tables (which serve only them). The firmware reads them from the flash the
+pack is installed in (eng_sample.c SMP_PACK) while it holds this id.
+
 The header is cached (build/gen_samples.cache) under a hash of every
 input file, this script, sampleio.py and the Python version, so unchanged
 inputs skip the slow pitch detection.
@@ -441,7 +447,107 @@ def input_key(have_cc0, drop=()):
     return h.hexdigest()
 
 
+PACK_MAGIC, PACK_VERSION, PACK_HDR = 0x4B504B53, 1, 256   # "SKPK"; the payload at +256 (eng_sample.c SMP_PACK_*)
+SLC_SEGS_N = 16                                             # eng_slice.c SLC_SEGS
+SLC_NAMES = ("BREAK", "FUNK", "PIANO")
+
+
+def pack_id(payload):
+    """the id of exactly this payload: the first four bytes of its SHA-256, little-endian"""
+    return int.from_bytes(hashlib.sha256(payload).digest()[:4], "little")
+
+
+def pack_header(payload):
+    """the pack's 256-byte header: magic, version, the payload's length, its CRC-32 (zlib), its id, then zeros"""
+    import struct
+    import zlib
+    return struct.pack("<5I", PACK_MAGIC, PACK_VERSION, len(payload), zlib.crc32(payload) & 0xFFFFFFFF,
+                       pack_id(payload)).ljust(PACK_HDR, b"\0")
+
+
+def c_init(body):
+    """a C initializer's text (numbers and braces) -> nested lists"""
+    toks = re.findall(r"[{}]|-?\d+", body)
+    stack = [[]]
+    for t in toks:
+        if t == "{":
+            stack.append([])
+        elif t == "}":
+            v = stack.pop()
+            stack[-1].append(v)
+        else:
+            stack[-1].append(int(t))
+    return stack[0][0]
+
+
+def slc_bytes(v):
+    """an slc_src_t initializer -> its bytes (eng_slice.c: len rate nseg nauto, seg[16] {off at n}, grid[128],
+    apos[32], ast[32]; all uint32, little-endian, the missing ones 0)"""
+    import struct
+    head = v[:4] + [0] * (4 - len(v[:4]))
+    segs = (v[4] if len(v) > 4 else []) + [[0, 0, 0]] * SLC_SEGS_N
+    rest = [(v[i] if len(v) > i else []) for i in (5, 6, 7)]
+    out = [*head]
+    for sg in segs[:SLC_SEGS_N]:
+        out += list(sg) + [0] * (3 - len(sg))
+    for arr, k in zip(rest, (SLC_GRID, SLC_AUTO, SLC_AUTO)):
+        out += list(arr) + [0] * (k - len(arr))
+    return struct.pack(f"<{len(out)}I", *(x & 0xFFFFFFFF for x in out))
+
+
+def pack_transform(text, pack_out):
+    """(the Bluetooth build: FELUCCA_SMP_PACK=FILE) the plain header -> its tables without SMP_DATA's bytes and without
+    the tables that serve only them; FILE, the built-in pack: a header and the payload, exactly SMP_DATA's bytes, then
+    (4-aligned) SMP_ZONES (smp_zone_t: <5I2h4B) and SLICE's BREAK, FUNK, PIANO (slc_src_t). SMP_PACK_LEN / _CRC / _ID
+    name the payload, SMP_PACK_ZONES and SMP_PACK_SLC_<NAME> where the tables are in it; SMP_ZONES becomes a RAM copy,
+    filled while the installed pack is this one (eng_sample.c smp_pack_scan)"""
+    import struct
+    import zlib
+    m = re.search(r"static const uint8_t SMP_DATA\[(\d+)\] = \{(.*?)\};\n", text, re.S)
+    data = bytes(int(v) for v in m.group(2).replace("\n", "").split(",") if v.strip())
+    if len(data) != int(m.group(1)):
+        sys.exit("gen_samples: SMP_DATA's length")
+    zm = re.search(r"static const smp_zone_t SMP_ZONES\[\] = \{\n(.*?)\n\};\n", text, re.S)
+    zones = [c_init(ln) for ln in zm.group(1).splitlines()]
+    payload = bytearray(data)
+    payload += b"\0" * (-len(payload) % 4)
+    defs = [f"#define SMP_PACK_ZONES {len(payload)}u"]
+    for z in zones:
+        payload += struct.pack("<5I2h4B", *z)
+    for name in SLC_NAMES:
+        mm = re.search(rf"#define SLC_{name}_INIT (\{{.*?\}})\n(?!    )", text, re.S)
+        if not mm or mm.group(1) == "{0}":
+            continue
+        defs.append(f"#define SMP_PACK_SLC_{name} {len(payload)}u")
+        payload += slc_bytes(c_init(mm.group(1).replace("\\\n", " ")))
+    payload = bytes(payload)
+    Path(pack_out).parent.mkdir(parents=True, exist_ok=True)
+    Path(pack_out).write_bytes(pack_header(payload) + payload)
+    text = text[:zm.start()] + \
+        f"static smp_zone_t SMP_ZONES[{len(zones)}] __attribute__((section(\".pool\")));   /* (n 0: no pack) */\n" + \
+        text[zm.end():]
+    text = text[:m.start()] + (
+        f"/* the built-in samples are not in this firmware: the pack (tools/gen_samples.py FELUCCA_SMP_PACK) holds\n"
+        f" * exactly these {len(data)} bytes, then the zone and SLICE tables, read from the flash it is installed in\n"
+        f" * (eng_sample.c SMP_PACK) */\n"
+        f"#define SMP_PACK 1\n#define SMP_PACK_LEN {len(payload)}u\n"
+        f"#define SMP_PACK_CRC 0x{zlib.crc32(payload) & 0xFFFFFFFF:08X}u\n#define SMP_PACK_ID 0x{pack_id(payload):08X}u\n"
+        + "\n".join(defs) + "\n") + text[m.end():]
+    return text, len(data), len(payload)
+
+
 def main(out):
+    pack_out = os.environ.get("FELUCCA_SMP_PACK")
+    if pack_out:                                    # (the plain header, made or cached, then its bytes to the pack)
+        main_text(out)
+        text, n, total = pack_transform(Path(out).read_text(), pack_out)
+        Path(out).write_text(text)
+        print(f"samples: the built-in pack {pack_out} ({PACK_HDR} + {n} B of samples + {total - n} B of tables)")
+        return
+    main_text(out)
+
+
+def main_text(out):
     have_cc0 = CC0.exists() and any(CC0.glob("*/*.wav"))
     if not have_cc0:
         print("samples: CC0 library not fetched (tools/fetch_cc0.py) - no SAMPLE sets")

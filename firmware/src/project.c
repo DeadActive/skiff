@@ -1394,6 +1394,10 @@ static void persist_boot(void)                    /* before settings_init / pane
 #if FELUCCA_SLICE
     slc_store_boot();                              /* (the scans read each slot's stored slices) */
 #endif
+#ifdef SMP_PACK
+    smp_pack_scan();                               /* (the Bluetooth build: the built-in pack, before the slots: their
+                                                    * zones are rebased onto its SMP_DATA) */
+#endif
     {
         uint32_t k;
         for (k = 0; k < SMP_USER_SLOTS; k++)
