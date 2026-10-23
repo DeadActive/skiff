@@ -40,3 +40,13 @@ crt0.S's STATUS words at 0x01C07F20 stay out of it).
 - **Pool: 29,536 B short** (8 KB kept spare); the RAM has only ~100 B to give (it keeps 4 KB). The delay line
   (`fx.c` `dly_buf`, 131,072 B, 1.49 s) is a power of two: half of it (0.74 s, a quarter note down to 81 BPM) frees
   65,536 B, enough with room to spare.
+
+Measured what-ifs (scratch builds, not in the tree):
+
+| also left out | image B (slot free) | pool B (of 356,352) |
+| --- | ---: | ---: |
+| USB audio's 48 kHz (`FELUCCA_UAC_48K=0`) | 596,412 (-14,848) | 377,696 |
+| + SLICE's FUNK | 578,180 (3,384) | 377,696 |
+| + the delay line halved (`fx.c` `DLY_LEN` 32768, 0.74 s) | 578,180 (3,384) | 312,160 (44,192 spare) |
+
+With all three every gate passes (gates 1, 2a-2c, 3, 4 in a BLE_MEASURE build).
