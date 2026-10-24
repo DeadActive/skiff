@@ -444,7 +444,7 @@ static void con_padtest(void)
 }
 #endif
 
-#if FELUCCA_BLE
+#if FELUCCA_BLE && BLE_CONSOLE
 static void con_fml(void)                              /* FM-Link: what the engine knows (bt_fml.c, fmlink.c) */
 {
     fml_t f;
@@ -467,7 +467,7 @@ static void con_fml(void)                              /* FM-Link: what the engi
 static void con_exec(const char *p)
 {
     if (con_word(&p, "help") || con_word(&p, "?"))
-#if FELUCCA_BLE
+#if FELUCCA_BLE && BLE_CONSOLE
         con_puts("status  dbg  inp  crash  params  memr ADDR [LEN]  flr OFF [LEN]  uboot yes\r\n"
                  "ble [start | scan | list | connect N | stop]  fml\r\n");
 #else
@@ -497,7 +497,7 @@ static void con_exec(const char *p)
     else if (con_word(&p, "flr"))
         con_flr(p);
 #endif
-#if FELUCCA_BLE
+#if FELUCCA_BLE && BLE_CONSOLE
     else if (con_word(&p, "ble"))
         ble_console(p);                                /* ble/ble_central.c: start, scan, list, connect N, stop, status */
     else if (con_word(&p, "fml"))

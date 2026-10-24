@@ -24,9 +24,10 @@ FELUCCA_BLE=1 (BLE MIDI: 2026 DEADACTIVE, from Felucca's Bluetooth build, DeadAc
 build, for the FM-1 only (BOARD=smk37 refuses it). firmware/src/ble/ (its own unit) and the JieLi BT libraries
 (tools/ble_libs.py, AC79_BT_SDK) are linked in through LTO with firmware/app_ble.ld; for the flash room its built-in
 samples are a pack (tools/gen_samples.py FELUCCA_SMP_PACK: build/skiff-samples-VER.bin, the plain build's sample bytes,
-installed over USB into USR2 and USR3's flash: one user slot, USR1), it has no SMC-Mixer layout (felucca.c
-FELUCCA_SMC), it leaves out the pixel faces of CRYPT and NEON (gfx.c) and USB audio's 48 kHz (FELUCCA_UAC_48K=0), its
-delay line is 1.11 s (fx.c), and it is built with one core (FELUCCA_CPU2=0); the build stops on any of its gates (the loader pin, the
+installed over USB into USR2 and USR3's flash: one user slot, USR1), it leaves out the pixel faces of CRYPT and NEON
+(gfx.c), USB audio's 48 kHz (FELUCCA_UAC_48K=0) and the top bar's Bluetooth icon, its BLE unit is built for size (-Oz)
+without its console words and diagnostics (BLE_CONSOLE=0), its delay line is 1.11 s (fx.c), and it is built with one
+core (FELUCCA_CPU2=0); the build stops on any of its gates (the loader pin, the
 update path, no BT at boot, RAM code: docs/ble/). The package is felucca-ble.fwsc. BLE_MEASURE=1: the regions widened
 so an image that does not fit can be measured; never packaged. Unset: the build is as before.
 """
@@ -317,9 +318,12 @@ def build_app():
     ble = is_ble()
     if ble:
         flags.append("-DFELUCCA_BLE=1")
+        # the console's `ble` / `fml` words and the diagnostics they print: none in Skiff's Bluetooth build, for the room
+        # of its sample pack (ble/ble_core.h BLE_CONSOLE; BLE_CONSOLE=1 brings them back, docs/ble/FIT.md)
+        flags.append(f"-DBLE_CONSOLE={'1' if os.environ.get('BLE_CONSOLE') == '1' else '0'}")
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_OTA_RAMONLY", "FELUCCA_CDC",
                  "FELUCCA_UART", "FELUCCA_UAC", "FELUCCA_UAC_TONE", "FELUCCA_UAC_48K", "FELUCCA_ICONS", "FELUCCA_SLICE", "FELUCCA_FM4",
-                 "FELUCCA_CDC_DEFAULT", "FELUCCA_CPU2", "FELUCCA_SMC"):
+                 "FELUCCA_CDC_DEFAULT", "FELUCCA_CPU2"):
         v = os.environ.get(flag)    # unset: the default in firmware/src/felucca.c
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")
@@ -383,8 +387,10 @@ def build_app():
         # the BLE module, its own unit: no static data shared with the core's unit. Long calls, as the libraries
         # (large-program): the BLE unit calls RAM code (__wrap_memcpy, the delays). No global merging, as the
         # object Hortator's device tests ran
-        tc("cc", *[f for f in flags if f != "-Ibuild/gen"], "-mllvm", "-enable-global-merge=false",
-           "-mllvm", "-pi32v2-large-program=true", "-c", FW / "src" / "ble" / "ble.c", "-o", OUT / "ble.o")
+        # (Skiff: built for size, -Oz, for the room of its sample pack; docs/ble/FIT.md)
+        tc("cc", *[("-Oz" if f == "-Os" else f) for f in flags if f != "-Ibuild/gen"], "-mllvm",
+           "-enable-global-merge=false", "-mllvm", "-pi32v2-large-program=true", "-c", FW / "src" / "ble" / "ble.c",
+           "-o", OUT / "ble.o")
         objs.append(OUT / "ble.o")
         extra = [OUT / "fm1_ctx.o", *cfg_objs, *objs, "--start-group", *[libdir / Path(p).name for p in libs],
                  "--end-group"]

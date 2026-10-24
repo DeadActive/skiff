@@ -15,10 +15,6 @@
  * device, MODE AUTO. The plain build never reads them and keeps them as saved, as every byte of that table it does
  * not use. (persist_t's own fields cannot hold them: lowcut is read % 3, zoom and bold are tagged values.)
  * Main loop only. */
-#ifndef FELUCCA_SMC
-#define FELUCCA_SMC 0            /* (Skiff: felucca.c) the SMC-Mixer DAW layout (smc.c, Felucca's layer 3, optional here):
-                                  * 0 = none: MODE has no SMC DAW (a stored one reads as AUTO), an SMC... device is MIDI */
-#endif
 enum { BT_MODE_AUTO, BT_MODE_SMC, BT_MODE_MIDI, BT_MODE_LINK };   /* LINK: FM-Link only, no MIDI either way */
 enum { BT_RATE_AUTO, BT_RATE_FAST, BT_RATE_SLOW };   /* RECONNECT: a host link's rest after a drop (bt_set_slow) */
 typedef struct { uint8_t addr[6], type, mode, has, autostart, role, link, rate; } bt_set_t;   /* has: a device is
@@ -46,10 +42,6 @@ static void bt_set_get(bt_set_t *s)
     }
     s->type = (b[6] >> 2) & 1u;
     s->mode = b[6] & 3u;
-#if !FELUCCA_SMC
-    if (s->mode == BT_MODE_SMC)
-        s->mode = BT_MODE_AUTO;                    /* (no SMC-Mixer layout in this build: AUTO, so MIDI) */
-#endif
     s->autostart = (b[6] >> 3) & 1u;
     s->role = (b[6] >> 4) & 1u;
     s->link = (b[6] >> 5) & 1u;

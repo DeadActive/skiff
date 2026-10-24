@@ -74,22 +74,33 @@ Measured what-ifs (scratch builds, not in the tree):
 
 With all three every gate passes (gates 1, 2a-2c, 3, 4 in a BLE_MEASURE build).
 
-## The Bluetooth build (2026-10-24): the samples as a pack, no SMC-Mixer layout
+## The Bluetooth build (2026-10-24): the samples as a pack, every BLE MIDI feature
 
 The user's decisions: the built-in samples (PIANO, FLUTE, SAX, SLICE's BREAK and FUNK) come back as a pack in USR2 and
-USR3's flash (one user slot, USR1), and the SMC-Mixer layout goes to make the room. `FELUCCA_BLE=1 ./build.sh` builds
-it: the package and build/skiff-samples-1.4.bin beside it.
+USR3's flash (one user slot, USR1), every Bluetooth feature stays (host and device roles, saved devices, FM-Link,
+RECONNECT, the page, the SMC-Mixer layout), and the room comes from code first: "shrink code and remove unnecessary
+things first, like debug code, console commands, bluetooth icons". `FELUCCA_BLE=1 ./build.sh` builds it: the package
+and build/skiff-samples-1.4.bin beside it.
+
+| step | image B (slot free) | saved B |
+| --- | ---: | ---: |
+| the pack, the SMC-Mixer layout in (below) | 582,748 (-1,184) | |
+| a. the BLE unit built for size (-Oz) | 582,196 (-632) | 552 |
+| b. no console words or diagnostics (`BLE_CONSOLE=0`: layer 1's `ble`, the core's `ble` / `fml`) | | ~5,850 |
+| c. no top-bar Bluetooth icon (the page's state line says it) | | ~240 |
+| **a + b + c: the Bluetooth build** | **576,104 (5,460)** | 6,644 |
+
+RAM 93,772 of 98,304 B, pool 345,232 of 356,352 B. (b and c measured together: 6,092 B; c is the header's icon
+drawing and bt_head_icon, from the symbol sizes.) Without the console the serial logger (tools/fm1_serial_log.py)
+reads no Bluetooth state: `BLE_CONSOLE=1 FELUCCA_BLE=1 ./build.sh` brings it back for a device test (it then does not
+fit, by about 400 B by the estimate above, unless something else goes).
 
 - The pack: tools/gen_samples.py `FELUCCA_SMP_PACK` (the plain build's sample bytes exactly, then the zone and SLICE
   tables), installed over USB: editor protocol PACK (90, web/EDITOR_PROTOCOL.md), the Bluetooth site's INSTALL
   BUILT-IN SAMPLES step (web/pack_step.js, web/make_site.py --pack), tools/fm1_sample_pack.py. Without it (or with
   another firmware's) the built-in sounds play a sine, say NO SAMPLE, and once SAMPLES: INSTALL PACK.
-- **A deviation from Felucca's reference (docs/ble/PORTING.md, layer 3): the SMC-Mixer layout (smc.c) is optional in
-  Skiff (felucca.c `FELUCCA_SMC`, 0 in its Bluetooth build).** MODE has AUTO, MIDI and FM-LINK; a stored SMC DAW reads
-  as AUTO; AUTO with an SMC-Mixer is MIDI mode: its faders, knobs and buttons arrive as ordinary MIDI on the input ring
-  (MIDI LEARN maps them). smc.c and its test stay (`FELUCCA_SMC=1`, Felucca's layer as it is); the reference keeps it.
 
-## The pack with the SMC-Mixer layout (2026-10-24, before the decision): 1,184 B over the slot
+## The pack with the SMC-Mixer layout, before the code shrank (2026-10-24): 1,184 B over the slot
 
 The user's design: one user slot (USR1), the built-in samples (PIANO, FLUTE, SAX, SLICE's BREAK and FUNK) as a pack in
 USR2 and USR3's flash, installed over USB (editor protocol PACK 90, web/EDITOR_PROTOCOL.md; the Bluetooth site's

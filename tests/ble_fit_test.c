@@ -5,8 +5,7 @@
  *    clock's slowest tempo, stays inside it; the indices wrap by hand at its end; an impulse comes back exactly the delay
  *    later, across the wrap;
  *  - SLICE's built-in FUNK (and BREAK) left out: no sound the FM-1 starts with (power-on, a NEW project)
- *    selects them, so only a sound the user picks says NO SAMPLE;
- *  - no SMC-Mixer layout (FELUCCA_SMC 0): MODE AUTO, MIDI, FM-LINK; a stored SMC DAW reads as AUTO; the mixer is MIDI. */
+ *    selects them, so only a sound the user picks says NO SAMPLE. */
 #define UI_TEST_NO_MAIN 1
 #include "ui_test.c"
 #if !FELUCCA_BLE
@@ -16,8 +15,7 @@
 int ble_midi_send(const uint8_t *m, uint32_t n) { (void)m; (void)n; return 0; }
 uint32_t ble_midi_room(void) { return 0; }
 #include "../firmware/src/bt_set.c"
-static uint32_t smc_seen;                           /* (no SMC-Mixer layout in Skiff's Bluetooth build: FELUCCA_SMC 0) */
-static void smc_in(uint32_t pkt) { (void)pkt; smc_seen++; }
+#include "../firmware/src/smc.c"
 #include "../firmware/src/bt_midi.c"
 #include "../firmware/src/bt_fml.c"
 #include "../firmware/src/bt_devs.c"
@@ -89,48 +87,6 @@ int main(void)
         }
         bad += check("an impulse across the wrap comes back the delay later", dl == DLY_LEN - 1u && at == dl &&
                      fx.dly_w < DLY_LEN);
-    }
-    {   /* (Skiff) no SMC-Mixer layout: MODE AUTO, MIDI, FM-LINK; a stored SMC DAW reads as AUTO; an SMC... device is MIDI */
-        bt_set_t st;
-        uint32_t seen[4], m;
-        memset(&st, 0, sizeof st);
-        st.mode = BT_MODE_SMC;
-        bt_set_put(&st);
-        bt_set_get(&st);
-        bad += check("no SMC layout: a stored SMC DAW reads as AUTO", st.mode == BT_MODE_AUTO && !FELUCCA_SMC);
-        strcpy(conn_name, "SMC-Mixer");
-        conn_up = 1;
-        bt_link(1);
-        smc_seen = 0;
-        mi_r = mi_w;
-        bt_midi_in(0x09u | 0x90u << 8 | 60u << 16 | 100u << 24);
-        bad += check("no SMC layout: AUTO with an SMC... device is MIDI (its notes into the input ring)",
-                     !bt_mode_now() && !smc_seen && mi_w - mi_r == 1u);
-        conn_up = 0;
-        bt_link(0);
-        mi_r = mi_w;
-        ui.menu = 1;
-        ui.menu_sel = MI_BT;
-        frame();
-        press(B_OCTUP);
-        for (i = 0; i < 3u; i++) {                      /* the cursor to MODE */
-            turn(EN_PRESET, 1);
-            frame();
-        }
-        for (m = 0; m < 4u; m++) {                      /* a knob right three times, from AUTO */
-            bt_set_get(&st);
-            seen[m] = st.mode;
-            turn(EN_K1, 1);
-            frame();
-        }
-        bad += check("no SMC layout: MODE steps AUTO, MIDI, FM-LINK (no SMC DAW)", btp.sel == 3u &&
-                     seen[0] == BT_MODE_AUTO && seen[1] == BT_MODE_MIDI && seen[2] == BT_MODE_LINK && seen[3] == BT_MODE_LINK);
-        turn(EN_K1, -1); frame();
-        turn(EN_K1, -1); frame();
-        bt_set_get(&st);
-        bad += check("no SMC layout: a knob left from FM-LINK twice: MIDI, then AUTO", st.mode == BT_MODE_AUTO);
-        press(B_OCTDN);
-        ui.menu = 0;
     }
     ui_power_on();
     bad += check("power-on: no track on SLICE's BREAK or FUNK", no_builtin_loop());

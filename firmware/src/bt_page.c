@@ -41,7 +41,8 @@ static struct {
 } btp __attribute__((section(".pool")));
 
 /* the top bar's Bluetooth icon (ui_draw.c draw_head; design 5.6): 0 none (Bluetooth off), 1 struck (on, nothing linked:
- * searching, reconnecting, the device role waiting), 2 lit (a link up) */
+ * searching, reconnecting, the device role waiting), 2 lit (a link up). (Skiff's Bluetooth build draws no icon, for
+ * the room of its sample pack: docs/ble/FIT.md; the page's state line says it. Kept for the tests and the reference) */
 static uint32_t bt_head_icon(void)
 {
     ble_ui_slot_t x;
@@ -335,10 +336,6 @@ static void bt_page_input(uint32_t oct)             /* oct: ui_input.c oct_taps 
         v = btp.sel == 3u ? &set.mode : &set.rate;
         m = btp.sel == 3u ? BT_MODE_LINK : BT_RATE_SLOW;
         k = s > 0 ? (*v < m ? *v + 1u : m) : s < 0 ? (*v ? *v - 1u : 0u) : ok ? (*v < m ? *v + 1u : 0u) : *v;
-#if !FELUCCA_SMC
-        if (btp.sel == 3u && k == BT_MODE_SMC)       /* (no SMC DAW in this build: AUTO, MIDI, FM-LINK) */
-            k = *v < BT_MODE_SMC ? BT_MODE_MIDI : BT_MODE_AUTO;
-#endif
         if (k != *v) {
             *v = (uint8_t)k;
             bt_set_put(&set);
